@@ -13,7 +13,7 @@ Built for an experienced programmer learning ML. Inspired by the learn-by-doing 
 
 The full application is tested on Apple Silicon Macs with Python 3.12. Windows is not supported yet; full Linux setup is on the [roadmap](ROADMAP.md). Allow several GB of disk space for ML packages. Internet is needed for the first installation; installed lessons run offline.
 
-1. Install [Node.js](https://nodejs.org/en/download) (22 or newer; 24 recommended) and [uv](https://docs.astral.sh/uv/getting-started/installation/). If you already use Homebrew: `brew install node uv`.
+1. Install [Node.js](https://nodejs.org/en/download) (22.13 or newer; 24 recommended) and [uv](https://docs.astral.sh/uv/getting-started/installation/). If you already use Homebrew: `brew install node uv`.
 2. Clone and set up:
 
    ```sh
@@ -56,11 +56,17 @@ flowchart LR
 
 Use **Run code** (⌘ Enter) to inspect output, then **Check answer** (⌘ Shift Enter) for feedback and XP. XP is awarded once per lesson. You can browse any lesson, reveal hints gradually, inspect solutions, and revisit completed work in Practice. See the [learning guide](docs/learning-plan.md).
 
+## Read alongside your exercises
+
+The **Books** area imports your own PDF and EPUB files with search, chapter navigation, bookmarks, notes, and saved reading position. Modal’s *GPU Glossary* and Philip Kiely’s *Inference Engineering* have 15 guided reading stops connected to the exercises. EPUB images keep their original bytes; PDFs retain their vectors, fonts, and images, with zoom rendered from the source.
+
+Books stay local and are not bundled with this repository. See [local library setup and quality notes](docs/local-library.md).
+
 ## Your progress stays local
 
 Drafts and notes are cached in the browser and synchronized to SQLite. Completions are saved by the server after checks pass. Your durable state lives in `data/workshop.sqlite3`.
 
-**Settings → Export progress & notes** writes JSON to `data/backups/` and offers a download. Keep this backup somewhere safe. JSON import is planned; for a full current restore, stop the app and restore a copy of the entire `data/` folder made while the server was stopped. Git ignores your data, notes, exports, logs, and environment files.
+**Settings → Export progress & notes** writes JSON to `data/backups/` and offers a download, including book notes, bookmarks, and reading positions. The JSON does not include imported book files. Keep this backup somewhere safe. JSON import is planned; for a full current restore, stop the app and restore a copy of the entire `data/` folder made while the server was stopped. Git ignores your data, notes, exports, logs, and environment files.
 
 To update, export progress, stop the app, run `git pull --ff-only`, then rerun Setup. If you are developing on a branch, commit or stash your source edits before integrating updates. Setup preserves `data/`.
 

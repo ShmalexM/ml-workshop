@@ -11,11 +11,15 @@ import unittest
 import urllib.request
 import urllib.error
 ROOT=Path(__file__).resolve().parents[1]
+sys.path.insert(0,str(ROOT/'backend'))
+from library import import_book
+from book_fixture import make_epub, PNG
 
 class ApiTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.tmp=tempfile.TemporaryDirectory(prefix='ml-api-test-')
+        cls.book=import_book(make_epub(Path(cls.tmp.name)/'fixture.epub'),cls.tmp.name,'fixture')
         with socket.socket() as sock:
             sock.bind(('127.0.0.1',0));cls.port=sock.getsockname()[1]
         cls.url=f'http://127.0.0.1:{cls.port}'
@@ -77,4 +81,36 @@ class ApiTests(unittest.TestCase):
     def test_invalid_payload_is_rejected(self):
         with self.assertRaises(urllib.error.HTTPError) as e:self.request('/api/run',dict(lessonId='missing',code='x',mode='run'))
         self.assertEqual(e.exception.code,400)
+    def test_book_state_rejects_stale_writes_and_is_backed_up(self):
+        latest=dict(bookId='fixture',location=2,notes='A useful observation',bookmarks=[2],completed=[],updatedAt=200)
+        self.request('/api/library/state',latest)
+        self.request('/api/library/state',{**latest,'location':1,'notes':'stale','updatedAt':100})
+        library=self.request('/api/library')
+        self.assertEqual(library['readingState']['fixture']['notes'],latest['notes'])
+        self.assertEqual(library['readingState']['fixture']['location'],2)
+        backup=self.request('/api/backup',{})
+        exported=self.request(backup['url'])
+        self.assertEqual(exported['version'],2)
+        self.assertEqual(exported['readingState']['fixture']['bookmarks'],[2])
+        self.assertNotIn('documents',exported)
+        for patch in ({'location':0},{'location':3},{'notes':'x'*30001},{'bookmarks':[3]},{'bookmarks':[True]},{'completed':['invented']},{'updatedAt':-1}):
+            with self.subTest(patch=str(patch)[:60]),self.assertRaises(urllib.error.HTTPError) as e:
+                self.request('/api/library/state',{**latest,**patch})
+            self.assertEqual(e.exception.code,400)
+        with self.assertRaises(urllib.error.HTTPError) as e:
+            self.request('/api/library/state',latest,{'X-Workshop-Token':'wrong'})
+        self.assertEqual(e.exception.code,403)
+    def test_book_media_ranges_and_navigation(self):
+        self.assertEqual(len(self.request('/api/library/search?q=warp')['results']),2)
+        self.assertEqual(self.request('/api/library/fixture/chapter/2')['title'],'Memory')
+        media='/api/library/fixture/asset/'+self.book['assets'][0]['path']
+        for requested,expected in [('bytes=0-7',PNG[:8]),('bytes=-8',PNG[-8:]),('bytes=8-',PNG[8:])]:
+            req=urllib.request.Request(self.url+media,headers={'Range':requested})
+            with urllib.request.urlopen(req) as response:
+                self.assertEqual(response.status,206)
+                self.assertEqual(response.read(),expected)
+                self.assertIn('sandbox',response.headers['Content-Security-Policy'])
+        for path,headers,status in [(media,{'Range':'bytes=99999-'},416),(media,{'Origin':'https://example.com'},403),('/api/library/fixture/asset/../book.json',{},404),('/api/library/fixture/chapter/999',{},404)]:
+            with self.assertRaises(urllib.error.HTTPError) as e:self.request(path,headers=headers)
+            self.assertEqual(e.exception.code,status)
 if __name__=='__main__':unittest.main()

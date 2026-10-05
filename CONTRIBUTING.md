@@ -23,6 +23,12 @@ Lessons live in `backend/courses.py`, `backend/courses_extra.py`, and `backend/e
 5. Keep exercises small, deterministic, offline, and within the runner's limits. No downloads, API credentials, telemetry, or paid services. Label synthetic data and simulated hardware accurately.
 6. Update lesson-count assertions in `tests/test_curriculum.py` and `tests/test_api.py`, plus the README's curriculum table, if adding/removing lessons.
 
+## Add a reading guide
+
+`backend/book_study.py` contains original study prompts linked to stable lesson IDs and local book locations. EPUB locations resolve by section key; PDF locations count physical pages. Keep source book text and images out of commits. Use synthetic documents in tests. See [local library documentation](docs/local-library.md) for storage, import, and quality boundaries.
+
+`npm run build` and `npm run dev` copy the installed PDF.js fonts, character maps, and decoders into ignored build assets; no CDN is required.
+
 ## Verify
 
 ```sh
