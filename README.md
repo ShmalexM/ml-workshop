@@ -3,20 +3,11 @@
 [![CI](https://github.com/ShmalexM/ml-workshop/actions/workflows/ci.yml/badge.svg)](https://github.com/ShmalexM/ml-workshop/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-Learn engineering through **58 checked exercises across 12 paths**, using Python and JavaScript. Study ML, PyTorch, TensorFlow, CUDA, agent harnesses, backends, web apps, reinforcement learning, retrieval, reliability, and interactive systems. Begin with explanations and runnable worked examples, then connect each skill to a curated public project.
+Practice ML and software engineering in **58 short lessons across 12 paths**, using Python and JavaScript: ML basics, PyTorch, TensorFlow, CUDA, agent harnesses, backends, web apps, reinforcement learning, retrieval, reliability, and interactive systems. Each lesson explains one idea, runs a worked example, then gives you an exercise with automatic checks. Projects show where the same ideas appear in public code.
 
 Built for an experienced programmer broadening their engineering skills. The recommended ML path still starts with fundamentals. The repository and existing launcher keep the `ml-workshop` name for compatibility. Inspired by the learn-by-doing format of Boot.dev, with original curriculum and interface. This is an independent project with no affiliation with Boot.dev or the framework authors.
 
 ![Guided lesson with an example and direct answer option](docs/guided-lesson-screenshot.jpg)
-
-### Open as a Mac app
-
-After setup, double-click **Install Mac App.command** once. It builds **Engineering Workshop.app** in your user Applications folder and adds a Desktop shortcut. Open it like any other Mac app; it starts the local server automatically and uses your existing lessons, books and progress. Right-click its Dock icon → **Options → Keep in Dock** for permanent access.
-
-The native window supports code exercises, book reading, normal copy/paste shortcuts, **⌘R** to reload, and **⌘Q** to quit. Closing the window keeps the app available in the Dock; click its icon to reopen. External references open in your default browser. Quitting the app leaves the shared local server running, so an open browser session continues to work.
-
-The installer needs the Apple command-line tools (`xcode-select --install`) and uses a local ad-hoc signature. No paid Apple developer membership is needed for this local build. Keep the project folder in place; if you move it, rerun the installer. Browser access remains available at `http://127.0.0.1:7318/`.
-
 
 ## Install
 
@@ -26,7 +17,7 @@ Clone this repository, then use the wrapper for your OS. Allow several GB for a 
 
 ### macOS
 
-On Apple Silicon, setup uses the pinned `requirements.lock` snapshot. Intel Macs use `requirements.txt`; Intel Macs are not covered by the current CI job. With Homebrew, `brew install node uv` provides the prerequisites; the macOS wrapper can use uv to obtain Python 3.12.
+On Apple Silicon, setup uses the pinned `requirements.lock` snapshot. On Intel Macs, run setup with `--no-ml`: current PyTorch and TensorFlow releases no longer ship Intel macOS packages. With Homebrew, `brew install node uv` provides the prerequisites; the macOS wrapper can use uv to obtain Python 3.12.
 
 ```sh
 git clone https://github.com/ShmalexM/ml-workshop.git
@@ -83,15 +74,23 @@ Once running, open **http://127.0.0.1:7318**. No account, API key, Docker, or cl
 
 All platforms cap returned output at 24,000 bytes and clean up exercise process trees. Windows CI uses GitHub's hosted Windows image, not separate Windows 10 and 11 desktop machines. Full ML installation on Linux/Windows and macOS Intel is not covered by these CI jobs; package availability depends on Python version and architecture.
 
+## Open as a Mac app
+
+After setup, double-click **Install Mac App.command** once. It builds **Engineering Workshop.app** in your user Applications folder and adds a Desktop shortcut. Open it like any other Mac app; it starts the local server automatically and uses your existing lessons, books and progress. Right-click its Dock icon → **Options → Keep in Dock** for permanent access.
+
+The native window supports code exercises, book reading, normal copy/paste shortcuts, **⌘R** to reload, and **⌘Q** to quit. Closing the window keeps the app available in the Dock; click its icon to reopen. External references open in your default browser. Quitting the app leaves the shared local server running, so an open browser session continues to work.
+
+The installer needs the Apple command-line tools (`xcode-select --install`) and uses a local ad-hoc signature. No paid Apple developer membership is needed for this local build. Keep the project folder in place; if you move it, rerun the installer. Browser access remains available at `http://127.0.0.1:7318/`.
+
 ## What you'll learn
 
-| Track | Lessons | Topics |
+| Path | Lessons | Topics |
 | --- | ---: | --- |
 | ML foundations | 6 | Predictions, loss, gradients, data splitting, and training |
 | PyTorch | 6 | Tensors, broadcasting, autograd, modules, optimization, and inference |
 | TensorFlow | 6 | Tensors, GradientTape, Keras, training, datasets, and inference |
 | Modern AI stack | 6 | Hugging Face, tokenization, LangChain, LlamaIndex, and retrieval |
-| CUDA Python | 6 | Thread/block indexing, bounds, transfers, 2D kernels, and shared memory |
+| CUDA & GPU programming | 6 | Thread/block indexing, bounds, transfers, 2D kernels, and shared memory |
 | Agent harness engineering | 4 | State machines, tool contracts, budgets, and trace evaluation |
 | Backend & API engineering | 4 | Input validation, idempotency, pagination, and readiness |
 | Web app engineering | 4 | JavaScript reducers, stale responses, derived views, and saved-state migration |
@@ -102,23 +101,33 @@ All platforms cap returned output at 24,000 bytes and clean up exercise process 
 
 ```mermaid
 flowchart LR
-  A[Read a concept] --> B[Edit Python or JavaScript]
-  B --> C[Run and inspect]
-  C --> D[Check assertions]
-  D -->|Needs work| E[Reveal a hint]
-  E --> B
-  D -->|Pass| F[Save progress and apply to a project]
+  A[Understand] --> B[See an example]
+  B --> C[Try it yourself]
+  C --> D[Check answer]
+  D -->|Not yet| E[Hint or solution]
+  E --> C
+  D -->|All checks pass| F[Lesson complete, then a project]
 ```
 
 Use **Run code** (⌘ Enter) to inspect output, then **Check answer** (⌘ Shift Enter) for feedback and XP. XP is awarded once per lesson. You can browse any lesson, reveal hints gradually, inspect solutions, and revisit completed work in Practice. Open **Paths** for suggested sequences and **All exercises** for practice. See the [ML learning guide](docs/learning-plan.md).
 
 Every lesson follows **Understand → See an example → Try it yourself**, with a small runnable example, a prediction question and feedback. **Show answer** is available immediately, with an explanation and optional loading into the challenge editor. Running examples does not overwrite drafts or award XP.
 
-The **Projects** area ships with **12 curated public repositories**, ordered from small starting points to capstones. Each has a preparation lesson, a starting-file link and focused study prompts. Private project inventories are not bundled. An optional ignored `data/portfolio.json` can customize your own catalog. See [project learning and catalog format](docs/project-learning.md).
+The **Projects** area ships with **12 curated public repositories**, ordered from small starting points to capstones. Each has a preparation lesson, a starting-file link and focused study prompts. An optional `data/portfolio.json` (ignored by Git) replaces the built-in catalog with your own. See [project learning and catalog format](docs/project-learning.md).
 
-## Read alongside your exercises
+## Hero game (optional)
 
-The **Books** area imports your own PDF and EPUB files with search, chapter navigation, bookmarks, notes, and saved reading position. Modal’s *GPU Glossary* and Philip Kiely’s *Inference Engineering* have 15 guided reading stops connected to the exercises. EPUB images keep their original bytes; PDFs retain their vectors, fonts, and images, with zoom rendered from the source.
+Finishing work earns rewards in a small fantasy game that runs alongside the lessons. Turn it off in **Settings → Hero game** to hide it completely; rewards keep building up from your progress, so nothing is lost if you turn it back on later.
+
+- **Chests.** Every finished lesson, path, project walkthrough, and reading guide earns one chest. Harder work earns a better chest: lesson chests depend on the path and on how far into it the lesson is, and finishing a whole path earns one of the two best tiers.
+- **Gear.** Create one hero from 13 World of Warcraft races and 12 classes. Chests only hold gear that class can use, in five rarities: Basic (white), Common (green), Rare (blue), Epic (red), and Legendary (orange). Better rarities look more ornate on the 3D hero and in your bags. Over the full curriculum a player opens about 140 items, of which about 4 are Legendary.
+- **Battles.** Every finished task also earns one fight in a top-down arena: click to move and attack, and use Q, W, E and R to cast your class's abilities. Each stage ends with a boss. A new hero is meant to lose at first. Damage you deal to a boss carries over between fights, and every chest makes you stronger. An **Auto** button plays the fight for you if you prefer to watch.
+
+The game is drawn with three.js and needs WebGL. Its data lives in the same local SQLite database as your progress and is included in exports.
+
+## Read alongside your lessons
+
+The **Books** area reads PDF and EPUB files that you import with `scripts/import-books.py`, with search, chapter navigation, bookmarks, notes, and saved reading position. If you import Modal’s *GPU Glossary* and Philip Kiely’s *Inference Engineering*, 15 reading guides link their sections to related lessons. EPUB images keep their original bytes; PDFs retain their vectors, fonts, and images, with zoom rendered from the source.
 
 Books stay local and are not bundled with this repository. See [local library setup and quality notes](docs/local-library.md).
 
@@ -126,15 +135,15 @@ Books stay local and are not bundled with this repository. See [local library se
 
 Drafts and notes are cached in the browser and synchronized to SQLite. Completions are saved by the server after checks pass. Your durable state lives in `data/workshop.sqlite3`.
 
-**Settings → Export progress & notes** writes JSON to `data/backups/` and offers a download, including book notes, bookmarks, reading positions, project walkthrough notes, and the local project catalog. Review exports before sharing because project details may be private. The JSON does not include imported book files. Keep this backup somewhere safe. JSON import is planned; for a full current restore, stop the app and restore a copy of the entire `data/` folder made while the server was stopped. Git ignores your data, notes, exports, logs, and environment files.
+**Settings → Export progress & notes** writes JSON to `data/backups/` and offers a download, including book notes, bookmarks, reading positions, project walkthrough notes, the local project catalog, and Hero game data. Review exports before sharing because project details may be private. The JSON does not include imported book files. Keep this backup somewhere safe. JSON import is planned; for a full current restore, stop the app and restore a copy of the entire `data/` folder made while the server was stopped. Git ignores your data, notes, exports, logs, and environment files.
 
 To update, export progress, stop the app, run `git pull --ff-only`, then rerun Setup. If you are developing on a branch, commit or stash your source edits before integrating updates. Setup preserves `data/`.
 
 ## CUDA without an NVIDIA GPU
 
-CUDA Python exercises use **Numba's CPU simulator**. They teach kernel structure and indexing on a Mac. They do not run on an NVIDIA GPU or qualify device compilation, races, warp behavior, occupancy, or performance. Real GPU execution and CUDA C++ are future additions. See [CUDA notes and limitations](docs/cuda-notes.md).
+CUDA Python exercises use **Numba's CPU simulator**. They teach kernel structure and indexing on a Mac. They do not run on an NVIDIA GPU, so they do not test device compilation, races, warp behavior, occupancy, or performance. Real GPU execution and CUDA C++ are future additions. See [CUDA notes and limitations](docs/cuda-notes.md).
 
-Framework lessons execute real libraries with small local inputs. They do not download pretrained models, call an LLM API, or claim that a tiny exercise establishes production model quality.
+Framework lessons run the real libraries on small local inputs. They do not download pretrained models or call an LLM API.
 
 ## Execution model
 

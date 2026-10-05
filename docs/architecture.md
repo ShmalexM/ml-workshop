@@ -51,3 +51,12 @@ The lesson UI begins in Understand, moves to See an example, then exposes the ed
 Startup calls the existing single-instance `scripts/launch.py --no-open`, then loads the loopback site. The native shell shares server-side progress/books with browser sessions; WebKit maintains its own draft recovery cache. Only this app's loopback origin loads in the window. HTTP(S) reference links open through the default browser, and downloads use an explicit native Save dialog. Closing the window preserves it for Dock reopening; quitting does not terminate the shared server.
 
 `script/build_and_run.sh` is the developer build/run entrypoint and the Codex Run action. It restarts only the native shell. Installation backs up previous matching app bundles under ignored `.local/launcher-backups/`; it refuses to replace a different bundle ID and never changes learner data. The app is tied to the checkout and is not a notarized, standalone distribution.
+
+## Hero game
+
+The optional game lives in `backend/game.py` and `src/game/`. The server exposes `GET /api/game`, `GET /api/game/summary`, and `POST /api/game/<action>` (hero, open, equip, unequip, discard, settings, retire, battle/start, battle/finish); POST routes use the same token and origin checks as every other write.
+
+Rewards are derived, not stored: on each request the backend lists the chests that saved progress has earned (lessons, completed paths, fully reviewed project walkthroughs, finished reading guides, and cleared boss stages) and subtracts the ones already opened, which are kept by source key. This is why turning the game off loses nothing, and why a chest can never be opened twice. Each earned non-boss source also grants one battle. Opening a chest rolls 1–3 items for the hero's class inside one `BEGIN IMMEDIATE` transaction; `tests/test_game.py` checks class rules, equip rules, the API, and a 1,000-player drop-rate simulation.
+
+The frontend loads three.js only on the Hero page. Heroes, gear, enemies and arenas are built from primitives at runtime; item icons are rendered from the same gear models, so an item looks the same in the bags, on the hero, and in battle. The battle engine (`src/game/battle/engine.ts`) runs the fight on the client and reports damage dealt to the boss when it ends; the server clamps it to the boss's remaining health and persists it.
+
