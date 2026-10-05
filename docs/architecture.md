@@ -2,7 +2,7 @@
 
 ```mermaid
 flowchart LR
-  A[Mac launcher] --> B[Loopback Python server]
+  A[Native Mac window / browser] --> B[Loopback Python server]
   B --> C[React lesson workspace]
   C --> D[Save draft / notes]
   D --> E[(Local SQLite)]
@@ -42,3 +42,12 @@ The UI uses hash routes for Paths, lessons, Projects and Books. Suggested sequen
 The lesson UI begins in Understand, moves to See an example, then exposes the editor in Try it yourself. Learners can revisit any stage and request an answer immediately without consuming hints. Viewing an answer leaves the draft intact; an explicit Load into editor action replaces it. Course/lesson changes reset the guided stage while preserving stored challenge drafts.
 
 `POST /api/example` uses the server-owned example code, the same local runner and the shared execution lock. It ignores submitted code/mode, passes no completion checks and never writes drafts, completions or activity. Python/JavaScript examples run with the same limits and trust model as challenges. Automated tests execute all examples and compare their actual stdout with the documented result.
+
+
+## Native Mac window
+
+`native/WorkshopApp.swift` is a small AppKit/WKWebView shell, compiled by `scripts/install-launcher.py` without third-party desktop dependencies. Its regular application bundle has a stable `dev.ml-workshop.desktop` identity and the existing Workshop icon. The generated bundle holds the checkout path in an ignored machine-specific Info.plist and is signed ad hoc for local use.
+
+Startup calls the existing single-instance `scripts/launch.py --no-open`, then loads the loopback site. The native shell shares server-side progress/books with browser sessions; WebKit maintains its own draft recovery cache. Only this app's loopback origin loads in the window. HTTP(S) reference links open through the default browser, and downloads use an explicit native Save dialog. Closing the window preserves it for Dock reopening; quitting does not terminate the shared server.
+
+`script/build_and_run.sh` is the developer build/run entrypoint and the Codex Run action. It restarts only the native shell. Installation backs up previous matching app bundles under ignored `.local/launcher-backups/`; it refuses to replace a different bundle ID and never changes learner data. The app is tied to the checkout and is not a notarized, standalone distribution.

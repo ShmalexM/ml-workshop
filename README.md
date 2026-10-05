@@ -9,6 +9,15 @@ Built for an experienced programmer broadening their engineering skills. The rec
 
 ![Guided lesson with an example and direct answer option](docs/guided-lesson-screenshot.jpg)
 
+### Open as a Mac app
+
+After setup, double-click **Install Mac App.command** once. It builds **Engineering Workshop.app** in your user Applications folder and adds a Desktop shortcut. Open it like any other Mac app; it starts the local server automatically and uses your existing lessons, books and progress. Right-click its Dock icon → **Options → Keep in Dock** for permanent access.
+
+The native window supports code exercises, book reading, normal copy/paste shortcuts, **⌘R** to reload, and **⌘Q** to quit. Closing the window keeps the app available in the Dock; click its icon to reopen. External references open in your default browser. Quitting the app leaves the shared local server running, so an open browser session continues to work.
+
+The installer needs the Apple command-line tools (`xcode-select --install`) and uses a local ad-hoc signature. No paid Apple developer membership is needed for this local build. Keep the project folder in place; if you move it, rerun the installer. Browser access remains available at `http://127.0.0.1:7318/`.
+
+
 ## Quick start: macOS with Apple Silicon
 
 The full application is tested on Apple Silicon Macs with Python 3.12. Windows is not supported yet; full Linux setup is on the [roadmap](ROADMAP.md). Allow several GB of disk space for ML packages. Internet is needed for the first installation; installed lessons run offline.
