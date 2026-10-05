@@ -16,7 +16,6 @@ import LootToast,{type LootNotice} from './game/LootToast'
 import {gameApi,summarize} from './game/gameApi'
 import type {GameSummary} from './game/types'
 import type {BookLocation,LibraryData} from './libraryTypes'
-import './engineering.css'
 const BookLibrary=lazy(()=>import('./components/BookLibrary'))
 const HeroPage=lazy(()=>import('./game/HeroPage'))
 type Page='paths'|'learn'|'projects'|'practice'|'progress'|'books'|'hero'
