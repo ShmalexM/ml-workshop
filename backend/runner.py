@@ -25,6 +25,12 @@ def missing_package(exc):
     return (f"Missing Python module '{exc.name}'. Rerun Engineering Workshop setup "
             "without --no-ml to install the lesson packages. See README.md.")
 
+def stopped_message(language, code):
+    name='JavaScript' if language=='javascript' else 'Python'
+    limits=(' An infinite loop stops at the 40-second CPU limit, and output over 1 MiB stops '
+            'at the file-size limit.') if resource is not None and sys.platform != 'win32' else ''
+    return f'{name} stopped before finishing (exit code {code}).{limits}'
+
 def raises(exception, function):
     try: function()
     except exception: return True
@@ -148,7 +154,7 @@ def execute(code, checks, timeout=50, simulator=False, language='python'):
             process=subprocess.Popen(args,cwd=work,env=env,stdout=out,stderr=out,**options)
             try:
                 wait_for_result(process,result,timeout)
-                data=json.loads(result.read_text()) if result.exists() else dict(error=f'{language.title()} stopped before finishing (exit {process.returncode}). Check your code or output limit.',checks=[],passed=False)
+                data=json.loads(result.read_text()) if result.exists() else dict(error=stopped_message(language,process.returncode),checks=[],passed=False)
             except subprocess.TimeoutExpired:
                 data=dict(error=f'Execution stopped after {timeout} seconds. Check for an infinite loop or reduce the workload.',checks=[],passed=False)
             finally:

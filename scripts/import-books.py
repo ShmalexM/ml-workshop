@@ -22,4 +22,4 @@ for source,book_id in [(args.epub,'gpu-glossary'),(args.pdf,'inference-engineeri
     if source:
         book = import_book(source,data,book_id)
         print(f"{book['title']}: {book['count']} {'pages' if book['format']=='pdf' else 'sections'}, {len(book['assets'])} original image assets. SHA-256: {book['sha256']}")
-print('Open Books in ML Workshop. Originals and extracted content stay in data/library/ and are ignored by Git.')
+print('Open Books in Engineering Workshop. Originals and extracted content stay in data/library/ and are ignored by Git.')

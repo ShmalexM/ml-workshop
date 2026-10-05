@@ -7,7 +7,7 @@ Practice ML and software engineering in **58 short lessons across 12 paths**, us
 
 Built for an experienced programmer broadening their engineering skills. The recommended ML path still starts with fundamentals. The repository and existing launcher keep the `ml-workshop` name for compatibility. Inspired by the learn-by-doing format of Boot.dev, with original curriculum and interface. This is an independent project with no affiliation with Boot.dev or the framework authors.
 
-![Guided lesson with an example and direct answer option](docs/guided-lesson-screenshot.jpg)
+![Guided lesson with a worked example and a prediction question](docs/guided-lesson-screenshot.jpg)
 
 ## Install
 
@@ -109,11 +109,11 @@ flowchart LR
   D -->|All checks pass| F[Lesson complete, then a project]
 ```
 
-Use **Run code** (⌘ Enter) to inspect output, then **Check answer** (⌘ Shift Enter) for feedback and XP. XP is awarded once per lesson. You can browse any lesson, reveal hints gradually, inspect solutions, and revisit completed work in Practice. Open **Paths** for suggested sequences and **All exercises** for practice. See the [ML learning guide](docs/learning-plan.md).
+Use **Run code** (⌘ Enter; Ctrl Enter on Linux and Windows) to see output, then **Check answer** (⌘ Shift Enter; Ctrl Shift Enter) to run the checks and earn XP. XP is awarded once per lesson. You can open any lesson, reveal hints in order, and view the solution. **Paths** suggests an order by role, and **All lessons** lists every lesson, with filters by path and for completed lessons. See the [ML learning guide](docs/learning-plan.md).
 
-Every lesson follows **Understand → See an example → Try it yourself**, with a small runnable example, a prediction question and feedback. **Show answer** is available immediately, with an explanation and optional loading into the challenge editor. Running examples does not overwrite drafts or award XP.
+Every lesson follows **Understand → See an example → Try it yourself**, with a small runnable example, a prediction question and feedback. **Show solution** is available at any time and lists the checks the solution passes; **Load into editor** replaces your code with it. Running examples does not overwrite drafts or award XP.
 
-The **Projects** area ships with **12 curated public repositories**, ordered from small starting points to capstones. Each has a preparation lesson, a starting-file link and focused study prompts. An optional `data/portfolio.json` (ignored by Git) replaces the built-in catalog with your own. See [project learning and catalog format](docs/project-learning.md).
+The **Projects** area ships with **12 curated public repositories**, ordered from Start small to Capstone. Each has a preparation lesson, a starting-file link and a few walkthrough steps. An optional `data/portfolio.json` (ignored by Git) replaces the built-in catalog with your own. See [project learning and catalog format](docs/project-learning.md).
 
 ## Hero game (optional)
 
@@ -135,13 +135,13 @@ Books stay local and are not bundled with this repository. See [local library se
 
 Drafts and notes are cached in the browser and synchronized to SQLite. Completions are saved by the server after checks pass. Your durable state lives in `data/workshop.sqlite3`.
 
-**Settings → Export progress & notes** writes JSON to `data/backups/` and offers a download, including book notes, bookmarks, reading positions, project walkthrough notes, the local project catalog, and Hero game data. Review exports before sharing because project details may be private. The JSON does not include imported book files. Keep this backup somewhere safe. JSON import is planned; for a full current restore, stop the app and restore a copy of the entire `data/` folder made while the server was stopped. Git ignores your data, notes, exports, logs, and environment files.
+**Settings → Export progress and notes** writes JSON to `data/backups/` and offers a download, including book notes, bookmarks, reading positions, project walkthrough notes, the local project catalog, and Hero game data. Review exports before sharing because project details may be private. The JSON does not include imported book files. Keep this backup somewhere safe. JSON import is planned; for a full current restore, stop the app and restore a copy of the entire `data/` folder made while the server was stopped. Git ignores your data, notes, exports, logs, and environment files.
 
 To update, export progress, stop the app, run `git pull --ff-only`, then rerun Setup. If you are developing on a branch, commit or stash your source edits before integrating updates. Setup preserves `data/`.
 
 ## CUDA without an NVIDIA GPU
 
-CUDA Python exercises use **Numba's CPU simulator**. They teach kernel structure and indexing on a Mac. They do not run on an NVIDIA GPU, so they do not test device compilation, races, warp behavior, occupancy, or performance. Real GPU execution and CUDA C++ are future additions. See [CUDA notes and limitations](docs/cuda-notes.md).
+CUDA Python exercises use **Numba's CPU simulator**. They teach kernel structure and indexing on any supported computer. They do not run on an NVIDIA GPU, so they do not test device compilation, races, warp behavior, occupancy, or performance. Real GPU execution and CUDA C++ are future additions. See [CUDA notes and limitations](docs/cuda-notes.md).
 
 Framework lessons run the real libraries on small local inputs. They do not download pretrained models or call an LLM API.
 

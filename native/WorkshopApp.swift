@@ -37,7 +37,7 @@ final class WorkshopApp: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             webView.topAnchor.constraint(equalTo: content.topAnchor),
             webView.bottomAnchor.constraint(equalTo: content.bottomAnchor)
         ])
-        statusLabel = NSTextField(wrappingLabelWithString: "Opening your workshop…")
+        statusLabel = NSTextField(wrappingLabelWithString: "Starting Engineering Workshop…")
         statusLabel.font = .systemFont(ofSize: 18, weight: .medium)
         statusLabel.alignment = .center
         let retry = NSButton(title: "Open workshop", target: self, action: #selector(startWorkshop))
@@ -98,10 +98,10 @@ final class WorkshopApp: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     @objc private func startWorkshop() {
         guard !starting else { return }
         starting = true
-        statusLabel.stringValue = "Opening your workshop…"
+        statusLabel.stringValue = "Starting Engineering Workshop…"
         status.isHidden = false
         guard let path = Bundle.main.object(forInfoDictionaryKey: "WorkshopRoot") as? String else {
-            showError("Reinstall the Mac app from your Workshop folder."); return
+            showError("Reinstall the app: run Install Mac App.command in the project folder."); return
         }
         let root = URL(fileURLWithPath: path)
         let process = Process()
@@ -118,11 +118,11 @@ final class WorkshopApp: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                     let target = self.webView.url.flatMap { self.isLocal($0) ? $0 : nil } ?? self.home
                     self.webView.load(URLRequest(url: target))
                 } else {
-                    self.showError("Could not open Workshop. Run Setup ML Workshop.command in your project folder, then try again.\n\n" + String((String(data: data, encoding: .utf8) ?? "").suffix(800)))
+                    self.showError("Could not start Engineering Workshop. Run Setup ML Workshop.command in the project folder, then try again.\n\n" + String((String(data: data, encoding: .utf8) ?? "").suffix(800)))
                 }
             }
         }
-        do { try process.run() } catch { showError("Run Setup ML Workshop.command in your project folder first.\n\n" + error.localizedDescription) }
+        do { try process.run() } catch { showError("Run Setup ML Workshop.command in the project folder first.\n\n" + error.localizedDescription) }
     }
     private func showError(_ message: String) { starting = false; statusLabel.stringValue = message; status.isHidden = false }
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { status.isHidden = true }
