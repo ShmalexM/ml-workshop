@@ -17,6 +17,7 @@ from runner import execute, node_binary
 from portfolio import load_portfolio
 from library import Library
 from book_study import study_guides
+import game
 
 ROOT=Path(__file__).resolve().parents[1]
 DATA=Path(os.environ.get('ML_WORKSHOP_DATA_DIR',ROOT/'data'))
@@ -38,6 +39,7 @@ with connect() as db:
     db.execute('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)')
     db.execute('CREATE TABLE IF NOT EXISTS project_state (project TEXT PRIMARY KEY, notes TEXT, reviewed TEXT, updated INTEGER)')
     db.execute('CREATE TABLE IF NOT EXISTS reading_state (book TEXT PRIMARY KEY, location INTEGER, notes TEXT, bookmarks TEXT, completed TEXT, updated INTEGER)')
+    game.ensure_schema(db)
 
 def project_state():
     with connect() as db:
@@ -53,6 +55,10 @@ def state():
         complete=db.execute('SELECT lesson,at,xp FROM completions').fetchall()
         current=db.execute("SELECT value FROM settings WHERE key='currentLesson'").fetchone()
         return dict(draftUpdated={r[0]:r[3] for r in drafts},drafts={r[0]:r[1] for r in drafts},notes={r[0]:r[2] for r in drafts},completed={r[0]:dict(at=r[1],xp=r[2]) for r in complete},currentLesson=current[0] if current and current[0] in BY_ID else 'foundations-1',activity=[r[0] for r in db.execute('SELECT day FROM activity ORDER BY day')])
+
+def game_progress():
+    with connect() as db:completed={r[0]:dict(at=r[1],xp=r[2]) for r in db.execute('SELECT lesson,at,xp FROM completions')}
+    return dict(completed=completed,projects=load_portfolio(DATA)['projects'],projectState=project_state(),readingState=reading_state(),guides=study_guides(LIBRARY))
 
 def runtime():
     packages={}
@@ -111,6 +117,12 @@ class Handler(BaseHTTPRequestHandler):
         if path=='/api/bootstrap':return self.send(dict(token=TOKEN))
         if path=='/api/curriculum':return self.send(public_curriculum())
         if path=='/api/state':return self.send(state())
+        if path=='/api/game':
+            progress=game_progress()
+            with connect() as db:return self.send(game.state(db,progress))
+        if path=='/api/game/summary':
+            progress=game_progress()
+            with connect() as db:return self.send(game.summary(db,progress))
         if path=='/api/runtime':return self.send(runtime())
         if path.startswith('/api/backups/'):
             name=path.rsplit('/',1)[-1]
@@ -203,7 +215,8 @@ class Handler(BaseHTTPRequestHandler):
             if path=='/api/backup':
                 folder=DATA/'backups';folder.mkdir(exist_ok=True)
                 name='ml-workshop-'+datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S-%f')+'.json'
-                payload=dict(app='ml-workshop',version=3,projectState=project_state(),portfolio=load_portfolio(DATA),exportedAt=datetime.now(timezone.utc).isoformat(),readingState=reading_state(),**state())
+                with connect() as db:game_export=game.export(db)
+                payload=dict(app='ml-workshop',version=3,projectState=project_state(),portfolio=load_portfolio(DATA),exportedAt=datetime.now(timezone.utc).isoformat(),readingState=reading_state(),game=game_export,**state())
                 (folder/name).write_text(json.dumps(payload,indent=2))
                 return self.send(dict(filename=name,url='/api/backups/'+name))
             if path=='/api/current':
@@ -211,6 +224,10 @@ class Handler(BaseHTTPRequestHandler):
                 if lesson not in BY_ID:raise ValueError('Unknown lesson')
                 with connect() as db:db.execute('INSERT OR REPLACE INTO settings VALUES (?,?)',('currentLesson',lesson))
                 return self.send({'ok':True})
+            if path.startswith('/api/game/'):
+                progress=game_progress()
+                with connect() as db:result=game.handle(db,path[len('/api/game/'):],body,progress)
+                return self.send(result)
             lesson=BY_ID.get(body.get('lessonId'))
             if not lesson:raise ValueError('Unknown lesson')
             if path=='/api/draft':
