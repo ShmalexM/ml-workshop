@@ -1,0 +1,27 @@
+.venv/
+node_modules/
+dist/
+data/
+__pycache__/
+*.pyc
+*.log
+.DS_Store
+*.tsbuildinfo
+.env
+.env.*
+*.sqlite3*
+*.db
+.local/
+
+# Machine-specific launcher and regenerable icon intermediates.
+scripts/launcher.applescript
+assets/Workshop.iconset/
+
+# Private build-session material; public documentation lives alongside it.
+PLAN.md
+docs/claude-*
+docs/design*
+docs/verification.md
+docs/acceptance-tests.log
+docs/mobile-screenshot.jpg
+docs/cuda-screenshot.jpg
