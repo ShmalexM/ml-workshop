@@ -3,11 +3,11 @@
 [![CI](https://github.com/ShmalexM/ml-workshop/actions/workflows/ci.yml/badge.svg)](https://github.com/ShmalexM/ml-workshop/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-Learn engineering through **58 checked exercises across 12 paths**, using Python and JavaScript. Study ML, PyTorch, TensorFlow, CUDA, agent harnesses, backends, web apps, reinforcement learning, retrieval, reliability, and interactive systems. Connect the lessons to your own projects with local walkthroughs and notes.
+Learn engineering through **58 checked exercises across 12 paths**, using Python and JavaScript. Study ML, PyTorch, TensorFlow, CUDA, agent harnesses, backends, web apps, reinforcement learning, retrieval, reliability, and interactive systems. Begin with explanations and runnable worked examples, then connect each skill to a curated public project.
 
 Built for an experienced programmer broadening their engineering skills. The recommended ML path still starts with fundamentals. The repository and existing launcher keep the `ml-workshop` name for compatibility. Inspired by the learn-by-doing format of Boot.dev, with original curriculum and interface. This is an independent project with no affiliation with Boot.dev or the framework authors.
 
-![Engineering Workshop learning paths](docs/engineering-screenshot.jpg)
+![Guided lesson with an example and direct answer option](docs/guided-lesson-screenshot.jpg)
 
 ## Quick start: macOS with Apple Silicon
 
@@ -63,7 +63,9 @@ flowchart LR
 
 Use **Run code** (⌘ Enter) to inspect output, then **Check answer** (⌘ Shift Enter) for feedback and XP. XP is awarded once per lesson. You can browse any lesson, reveal hints gradually, inspect solutions, and revisit completed work in Practice. Open **Paths** for suggested sequences and **All exercises** for practice. See the [ML learning guide](docs/learning-plan.md).
 
-The **Projects** area maps your codebases to learning paths, with source-tracing prompts, deliverables, notes, and self-reviewed steps. Add or edit your ignored `data/portfolio.json` to keep growing your own map. Fresh clones have no personal catalog. See [project learning and catalog format](docs/project-learning.md).
+Every lesson follows **Understand → See an example → Try it yourself**, with a small runnable example, a prediction question and feedback. **Show answer** is available immediately, with an explanation and optional loading into the challenge editor. Running examples does not overwrite drafts or award XP.
+
+The **Projects** area ships with **12 curated public repositories**, ordered from small starting points to capstones. Each has a preparation lesson, a starting-file link and focused study prompts. Private project inventories are not bundled. An optional ignored `data/portfolio.json` can customize your own catalog. See [project learning and catalog format](docs/project-learning.md).
 
 ## Read alongside your exercises
 

@@ -9,7 +9,8 @@ Engineering Workshop starts with a complete, small learning loop and grows from 
 - Local progress storage and JSON export, plus a double-click macOS launcher.
 - Offline exercises using small synthetic inputs, including CUDA CPU simulation.
 
-- A local project catalog with skill links, guided source walkthroughs and saved review notes.
+- A curated catalog of 12 public projects, with starting files, preparation lessons and locally saved review notes.
+- Guided explanations, runnable examples and prediction questions for all 58 lessons, with answers available immediately.
 - PDF/EPUB reading with original assets and connected study prompts.
 
 ## Next improvements

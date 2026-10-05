@@ -219,8 +219,9 @@ class Handler(BaseHTTPRequestHandler):
                 stamp=int(body.get('updatedAt',0))
                 with connect() as db:db.execute('INSERT INTO drafts VALUES (?,?,?,?) ON CONFLICT(lesson) DO UPDATE SET code=excluded.code,notes=excluded.notes,updated=excluded.updated WHERE excluded.updated>=drafts.updated',(lesson['id'],code,notes,stamp))
                 return self.send({'ok':True})
-            if path=='/api/run':
-                code=body.get('code');mode=body.get('mode')
+            if path in ('/api/run','/api/example'):
+                is_example=path=='/api/example'
+                code=lesson['example']['code'] if is_example else body.get('code');mode='run' if is_example else body.get('mode')
                 if not isinstance(code,str) or len(code)>50000 or mode not in ('run','check'):raise ValueError('Invalid exercise request')
                 if not RUN_LOCK.acquire(blocking=False):return self.send({'error':'Another exercise is running. Try again when it finishes.'},409)
                 try:

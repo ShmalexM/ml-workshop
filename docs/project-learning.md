@@ -1,60 +1,76 @@
-# Learn through a project
+# Learn from public projects
 
-The workshop has two connected layers: reusable coding paths and local project walkthroughs. A walkthrough asks you to find the corresponding behavior in a real codebase, record evidence, and explain a tradeoff. Its review checkboxes are self-assessment, separate from checked lesson completions and XP.
+The Projects tab ships with **12 curated public repositories**, covering all 12 learning paths. Each entry has a difficulty level, a preparation lesson, a specific starting file, prerequisites and three focused prompts. Follow a small slice of a codebase before trying to run or understand the whole application.
 
 ```mermaid
 flowchart LR
-  A[Choose an engineering skill] --> B[Run a small checked exercise]
-  B --> C[Choose a related project]
-  C --> D[Trace actual source and behavior]
-  D --> E[Record evidence and a test idea]
-  E --> A
+  A[Understand a concept] --> B[Run a worked example]
+  B --> C[Try the checked challenge]
+  C --> D[Open one public source file]
+  D --> E[Trace a behavior and record evidence]
 ```
 
-## Add or extend your project map
+## The selection
 
-Create `data/portfolio.json`. The app loads it when you refresh; no rebuild or server restart is needed. There is no automatic GitHub scan, repository execution, or cloud upload. The file is ignored by Git, so private project details stay local. A fresh clone starts with an empty Projects view.
+| Level | Project | Starting point |
+| --- | --- | --- |
+| Start small | [micrograd](https://github.com/karpathy/micrograd) | Scalar operations and backward callbacks |
+| Start small | [TodoMVC](https://github.com/tastejs/todomvc) | React reducer and a single UI action |
+| Start small | [Gymnasium](https://github.com/Farama-Foundation/Gymnasium) | CartPole’s environment contract |
+| Build next | [PyTorch examples](https://github.com/pytorch/examples) | Synthetic regression training loop |
+| Build next | [Keras guides](https://github.com/keras-team/keras-io) | Introduction for engineers |
+| Build next | [smolagents](https://github.com/huggingface/smolagents) | Agent loop and tool boundaries |
+| Build next | [Full Stack FastAPI Template](https://github.com/fastapi/full-stack-fastapi-template) | One item route and its browser client |
+| Build next | [LlamaIndex](https://github.com/run-llama/llama_index) | Document and node schema |
+| Build next | [Temporal Python samples](https://github.com/temporalio/samples-python) | One activity retry example |
+| Capstone | [PokeRL](https://github.com/ShmalexM/PokeRL) | Credited [PokémonRedExperiments](https://github.com/PWhiddy/PokemonRedExperiments) environment implementation |
+| Capstone | [Vigil at Home](https://github.com/ShmalexM/Vigil-at-Home) | Desktop alert flow and authority boundaries |
+| Capstone | [NVIDIA CUDA samples](https://github.com/NVIDIA/cuda-samples) | Native vector-add sample |
+
+Public visibility, README context and starting-file paths were checked on 2026-10-05. Links follow upstream branches and can move. Upstream installation and runtime behavior were not qualified in this review. Source reading comes first; each card explains additional requirements such as a model provider, database, NVIDIA GPU or user-supplied game assets.
+
+The PokeRL repository currently contains a brief README; its walkthrough explicitly links to the credited upstream implementation. No game assets, repository source code, private project inventory or third-party dependencies are bundled with these project recommendations. The selection notes distinguish an inspected README from tested behavior.
+
+## Extend the shared catalog
+
+The reusable catalog lives in `backend/public_projects.json`. Add public project metadata and original study prompts, not copied repository code. Verify the entry-point URL and identify a small, teachable behavior. A useful project should have an approachable source slice, a connection to an existing path and a concrete deliverable. Large projects belong after the smaller examples.
+
+Keep project IDs and step order stable once learners have progress. If the walkthrough changes materially, use a new ID to avoid applying old review checks to new tasks. Review checkboxes record the learner’s own assessment and do not award lesson XP.
+
+## Optional local customization
+
+A Git-ignored `data/portfolio.json` overrides the bundled catalog when present. Without it, every fresh clone gets the public selection. To return to the default, move the override aside and refresh. The app never scans or executes referenced repositories.
 
 ```json
 {
   "version": 1,
-  "updatedAt": "2026-10-05",
-  "coverage": "A manually reviewed example repository.",
+  "coverage": "My own optional learning map",
   "projects": [
     {
       "id": "example-service",
       "title": "Example service",
-      "summary": "A small API and browser client for studying request contracts and asynchronous state.",
+      "summary": "Study a small API contract.",
       "visibility": "local",
       "repoUrl": "",
       "localPath": "/path/to/example-service",
-      "tracks": ["backend", "web", "reliability"],
-      "evidence": "README and request handler inspected. Deployment behavior not tested.",
-      "steps": [
-        "Trace one request from UI input to validated API payload and response.",
-        "Design a duplicate-request fixture and explain what must remain unchanged.",
-        "Record how a delayed response should behave after the user changes the query."
-      ],
-      "deliverable": "A request sequence diagram and three behavioral acceptance criteria."
+      "tracks": ["backend"],
+      "level": "Start small",
+      "firstLesson": "backend-1",
+      "entryPoint": {"label": "Read the local README", "url": ""},
+      "why": "One request handler is a small enough unit to trace.",
+      "requirements": "Python functions and dictionaries.",
+      "evidence": "README inspected; runtime not tested.",
+      "steps": ["Trace input validation.", "Describe an invalid request.", "Write an acceptance test."],
+      "deliverable": "A request contract and one test case."
     }
   ]
 }
 ```
 
-IDs must be unique lowercase slugs. Supported path IDs are `foundations`, `pytorch`, `tensorflow`, `modern`, `cuda`, `harness`, `backend`, `web`, `rl`, `data`, `reliability`, and `interactive`. Use 1–8 walkthrough steps, an optional HTTPS GitHub repository URL, and visibility `public`, `private`, or `local`. Visibility is a descriptive label, not an access-control setting; the entire app is a personal loopback service.
+Valid path IDs: `foundations`, `pytorch`, `tensorflow`, `modern`, `cuda`, `harness`, `backend`, `web`, `rl`, `data`, `reliability`, `interactive`. IDs must be unique lowercase slugs. Use 1–8 walkthrough steps and HTTPS GitHub URLs. Visibility is descriptive, not an access-control boundary; this remains a personal loopback app.
 
-Keep a project's ID and step order stable after recording progress. If you replace the walkthrough with materially different steps, use a new project ID so old review checks are not applied to different work. The server validates the catalog and shows an actionable error instead of rendering a partial or malformed map.
+## Progress and backups
 
-## Evidence and ownership
+Notes and reviewed step indices save locally to SQLite with browser-cache recovery and stale-write protection. Replacing a catalog does not delete old project notes from the database. New catalog entries use separate IDs so old reviews do not transfer to different projects.
 
-Describe what you actually inspected: metadata, README, selected source, tests, or observed runtime behavior. A repository description is not proof that its planned features exist. Forks and adapted projects should credit upstream authors. Do not use project mappings as claims of sole authorship, production readiness, or verified deployment.
-
-Project paths are displayed as reference text. The server does not expose a general file reader or open, scan, train, deploy, or modify the referenced project. Use synthetic fixtures when turning a walkthrough into a coding experiment.
-
-## Persistence
-
-Project notes and reviewed step indices save to `project_state` in SQLite, with browser-cache recovery and timestamp ordering. **Settings → Export progress & notes** includes the local project catalog and project notes, in addition to lesson and reading progress. An export may therefore contain private project details: review it before sharing. Source code and book binaries are not included. A full backup remains a stopped-server copy of `data/`.
-
-## Scope of the new paths
-
-The new four-lesson paths introduce specific invariants; they are not complete professional certifications. Web lessons run JavaScript functions in Node, rather than rendering a browser UI. Interactive/native lessons use Python to model lifecycle, time and media geometry; they do not teach the full SwiftUI or Flutter APIs. RL lessons use a tiny deterministic environment and tabular updates; real emulator training and PPO are project follow-ups. CUDA remains CPU simulation.
+Settings → Export progress & notes includes project notes and the active catalog, alongside lesson and reading state. A local override or old notes may contain personal information; review an export before sharing. Source code and book files are not included. For a full restore, back up the entire `data/` folder while the app is stopped.

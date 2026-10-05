@@ -89,6 +89,16 @@ class ApiTests(unittest.TestCase):
             self.assertEqual(error.exception.code,400)
         with self.assertRaises(urllib.error.HTTPError) as error:self.request('/api/project/state',payload,{'X-Workshop-Token':'wrong'})
         self.assertEqual(error.exception.code,403)
+    def test_worked_example_is_separate_from_challenge(self):
+        before=self.request('/api/state')
+        result=self.request('/api/example',dict(lessonId='foundations-1',code='raise Exception("should not run")',mode='check'))
+        self.assertIsNone(result['error']);self.assertEqual(result['stdout'].strip(),'7')
+        self.assertFalse(result['passed']);self.assertEqual(result['checks'],[])
+        self.assertEqual(self.request('/api/state'),before)
+        result=self.request('/api/example',dict(lessonId='web-1'))
+        self.assertEqual(result['stdout'].strip(),'1 3');self.assertFalse(result['passed'])
+        with self.assertRaises(urllib.error.HTTPError) as e:self.request('/api/example',dict(lessonId='unknown'))
+        self.assertEqual(e.exception.code,400)
     def test_single_exercise_at_a_time(self):
         import concurrent.futures
         with concurrent.futures.ThreadPoolExecutor() as pool:

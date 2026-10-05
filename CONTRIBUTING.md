@@ -21,9 +21,14 @@ Lessons live in `backend/courses.py`, `backend/courses_extra.py`, `backend/extra
 3. Include runnable starter code and a worked solution. The starter should fail the checks, and the solution should pass.
 4. Add three to five checks that exercise behavior across inputs. Include a boundary case and reject plausible wrong implementations; avoid checking source spelling.
 5. Keep exercises small, deterministic, offline, and within the runner's limits. No downloads, API credentials, telemetry, or paid services. Label synthetic data and simulated hardware accurately.
-6. Update lesson-count assertions in `tests/test_curriculum.py` and `tests/test_api.py`, plus the README's curriculum table, if adding/removing lessons.
+6. Add a small worked example, exact expected output, two value-tracing steps and a three-choice prediction question in `backend/lesson_guides.py`. Teach a smaller case before asking the learner to generalize; test the output with the real runner.
+7. Update lesson-count assertions in `tests/test_curriculum.py` and `tests/test_api.py`, plus the README's curriculum table, if adding/removing lessons.
 
 For JavaScript, set `language="javascript"`; checks are JavaScript expressions and the runner exposes `equal(a,b)` for JSON-compatible values. Python remains the default. Node.js must be available for API tests that run web lessons. Keep public exercises reusable; store personal project mappings in the ignored catalog described in [project learning](docs/project-learning.md).
+
+## Add a public project
+
+Edit `backend/public_projects.json` with a public repository, verified starting-file URL, prerequisites, preparation lesson and a focused walkthrough. Start with a source slice instead of requiring an entire stack. See [project learning](docs/project-learning.md). Private inventories belong only in ignored local overrides.
 
 ## Add a reading guide
 

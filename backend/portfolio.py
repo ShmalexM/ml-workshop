@@ -1,13 +1,14 @@
-"""Optional, local-only project catalog. Never scans or executes project code."""
+"""Curated public projects with an optional local catalog override. Never scans or executes project code."""
 import json
 import re
 from pathlib import Path
 from urllib.parse import urlparse
-from courses import COURSES
+from courses import COURSES, BY_ID
 
 
 def load_portfolio(data):
-    path=Path(data)/'portfolio.json'
+    local=Path(data)/'portfolio.json'
+    path=local if local.exists() else Path(__file__).with_name('public_projects.json')
     empty=dict(version=1,projects=[],coverage='',updatedAt='')
     if not path.exists():return empty
     try:
@@ -34,7 +35,17 @@ def load_portfolio(data):
                 if parsed.scheme!='https' or parsed.netloc!='github.com' or parsed.query or parsed.fragment:raise ValueError('Use an HTTPS GitHub repository URL')
             steps=p.get('steps',[])
             if not isinstance(steps,list) or not 1<=len(steps)<=8:raise ValueError('Provide 1–8 walkthrough steps')
-            clean.append(dict(id=pid,title=text(p.get('title'),120),summary=text(p.get('summary')),tracks=list(dict.fromkeys(tracks)),visibility=visibility,repoUrl=url,evidence=text(p.get('evidence','')),localPath=text(p.get('localPath',''),1000),steps=[text(s) for s in steps],deliverable=text(p.get('deliverable',''))))
+            level=text(p.get('level','Build next'),40)
+            if level not in ('Start small','Build next','Capstone'):raise ValueError('Unknown project level')
+            first=text(p.get('firstLesson',tracks[0]+'-1'),80)
+            if first not in BY_ID or BY_ID[first]['course'] not in tracks:raise ValueError('Unknown preparation lesson')
+            entry=p.get('entryPoint',dict(label='Repository',url=url))
+            if not isinstance(entry,dict):raise ValueError('Invalid starting file')
+            entry_label=text(entry.get('label',''),250);entry_url=text(entry.get('url',''),1000)
+            if entry_url:
+                parsed=urlparse(entry_url)
+                if parsed.scheme!='https' or parsed.netloc!='github.com':raise ValueError('Use an HTTPS GitHub source URL')
+            clean.append(dict(level=level,firstLesson=first,entryPoint=dict(label=entry_label,url=entry_url),why=text(p.get('why','')),requirements=text(p.get('requirements','')),id=pid,title=text(p.get('title'),120),summary=text(p.get('summary')),tracks=list(dict.fromkeys(tracks)),visibility=visibility,repoUrl=url,evidence=text(p.get('evidence','')),localPath=text(p.get('localPath',''),1000),steps=[text(s) for s in steps],deliverable=text(p.get('deliverable',''))))
         return dict(version=1,projects=clean,coverage=text(raw.get('coverage','')),updatedAt=text(raw.get('updatedAt',''),100))
     except (OSError,ValueError,TypeError,KeyError) as error:
-        return {**empty,'error':f'Could not load data/portfolio.json: {error}'}
+        return {**empty,'error':f'Could not load project catalog: {error}'}
