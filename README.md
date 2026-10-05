@@ -1,13 +1,13 @@
-# ML Workshop
+# Engineering Workshop
 
 [![CI](https://github.com/ShmalexM/ml-workshop/actions/workflows/ci.yml/badge.svg)](https://github.com/ShmalexM/ml-workshop/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-Learn ML engineering by writing and running Python. **30 hands-on lessons** take you from ML fundamentals through PyTorch, TensorFlow, modern AI frameworks, and CUDA Python—with hints, worked solutions, notes, practice, and saved progress.
+Learn engineering through **58 checked exercises across 12 paths**, using Python and JavaScript. Study ML, PyTorch, TensorFlow, CUDA, agent harnesses, backends, web apps, reinforcement learning, retrieval, reliability, and interactive systems. Connect the lessons to your own projects with local walkthroughs and notes.
 
-Built for an experienced programmer learning ML. Inspired by the learn-by-doing format of Boot.dev, with original curriculum and interface. This is an independent project with no affiliation with Boot.dev or the framework authors.
+Built for an experienced programmer broadening their engineering skills. The recommended ML path still starts with fundamentals. The repository and existing launcher keep the `ml-workshop` name for compatibility. Inspired by the learn-by-doing format of Boot.dev, with original curriculum and interface. This is an independent project with no affiliation with Boot.dev or the framework authors.
 
-![ML Workshop lesson workspace](docs/desktop-screenshot.jpg)
+![Engineering Workshop learning paths](docs/engineering-screenshot.jpg)
 
 ## Quick start: macOS with Apple Silicon
 
@@ -43,18 +43,27 @@ Once running, open **http://127.0.0.1:7318**. No account, API key, Docker, or cl
 | TensorFlow | 6 | Tensors, GradientTape, Keras, training, datasets, and inference |
 | Modern AI stack | 6 | Hugging Face, tokenization, LangChain, LlamaIndex, and retrieval |
 | CUDA Python | 6 | Thread/block indexing, bounds, transfers, 2D kernels, and shared memory |
+| Agent harness engineering | 4 | State machines, tool contracts, budgets, and trace evaluation |
+| Backend & API engineering | 4 | Input validation, idempotency, pagination, and readiness |
+| Web app engineering | 4 | JavaScript reducers, stale responses, derived views, and saved-state migration |
+| Reinforcement learning | 4 | Environment contracts, returns, exploration, and terminal/truncated targets |
+| Data & retrieval engineering | 4 | Revision deduplication, chunking, bounded graph walks, and recall |
+| Shipping & reliability | 4 | Retry budgets, structured redaction, change plans, and release gates |
+| Interactive & native systems | 4 | Lifecycle, frame time, aspect ratios, and event replay |
 
 ```mermaid
 flowchart LR
-  A[Read a concept] --> B[Edit Python]
+  A[Read a concept] --> B[Edit Python or JavaScript]
   B --> C[Run and inspect]
   C --> D[Check assertions]
   D -->|Needs work| E[Reveal a hint]
   E --> B
-  D -->|Pass| F[Save progress and continue]
+  D -->|Pass| F[Save progress and apply to a project]
 ```
 
-Use **Run code** (⌘ Enter) to inspect output, then **Check answer** (⌘ Shift Enter) for feedback and XP. XP is awarded once per lesson. You can browse any lesson, reveal hints gradually, inspect solutions, and revisit completed work in Practice. See the [learning guide](docs/learning-plan.md).
+Use **Run code** (⌘ Enter) to inspect output, then **Check answer** (⌘ Shift Enter) for feedback and XP. XP is awarded once per lesson. You can browse any lesson, reveal hints gradually, inspect solutions, and revisit completed work in Practice. Open **Paths** for suggested sequences and **All exercises** for practice. See the [ML learning guide](docs/learning-plan.md).
+
+The **Projects** area maps your codebases to learning paths, with source-tracing prompts, deliverables, notes, and self-reviewed steps. Add or edit your ignored `data/portfolio.json` to keep growing your own map. Fresh clones have no personal catalog. See [project learning and catalog format](docs/project-learning.md).
 
 ## Read alongside your exercises
 
@@ -66,7 +75,7 @@ Books stay local and are not bundled with this repository. See [local library se
 
 Drafts and notes are cached in the browser and synchronized to SQLite. Completions are saved by the server after checks pass. Your durable state lives in `data/workshop.sqlite3`.
 
-**Settings → Export progress & notes** writes JSON to `data/backups/` and offers a download, including book notes, bookmarks, and reading positions. The JSON does not include imported book files. Keep this backup somewhere safe. JSON import is planned; for a full current restore, stop the app and restore a copy of the entire `data/` folder made while the server was stopped. Git ignores your data, notes, exports, logs, and environment files.
+**Settings → Export progress & notes** writes JSON to `data/backups/` and offers a download, including book notes, bookmarks, reading positions, project walkthrough notes, and the local project catalog. Review exports before sharing because project details may be private. The JSON does not include imported book files. Keep this backup somewhere safe. JSON import is planned; for a full current restore, stop the app and restore a copy of the entire `data/` folder made while the server was stopped. Git ignores your data, notes, exports, logs, and environment files.
 
 To update, export progress, stop the app, run `git pull --ff-only`, then rerun Setup. If you are developing on a branch, commit or stash your source edits before integrating updates. Setup preserves `data/`.
 
@@ -78,13 +87,13 @@ Framework lessons execute real libraries with small local inputs. They do not do
 
 ## Execution model
 
-**This is a trusted personal-code runner, not a security sandbox.** Python runs with your account's filesystem and network permissions. Run code you trust and keep the service local.
+**This is a trusted personal-code runner, not a security sandbox.** Python and JavaScript run with your account's filesystem and network permissions. Run code you trust and keep the service local.
 
-The server binds to `127.0.0.1`, checks Host/Origin, and requires a per-session token for writes. Each exercise runs in a fresh Python process and temporary directory with a 50-second wall timeout, CPU/output limits, and process-group cleanup. Only one exercise runs at a time. See [architecture](docs/architecture.md) and [security](SECURITY.md).
+The server binds to `127.0.0.1`, checks Host/Origin, and requires a per-session token for writes. Each exercise runs in a fresh Python or Node process and temporary directory with a 50-second wall timeout, CPU/output limits, and process-group cleanup. Only one exercise runs at a time. See [architecture](docs/architecture.md) and [security](SECURITY.md).
 
 ## Develop and contribute
 
-The interface uses React, TypeScript, Vite, and CodeMirror. The backend uses Python's HTTP server and SQLite. ML packages load only inside exercise processes.
+The interface uses React, TypeScript, Vite, and CodeMirror. The backend uses Python's HTTP server and SQLite. JavaScript lessons use the already-required Node runtime and its built-in modules. ML packages load only inside exercise processes.
 
 ```sh
 npm run build     # Type-check and build the frontend

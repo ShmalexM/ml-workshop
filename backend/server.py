@@ -13,7 +13,8 @@ import sys
 import threading
 
 from courses import BY_ID, public_curriculum
-from runner import execute
+from runner import execute, node_binary
+from portfolio import load_portfolio
 from library import Library
 from book_study import study_guides
 
@@ -35,7 +36,12 @@ with connect() as db:
     db.execute('CREATE TABLE IF NOT EXISTS completions (lesson TEXT PRIMARY KEY, at TEXT, xp INTEGER)')
     db.execute('CREATE TABLE IF NOT EXISTS activity (day TEXT PRIMARY KEY)')
     db.execute('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)')
+    db.execute('CREATE TABLE IF NOT EXISTS project_state (project TEXT PRIMARY KEY, notes TEXT, reviewed TEXT, updated INTEGER)')
     db.execute('CREATE TABLE IF NOT EXISTS reading_state (book TEXT PRIMARY KEY, location INTEGER, notes TEXT, bookmarks TEXT, completed TEXT, updated INTEGER)')
+
+def project_state():
+    with connect() as db:
+        return {r[0]:dict(notes=r[1],reviewed=json.loads(r[2]),updatedAt=r[3]) for r in db.execute('SELECT project,notes,reviewed,updated FROM project_state')}
 
 def reading_state():
     with connect() as db:
@@ -53,7 +59,7 @@ def runtime():
     for name in ['torch','tensorflow','transformers','tokenizers','langchain-core','llama-index-core','numba']:
         try:packages[name]=version(name)
         except PackageNotFoundError:packages[name]=None
-    return dict(python=sys.version.split()[0],packages=packages,cudaMode='CPU simulator (Numba); no NVIDIA GPU execution')
+    return dict(python=sys.version.split()[0],javascript=bool(node_binary()),packages=packages,cudaMode='CPU simulator (Numba); no NVIDIA GPU execution')
 
 class Handler(BaseHTTPRequestHandler):
     server_version='MLWorkshop/1.0'
@@ -83,6 +89,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if not self.allowed():return
         parsed=urlparse(self.path);path=parsed.path
+        if path=='/api/portfolio':return self.send(dict(**load_portfolio(DATA),projectState=project_state()))
         if path=='/api/library':
             return self.send(dict(books=LIBRARY.catalog(),guides=study_guides(LIBRARY),readingState=reading_state()))
         if path=='/api/library/search':
@@ -172,6 +179,15 @@ class Handler(BaseHTTPRequestHandler):
             body=json.loads(self.rfile.read(length))
             if not isinstance(body,dict):raise ValueError('Expected an object')
             path=urlparse(self.path).path
+            if path=='/api/project/state':
+                project=next((p for p in load_portfolio(DATA)['projects'] if p['id']==body.get('projectId')),None)
+                if not project:raise ValueError('Unknown project')
+                notes=body.get('notes');reviewed=body.get('reviewed');updated=body.get('updatedAt')
+                if not isinstance(notes,str) or len(notes)>30000:raise ValueError('Invalid project notes')
+                if not isinstance(reviewed,list) or len(reviewed)>len(project['steps']) or any(type(i)!=int or not 0<=i<len(project['steps']) for i in reviewed):raise ValueError('Invalid reviewed steps')
+                if type(updated)!=int or not 0<=updated<=2**53-1:raise ValueError('Invalid timestamp')
+                with connect() as db:db.execute('INSERT INTO project_state VALUES (?,?,?,?) ON CONFLICT(project) DO UPDATE SET notes=excluded.notes,reviewed=excluded.reviewed,updated=excluded.updated WHERE excluded.updated>=project_state.updated',(project['id'],notes,json.dumps(sorted(set(reviewed))),updated))
+                return self.send({'ok':True})
             if path=='/api/library/state':
                 book_id=body.get('bookId','')
                 try:book=LIBRARY.book(book_id)
@@ -187,7 +203,7 @@ class Handler(BaseHTTPRequestHandler):
             if path=='/api/backup':
                 folder=DATA/'backups';folder.mkdir(exist_ok=True)
                 name='ml-workshop-'+datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S-%f')+'.json'
-                payload=dict(app='ml-workshop',version=2,exportedAt=datetime.now(timezone.utc).isoformat(),readingState=reading_state(),**state())
+                payload=dict(app='ml-workshop',version=3,projectState=project_state(),portfolio=load_portfolio(DATA),exportedAt=datetime.now(timezone.utc).isoformat(),readingState=reading_state(),**state())
                 (folder/name).write_text(json.dumps(payload,indent=2))
                 return self.send(dict(filename=name,url='/api/backups/'+name))
             if path=='/api/current':
@@ -208,7 +224,7 @@ class Handler(BaseHTTPRequestHandler):
                 if not isinstance(code,str) or len(code)>50000 or mode not in ('run','check'):raise ValueError('Invalid exercise request')
                 if not RUN_LOCK.acquire(blocking=False):return self.send({'error':'Another exercise is running. Try again when it finishes.'},409)
                 try:
-                    result=execute(code,lesson['checks'] if mode=='check' else [],simulator=lesson['course']=='cuda')
+                    result=execute(code,lesson['checks'] if mode=='check' else [],simulator=lesson['course']=='cuda',language=lesson.get('language','python'))
                     if mode=='check' and result['passed']:
                         now=datetime.now(timezone.utc).isoformat()
                         # Activity uses the user's local system date, not UTC midnight.

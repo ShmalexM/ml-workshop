@@ -453,6 +453,10 @@ from courses_extra import COURSES_EXTRA, LESSONS_EXTRA
 COURSES.extend(COURSES_EXTRA)
 LESSONS.extend(LESSONS_EXTRA)
 
+from engineering_courses import COURSES_ENGINEERING, LESSONS_ENGINEERING
+COURSES.extend(COURSES_ENGINEERING)
+LESSONS.extend(LESSONS_ENGINEERING)
+
 BY_ID={lesson['id']:lesson for lesson in LESSONS}
 
 def public_curriculum():

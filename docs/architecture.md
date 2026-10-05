@@ -6,7 +6,7 @@ flowchart LR
   B --> C[React lesson workspace]
   C --> D[Save draft / notes]
   D --> E[(Local SQLite)]
-  C --> F[Run or check Python]
+  C --> F[Run or check Python or JavaScript]
   F --> G[Fresh subprocess + temporary directory]
   G --> H[Real framework / CUDA CPU simulator]
   H --> I[Output and assertion results]
@@ -16,7 +16,7 @@ flowchart LR
 
 The production frontend is served from `dist/`; only one long-lived Python process is needed. Heavy framework imports live exclusively in exercise subprocesses. Course source and reference checks are backend-owned, published lesson metadata excludes solutions/check expressions, and solutions are fetched only when the user chooses to view them. Every completion is keyed by lesson ID, preventing duplicate XP. SQLite transactions serialize writes and timestamped drafts ignore stale saves.
 
-Execution is deliberately trusted local Python, not an untrusted code service. Loopback host/origin checks, no CORS, an unpredictable write token, subprocess time/output limits, secret-minimized environment, and process-group cleanup reduce accidental misuse but do not isolate the user's filesystem. Do not expose this server on a network.
+Execution is deliberately trusted local Python and JavaScript, not an untrusted code service. Loopback host/origin checks, no CORS, an unpredictable write token, subprocess time/output limits, secret-minimized environment, and process-group cleanup reduce accidental misuse but do not isolate the user's filesystem. Do not expose this server on a network.
 
 
 ## Local books
@@ -26,3 +26,11 @@ Execution is deliberately trusted local Python, not an untrusted code service. L
 The Books UI uses hash routes for direct chapter links, cancellable PDF rendering, and timestamped reading state in SQLite. Notes, bookmarks, and reviewed guide IDs are included in progress exports; book binaries and extracted content are not. Original study prompts live in `backend/book_study.py` and appear only for matching locally imported books.
 
 Library routes inherit the server's Host/Origin checks and token-protected writes. Assets are manifest-allowlisted and path-confined. Original asset responses prohibit active content; the application CSP allows the local PDF worker and WASM decoder. The app does not execute PDF actions, forms, or EPUB scripts.
+
+## Engineering paths and project practice
+
+`backend/engineering_courses.py` adds original, deterministic engineering lessons. A lesson's language selects Python (the default) or JavaScript. JavaScript runs in a fresh Node process via a Python launcher that sets CPU/file limits before `execve`; the threaded server does not use `preexec_fn`. Both languages share wall timeout, output capture, process-group cleanup and completion rules. Node's VM context organizes exercise/check bindings; it is not a security boundary.
+
+`backend/portfolio.py` validates an optional ignored `data/portfolio.json`. The public source contains no personal project inventory. The server reads only this explicit catalog, not the referenced repositories. API responses supply catalog metadata and project state; token-protected writes persist timestamped notes and reviewed step indices in SQLite. Progress export version 3 includes the catalog and project state. Existing lesson IDs, draft caches, book storage and launcher identity remain compatible.
+
+The UI uses hash routes for Paths, lessons, Projects and Books. Suggested sequences do not gate access. A project review is self-assessment and never awards lesson XP. Browser recovery caches survive refresh and stale server writes are rejected.

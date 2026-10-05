@@ -15,17 +15,24 @@ socket.create_connection = _network_disabled
 socket.getaddrinfo = _network_disabled
 """
 
+JS_OFFLINE_PREFIX = """const denyNetwork = () => {throw new Error('Network disabled during verification')};
+require('node:net').Socket.prototype.connect = denyNetwork;
+require('node:dgram').Socket.prototype.send = denyNetwork;
+globalThis.fetch = denyNetwork;
+"""
+
 class CurriculumTests(unittest.TestCase):
     def test_every_solution_and_starter(self):
-        self.assertEqual(len(LESSONS),30)
-        self.assertEqual(len({l['id'] for l in LESSONS}),30)
+        self.assertEqual(len(LESSONS),58)
+        self.assertEqual(len({l['id'] for l in LESSONS}),58)
         for lesson in LESSONS:
             with self.subTest(lesson=lesson['id']):
                 # Use the same 50-second budget as the app. A cold TensorFlow
                 # import on a fresh macOS installation can exceed 20 seconds.
-                result=execute(OFFLINE_PREFIX+lesson['solution'],lesson['checks'],simulator=lesson['course']=='cuda')
+                prefix=JS_OFFLINE_PREFIX if lesson.get('language')=='javascript' else OFFLINE_PREFIX
+                result=execute(prefix+lesson['solution'],lesson['checks'],simulator=lesson['course']=='cuda',language=lesson.get('language','python'))
                 self.assertTrue(result['passed'],f"{lesson['id']} solution: {result}")
-                starter=execute(OFFLINE_PREFIX+lesson['starter'],lesson['checks'],simulator=lesson['course']=='cuda')
+                starter=execute(prefix+lesson['starter'],lesson['checks'],simulator=lesson['course']=='cuda',language=lesson.get('language','python'))
                 self.assertFalse(starter['passed'],f"{lesson['id']} starter should not pass")
                 print(f"{lesson['id']}: solution passed; starter did not pass",flush=True)
     def test_extra_schema_and_sources(self):
@@ -36,7 +43,7 @@ class CurriculumTests(unittest.TestCase):
             for field in ['diagram','tasks','hints']:self.assertEqual(len(lesson[field]),3)
             self.assertTrue(3<=len(lesson['checks'])<=5)
             domain=urlparse(lesson['reference']['url']).hostname
-            self.assertIn(domain,['developers.google.com','docs.pytorch.org','www.tensorflow.org','huggingface.co','reference.langchain.com','developers.llamaindex.ai','nvidia.github.io'])
+            self.assertIn(domain,['developers.google.com','docs.pytorch.org','www.tensorflow.org','huggingface.co','reference.langchain.com','developers.llamaindex.ai','nvidia.github.io','docs.python.org','www.rfc-editor.org','react.dev','gymnasium.farama.org','opentelemetry.io','developer.mozilla.org'])
     def test_constant_answer_does_not_pass(self):
         lesson=next(l for l in LESSONS if l['id']=='foundations-3')
         self.assertFalse(execute('def step(weight,target,learning_rate):return 0.6',lesson['checks'])['passed'])
@@ -48,6 +55,15 @@ class CurriculumTests(unittest.TestCase):
     def test_timeout_and_error_reporting(self):
         self.assertIn('Execution stopped',execute('while True: pass',[],timeout=1)['error'])
         self.assertIn('ZeroDivisionError',execute('1/0',[])['error'])
+    def test_javascript_timeout_and_error_reporting(self):
+        self.assertIn('Execution stopped',execute('while(true){}',[],timeout=1,language='javascript')['error'])
+        self.assertIn('ReferenceError',execute('missingName()',[],language='javascript')['error'])
+        result=execute('console.log("finished")',[dict(label='real requirement',expr='false')],language='javascript')
+        self.assertFalse(result['passed']);self.assertEqual(result['stdout'].strip(),'finished')
+    def test_javascript_stale_response_mutation_fails(self):
+        lesson=next(l for l in LESSONS if l['id']=='web-2')
+        result=execute('function applyResponse(state, response) {return {...state, items:response.items, status:"ready"}}',lesson['checks'],language='javascript')
+        self.assertFalse(result['passed'])
     def test_stdout_is_not_an_answer(self):
         result=execute('print("all checks passed")',[{'label':'real result','expr':'False'}])
         self.assertFalse(result['passed'])

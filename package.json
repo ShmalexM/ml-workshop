@@ -26,7 +26,7 @@
     "vite": "^6.3.5"
   },
   "license": "MIT",
-  "description": "Learn ML, PyTorch, TensorFlow, modern AI frameworks, and CUDA through offline coding exercises.",
+  "description": "Learn ML and software engineering through local Python/JavaScript exercises and project walkthroughs.",
   "repository": {
     "type": "git",
     "url": "https://github.com/ShmalexM/ml-workshop.git"

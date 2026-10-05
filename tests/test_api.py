@@ -19,6 +19,8 @@ class ApiTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.tmp=tempfile.TemporaryDirectory(prefix='ml-api-test-')
+        project=dict(id='sample',title='Sample project',summary='Synthetic fixture',tracks=['backend'],steps=['Trace request','Test retry'],deliverable='A diagram')
+        (Path(cls.tmp.name)/'portfolio.json').write_text(json.dumps(dict(version=1,projects=[project])))
         cls.book=import_book(make_epub(Path(cls.tmp.name)/'fixture.epub'),cls.tmp.name,'fixture')
         with socket.socket() as sock:
             sock.bind(('127.0.0.1',0));cls.port=sock.getsockname()[1]
@@ -60,8 +62,33 @@ class ApiTests(unittest.TestCase):
         self.assertNotIn('foundations-2',self.request('/api/state')['completed'])
     def test_curriculum_does_not_leak_answers(self):
         lessons=self.request('/api/curriculum')['lessons']
-        self.assertEqual(len(lessons),30)
-        self.assertNotIn('solution',lessons[0]);self.assertNotIn('checks',lessons[0])
+        self.assertEqual(len(lessons),58)
+        for lesson in lessons:
+            self.assertNotIn('solution',lesson);self.assertNotIn('checks',lesson)
+    def test_javascript_lesson_api(self):
+        lesson=next(l for l in self.request('/api/curriculum')['lessons'] if l['id']=='web-1')
+        self.assertEqual(lesson['language'],'javascript')
+        result=self.request('/api/run',dict(lessonId='web-1',code=lesson['starter'],mode='check'))
+        self.assertFalse(result['passed'])
+        solution=self.request('/api/solution/web-1')['solution']
+        result=self.request('/api/run',dict(lessonId='web-1',code=solution,mode='check'))
+        self.assertTrue(result['passed']);self.assertIn('web-1',result['state']['completed'])
+    def test_project_state_and_backup(self):
+        payload=dict(projectId='sample',notes='New evidence',reviewed=[1],updatedAt=200)
+        self.request('/api/project/state',payload)
+        self.request('/api/project/state',{**payload,'notes':'stale','reviewed':[],'updatedAt':100})
+        catalog=self.request('/api/portfolio')
+        self.assertEqual(catalog['projectState']['sample']['notes'],'New evidence')
+        self.assertEqual(catalog['projectState']['sample']['reviewed'],[1])
+        backup=self.request(self.request('/api/backup',{})['url'])
+        self.assertEqual(backup['projectState'],catalog['projectState'])
+        self.assertEqual(backup['portfolio']['projects'][0]['id'],'sample')
+        for patch in ({'projectId':'unknown'},{'reviewed':[2]},{'reviewed':[True]},{'reviewed':[-1]},{'updatedAt':-1},{'notes':'x'*30001}):
+            with self.subTest(patch=str(patch)[:50]),self.assertRaises(urllib.error.HTTPError) as error:
+                self.request('/api/project/state',{**payload,**patch})
+            self.assertEqual(error.exception.code,400)
+        with self.assertRaises(urllib.error.HTTPError) as error:self.request('/api/project/state',payload,{'X-Workshop-Token':'wrong'})
+        self.assertEqual(error.exception.code,403)
     def test_single_exercise_at_a_time(self):
         import concurrent.futures
         with concurrent.futures.ThreadPoolExecutor() as pool:
@@ -90,7 +117,7 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(library['readingState']['fixture']['location'],2)
         backup=self.request('/api/backup',{})
         exported=self.request(backup['url'])
-        self.assertEqual(exported['version'],2)
+        self.assertEqual(exported['version'],3)
         self.assertEqual(exported['readingState']['fixture']['bookmarks'],[2])
         self.assertNotIn('documents',exported)
         for patch in ({'location':0},{'location':3},{'notes':'x'*30001},{'bookmarks':[3]},{'bookmarks':[True]},{'completed':['invented']},{'updatedAt':-1}):
