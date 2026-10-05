@@ -273,7 +273,8 @@
 }
 
 /* Battle */
-.game.battle-host { overflow: hidden; position: relative; }
+.game.battle-host { overflow: hidden auto; position: relative; }
+.game.battle-host:has(.battle) { overflow: hidden; }
 .battle-ready { max-width: 760px; }
 .back-armory { margin-bottom: 14px; }
 .ready-card { padding: 26px 28px; display: grid; gap: 12px; }
