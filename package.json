@@ -1,0 +1,36 @@
+{
+  "name": "ml-workshop",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite build --watch",
+    "build": "tsc -b && vite build",
+    "test": ".venv/bin/python -m unittest discover -s tests -v",
+    "start": ".venv/bin/python scripts/launch.py"
+  },
+  "dependencies": {
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "lucide-react": "^0.468.0",
+    "@uiw/react-codemirror": "^4.23.0",
+    "@codemirror/lang-python": "^6.1.6",
+    "@codemirror/theme-one-dark": "^6.1.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5",
+    "@vitejs/plugin-react": "^4.4.1",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0"
+  },
+  "license": "MIT",
+  "description": "Learn ML, PyTorch, TensorFlow, modern AI frameworks, and CUDA through offline coding exercises.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ShmalexM/ml-workshop.git"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
