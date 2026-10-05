@@ -9,6 +9,7 @@
 .loot-toast-text { display: grid; gap: 4px; }
 .loot-toast-text strong { font-family: 'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif; color: #e4bc6a; font-size: 15px; }
 .loot-toast-text span { font-size: 13px; color: #c9c5b8; }
+.loot-toast-text .loot-toast-lesson { color: #ebe7dc; font-weight: 600; }
 .loot-toast-actions { display: flex; gap: 14px; margin-top: 4px; }
 .loot-toast-actions a { color: #f2cf7c; font-weight: 650; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; }
 .loot-toast-close { position: absolute; top: 8px; right: 8px; color: #aaa79c; padding: 4px; border-radius: 4px; }
