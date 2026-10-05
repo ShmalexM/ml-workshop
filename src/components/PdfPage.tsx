@@ -59,8 +59,8 @@ export default function PdfPage({ bookId, page, zoom }: { bookId: string; page: 
   }, [pdf, page, zoom, width])
 
   return <div className="pdf-stage" ref={host} aria-busy={loading}>
-    {loading && <p className="pdf-status" role="status">Rendering original PDF…</p>}
-    {error && <p className="book-error" role="alert">Could not render this page: {error}. You can still download the original PDF above.</p>}
-    <div className="pdf-scroll"><canvas ref={canvas} aria-label={`Original PDF page ${page}`} style={{ visibility: loading || error ? 'hidden' : 'visible' }} /></div>
+    {loading && <p className="pdf-status" role="status">Rendering page…</p>}
+    {error && <p className="book-error" role="alert">Could not render this page: {error}. You can still download the PDF above.</p>}
+    <div className="pdf-scroll"><canvas ref={canvas} aria-label={`PDF page ${page}`} style={{ visibility: loading || error ? 'hidden' : 'visible' }} /></div>
   </div>
 }

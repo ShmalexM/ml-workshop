@@ -48,7 +48,7 @@ class ApiTests(unittest.TestCase):
         self.assertTrue(result['passed']);stamp=result['state']['completed']['foundations-1']['at']
         again=self.request('/api/run',dict(lessonId='foundations-1',code=code,mode='check'))
         self.assertEqual(again['state']['completed']['foundations-1']['at'],stamp)
-        self.assertEqual(sum(x['xp'] for x in again['state']['completed'].values()),100)
+        self.assertEqual(again['state']['completed']['foundations-1']['xp'],100)
         self.request('/api/draft',dict(lessonId='foundations-1',code=code,notes='new note',updatedAt=20))
         self.request('/api/draft',dict(lessonId='foundations-1',code='stale',notes='stale',updatedAt=10))
         saved=self.request('/api/state')

@@ -83,7 +83,7 @@ class Handler(BaseHTTPRequestHandler):
     def allowed(self,write=False):
         expected=f'127.0.0.1:{self.server.server_port}'
         if self.headers.get('Host')!=expected:
-            self.send({'error':'This app accepts only its loopback host.'},403);return False
+            self.send({'error':f'Open http://{expected}/ instead. The workshop only answers on that address.'},403);return False
         origin=self.headers.get('Origin')
         if origin and origin!=f'http://{expected}':
             self.send({'error':'Cross-origin requests are disabled.'},403);return False
@@ -258,7 +258,7 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             import traceback
             traceback.print_exc()
-            self.send({'error':'The local server hit an error. Your previously saved progress is intact.'},500)
+            self.send({'error':'The local server hit an error. Saved progress is safe. Details are in data/server.log.'},500)
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('--port',type=int,default=7318)

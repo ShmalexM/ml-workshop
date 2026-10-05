@@ -57,6 +57,7 @@ class CurriculumTests(unittest.TestCase):
                 result=execute(prefix+lesson['solution'],lesson['checks'],simulator=lesson['course']=='cuda',language=lesson.get('language','python'))
                 self.assertTrue(result['passed'],f"{lesson['id']} solution: {result}")
                 starter=execute(prefix+lesson['starter'],lesson['checks'],simulator=lesson['course']=='cuda',language=lesson.get('language','python'))
+                self.assertIsNone(starter['error'], f"{lesson['id']} starter: {starter}")
                 self.assertFalse(starter['passed'],f"{lesson['id']} starter should not pass")
                 print(f"{lesson['id']}: solution passed; starter did not pass",flush=True)
     def test_extra_schema_and_sources(self):
@@ -74,7 +75,8 @@ class CurriculumTests(unittest.TestCase):
     def test_cuda_missing_bounds_guard_fails(self):
         lesson=next(l for l in LESSONS if l['id']=='cuda-2')
         require_lesson_modules(self, lesson)
-        broken=lesson['solution'].replace('if i<out.size:out[i]=a[i]+b[i]','out[i]=a[i]+b[i]')
+        broken=lesson['solution'].replace('    if i < out.size:\n        out[i] = a[i] + b[i]', '    out[i] = a[i] + b[i]')
+        self.assertNotEqual(broken, lesson['solution'])
         result=execute(OFFLINE_PREFIX+broken,lesson['checks'],simulator=True)
         self.assertFalse(result['passed'])
     def test_timeout_and_error_reporting(self):

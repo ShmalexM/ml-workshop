@@ -90,7 +90,7 @@ final class WorkshopApp: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
     @objc private func about() {
-        NSApp.orderFrontStandardAboutPanel(options: [.applicationName: "Engineering Workshop", .applicationVersion: "1.0", .credits: NSAttributedString(string: "Your local engineering learning companion.\nLessons, books and progress stay on this Mac.")])
+        NSApp.orderFrontStandardAboutPanel(options: [.applicationName: "Engineering Workshop", .applicationVersion: "1.0", .credits: NSAttributedString(string: "ML and software engineering lessons that run on this Mac.\nLessons, books and progress stay on this Mac.")])
     }
     @objc private func openInBrowser() { NSWorkspace.shared.open(webView.url.flatMap { isLocal($0) ? $0 : nil } ?? home) }
     private func isLocal(_ url: URL) -> Bool { url.scheme == "http" && url.host == "127.0.0.1" && url.port == 7318 }
