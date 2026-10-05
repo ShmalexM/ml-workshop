@@ -5,12 +5,13 @@ import unittest
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'backend'))
 from courses import COURSES,LESSONS
 from runner import execute
-from test_curriculum import OFFLINE_PREFIX,JS_OFFLINE_PREFIX
+from test_curriculum import OFFLINE_PREFIX,JS_OFFLINE_PREFIX,require_lesson_modules
 
 class GuideTests(unittest.TestCase):
     def test_every_example_prints_the_teaching_result(self):
         for lesson in LESSONS:
             with self.subTest(lesson=lesson['id']):
+                require_lesson_modules(self, lesson)
                 example=lesson['example'];lang=lesson.get('language','python')
                 prefix=JS_OFFLINE_PREFIX if lang=='javascript' else OFFLINE_PREFIX
                 result=execute(prefix+example['code'],[],language=lang,simulator=lesson['course']=='cuda')

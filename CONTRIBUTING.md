@@ -4,13 +4,13 @@ Engineering Workshop is a personal learning project that grows through use. Smal
 
 ## Develop locally
 
-Follow the [setup instructions](README.md#quick-start-macos-with-apple-silicon). Work on a branch. To edit the frontend, start the app and run:
+Follow the [setup instructions](README.md#install). Work on a branch. To edit the frontend, start the app and run:
 
 ```sh
 npm run dev
 ```
 
-This watches and rebuilds `dist/`. Refresh `http://127.0.0.1:7318` after a change. Serving the UI and API from one origin preserves the local server's request checks. For backend edits, stop the app with `./"Stop ML Workshop.command"` and restart it with `./"Open ML Workshop.command"`.
+This watches and rebuilds `dist/`. Refresh `http://127.0.0.1:7318` after a change. Serving the UI and API from one origin preserves the local server's request checks. For backend edits, stop and restart with your OS wrappers: `stop.sh`/`start.sh` on Linux, `stop.ps1`/`start.ps1` on Windows, or the existing Stop/Open `.command` files on macOS. `npm start -- --no-open` starts the browser server without opening a browser. Use the same `ML_WORKSHOP_PORT` and `ML_WORKSHOP_DATA_DIR` values for launch and stop.
 
 ## Add a lesson
 
@@ -38,17 +38,28 @@ Edit `backend/public_projects.json` with a public repository, verified starting-
 
 ## Verify
 
+Run tests with disposable storage. On macOS/Linux:
+
 ```sh
+TEST_DATA=$(mktemp -d "${TMPDIR:-/tmp}/workshop-tests.XXXXXX")
+export ML_WORKSHOP_DATA_DIR="$TEST_DATA"
 npm run build
 npm test
 ```
 
-The full suite runs every solution and starter, denies network access in curriculum checks, and exercises persistence, execution limits, and API guards using a disposable database. A quick backend check without ML packages is:
+On Windows (PowerShell):
 
-```sh
-python3 -m unittest discover -s tests -p test_api.py -v
+```powershell
+$env:ML_WORKSHOP_DATA_DIR = Join-Path ([System.IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString())
+New-Item -ItemType Directory $env:ML_WORKSHOP_DATA_DIR | Out-Null
+npm run build
+npm test
 ```
 
-CI builds the frontend and runs the full suite on an Apple Silicon macOS runner with Python 3.12. It also runs the API suite using Python standard-library modules and Node.js on Linux. This does not qualify the complete application on Linux or on NVIDIA hardware. For UI changes, check both desktop and narrow layouts and the read → edit → run → check flow.
+The suite checks solutions and starters, worked examples, persistence, runner limits, process cleanup, and API guards. Launcher/API integration tests choose unused loopback ports and disposable databases. POSIX-only checks skip on Windows. Lessons whose required Python modules are absent skip using `importlib.util.find_spec`; setup with `--no-ml` lets you run all other tests. Set `ML_WORKSHOP_REQUIRE_ML=1` for a full-install check that fails on missing lesson modules.
+
+`npm test` and `npm start` use the checkout's `.venv` on every OS. For a quick API-only check, run `node scripts/py.mjs -m unittest discover -s tests -p test_api.py -v`.
+
+CI builds the frontend and runs the full suite on Apple Silicon macOS with Python 3.12. Linux and Windows jobs run light setup, build, and all non-ML tests; their first run with these changes is pending. This does not qualify full framework installs, desktop browser integration on those platforms, or NVIDIA hardware. Windows exercises have a wall timeout and returned-output cap, but no CPU or file-size limit. For UI changes, check both desktop and narrow layouts and the read → edit → run → check flow.
 
 Keep generated files, learner progress, notes, logs, and credentials out of commits. Include what changed, why, and what you tested in your pull request. Contributions are provided under the project's MIT license.

@@ -15,4 +15,8 @@ try {
   }
   result.passed=result.checks.length>0&&result.checks.every(c=>c.passed);
 } catch(e){result.error=String(e.stack||e).slice(-6000);}
-fs.writeFileSync(process.argv[3],JSON.stringify(result));
+const pending=process.argv[3]+'.tmp';
+fs.writeFileSync(pending,JSON.stringify(result));
+fs.renameSync(pending,process.argv[3]);
+// Keep the Windows tree root alive until the parent cleans up with taskkill /T.
+if(process.platform==='win32')setInterval(()=>{},60000);

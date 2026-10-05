@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "node scripts/copy-pdf-assets.mjs && vite build --watch",
     "build": "node scripts/copy-pdf-assets.mjs && tsc -b && vite build",
-    "test": ".venv/bin/python -m unittest discover -s tests -v",
-    "start": ".venv/bin/python scripts/launch.py"
+    "test": "node scripts/py.mjs -m unittest discover -s tests -v",
+    "start": "node scripts/py.mjs scripts/launch.py"
   },
   "dependencies": {
     "@codemirror/lang-python": "^6.1.6",

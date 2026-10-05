@@ -1,3 +1,4 @@
-#!/bin/zsh
-cd "${0:A:h}"
+#!/bin/sh
+set -eu
+cd "$(dirname "$0")"
 exec .venv/bin/python scripts/launch.py "$@"

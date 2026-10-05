@@ -18,6 +18,8 @@ jobs:
     name: macOS build and all lessons
     runs-on: macos-26
     timeout-minutes: 20
+    env:
+      ML_WORKSHOP_REQUIRE_ML: '1'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -36,13 +38,21 @@ jobs:
       - run: python -m pip install -r requirements.lock
       - run: python -m pip check
       - run: python -m unittest discover -s tests -v
+        env:
+          ML_WORKSHOP_DATA_DIR: ${{ runner.temp }}/workshop-data
       - name: Check command syntax
-        run: zsh -n *.command
+        run: |
+          for file in *.command; do zsh -n "$file" || exit; done
+          for file in *.sh; do sh -n "$file" || exit; done
 
-  api:
-    name: Linux API checks (no ML dependencies)
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
+  portable:
+    name: ${{ matrix.os }} build and all non-ML tests
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -53,4 +63,25 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version-file: .nvmrc
-      - run: python -m unittest discover -s tests -p test_api.py -v
+      - name: Linux setup
+        if: runner.os == 'Linux'
+        run: ./setup.sh --no-ml --no-launch
+      - name: Windows setup
+        if: runner.os == 'Windows'
+        run: .\setup.ps1 --no-ml --no-launch
+      - run: npm test
+        env:
+          ML_WORKSHOP_DATA_DIR: ${{ runner.temp }}/workshop-data
+      - name: Check Linux wrapper syntax
+        if: runner.os == 'Linux'
+        run: for file in *.sh; do sh -n "$file" || exit; done
+      - name: Check Windows wrapper syntax
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Get-ChildItem *.ps1 | ForEach-Object {
+            $tokens = $null
+            $parseErrors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$parseErrors) | Out-Null
+            if ($parseErrors.Count) { throw ($parseErrors | Out-String) }
+          }

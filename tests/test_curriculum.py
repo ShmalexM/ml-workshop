@@ -1,3 +1,6 @@
+import ast
+import importlib.util
+import os
 import sys
 from pathlib import Path
 import unittest
@@ -21,12 +24,33 @@ require('node:dgram').Socket.prototype.send = denyNetwork;
 globalThis.fetch = denyNetwork;
 """
 
+def missing_lesson_modules(lesson):
+    if lesson.get('language') == 'javascript':
+        return []
+    modules = set()
+    for code in (lesson['starter'], lesson['solution'], lesson['example']['code']):
+        for node in ast.walk(ast.parse(code)):
+            if isinstance(node, ast.Import):
+                modules.update(alias.name.split('.')[0] for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                modules.add(node.module.split('.')[0])
+    return sorted(module for module in modules if importlib.util.find_spec(module) is None)
+
+def require_lesson_modules(test, lesson):
+    missing = missing_lesson_modules(lesson)
+    if missing:
+        message = f"{lesson['id']} requires {', '.join(missing)}; run setup without --no-ml."
+        if os.environ.get('ML_WORKSHOP_REQUIRE_ML') == '1':
+            test.fail(message)
+        test.skipTest(message)
+
 class CurriculumTests(unittest.TestCase):
     def test_every_solution_and_starter(self):
         self.assertEqual(len(LESSONS),58)
         self.assertEqual(len({l['id'] for l in LESSONS}),58)
         for lesson in LESSONS:
             with self.subTest(lesson=lesson['id']):
+                require_lesson_modules(self, lesson)
                 # Use the same 50-second budget as the app. A cold TensorFlow
                 # import on a fresh macOS installation can exceed 20 seconds.
                 prefix=JS_OFFLINE_PREFIX if lesson.get('language')=='javascript' else OFFLINE_PREFIX
@@ -49,6 +73,7 @@ class CurriculumTests(unittest.TestCase):
         self.assertFalse(execute('def step(weight,target,learning_rate):return 0.6',lesson['checks'])['passed'])
     def test_cuda_missing_bounds_guard_fails(self):
         lesson=next(l for l in LESSONS if l['id']=='cuda-2')
+        require_lesson_modules(self, lesson)
         broken=lesson['solution'].replace('if i<out.size:out[i]=a[i]+b[i]','out[i]=a[i]+b[i]')
         result=execute(OFFLINE_PREFIX+broken,lesson['checks'],simulator=True)
         self.assertFalse(result['passed'])
