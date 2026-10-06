@@ -11,7 +11,11 @@ __pycache__/
 .env.*
 *.sqlite3*
 *.db
+*.epub
+*.pdf
+public/pdfjs/
 .local/
+release/
 
 # Machine-specific launcher and regenerable icon intermediates.
 scripts/launcher.applescript

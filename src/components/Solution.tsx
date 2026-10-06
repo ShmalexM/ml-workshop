@@ -1,7 +1,9 @@
-import {useEffect,useRef} from 'react'
+import {useEffect,useRef,useState} from 'react'
 import {CheckCircle2,X} from 'lucide-react'
-export default function Solution({code,onClose,onLoad}:{code:string;onClose:()=>void;onLoad:()=>void}){
- const dialog=useRef<HTMLDialogElement>(null)
+import {CodeDiff,CodeLines} from './CodeView'
+import type {Lesson} from '../types'
+export default function Solution({lesson,code,draft,onClose,onLoad}:{lesson:Lesson;code:string;draft:string;onClose:()=>void;onLoad:()=>void}){
+ const dialog=useRef<HTMLDialogElement>(null);const [compare,setCompare]=useState(false);const python=lesson.language!=='javascript'
  useEffect(()=>{dialog.current?.showModal()},[])
- return <dialog ref={dialog} className="solution-dialog" aria-label="Worked solution" onCancel={onClose} onClick={e=>{if(e.target===e.currentTarget)onClose()}}><div className="dialog-header"><h2>A worked solution</h2><button className="icon-button" aria-label="Close solution" onClick={onClose}><X size={20}/></button></div><p>Read it, explain why it works, then try writing it from memory.</p><pre>{code}</pre><div className="button-row"><button className="secondary-button" onClick={onClose}>Back to my code</button><button className="primary-button" onClick={onLoad}><CheckCircle2 size={16}/>Load into editor</button></div></dialog>
+ return <dialog ref={dialog} className="solution-dialog" aria-label="Worked solution" onCancel={onClose} onClick={e=>{if(e.target===e.currentTarget)onClose()}}><div className="dialog-header"><h2>Solution</h2><button className="icon-button" aria-label="Close solution" onClick={onClose}><X size={20}/></button></div><h3>{lesson.title}</h3><p className="answer-explanation">{lesson.explanation}</p><div className="code-toggle" role="group" aria-label="Code to show"><button aria-pressed={!compare} onClick={()=>setCompare(false)}>Solution</button><button aria-pressed={compare} onClick={()=>setCompare(true)}>Compare with my code</button></div>{compare?<CodeDiff mine={draft} solution={code} python={python}/>:<CodeLines code={code} python={python} label="Solution code"/>}<div className="answer-checks"><h3>Checks this solution passes</h3><ul>{lesson.checkLabels.map(label=><li key={label}>{label}</li>)}</ul></div><p className="answer-load-note">Load into editor replaces your code. Only viewing the solution changes nothing.</p><div className="button-row"><button className="secondary-button" onClick={onClose}>Back to lesson</button><button className="primary-button" onClick={onLoad}><CheckCircle2 size={16}/>Load into editor</button></div></dialog>
 }

@@ -5,3 +5,4 @@ tokenizers>=0.21,<1
 langchain-core>=0.3,<2
 llama-index-core>=0.12,<1
 numba>=0.61,<1
+pypdf>=6.19,<7

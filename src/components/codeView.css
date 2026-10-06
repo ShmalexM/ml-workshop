@@ -1,0 +1,33 @@
+/* Line numbers, diff rows and view toggle adapted from beautiful-ui CodeBlock (github.com/slev12397/beautiful-ui), MIT License, Copyright (c) 2026 Shane Levine; see THIRD_PARTY_NOTICES.md. */
+pre.code-view{padding:14px 0;tab-size:4}
+.code-view>code{display:block;width:max-content;min-width:100%;font:inherit}
+.code-row{display:flex;position:relative}
+.code-num{flex:none;width:3.4em;padding-right:.9em;margin-right:.9em;border-right:1px solid #2c3a50;text-align:right;color:#94a2b6;font-variant-numeric:tabular-nums;user-select:none;-webkit-user-select:none}
+.code-text{white-space:pre;padding-right:20px}
+.hl-keyword{color:#d08be6}
+.hl-string{color:#98c379}
+.hl-number{color:#d19a66}
+.hl-comment{color:#939eb0;font-style:italic}
+.hl-function{color:#61afef}
+.hl-type{color:#e5c07b}
+
+/* Diff: two line-number columns (your code, solution), then a − or + marker. */
+.diff-view .code-num{width:2.8em;padding-right:.6em;margin-right:0;border-right:0}
+.diff-view .code-num+.code-num{border-right:1px solid #2c3a50}
+.diff-mark{flex:none;width:2em;text-align:center;user-select:none;-webkit-user-select:none}
+.code-row.add{background:#28383e}
+.code-row.del{background:#312e3e}
+.code-row.add::before,.code-row.del::before{content:'';position:absolute;inset:0 auto 0 0;width:3px}
+.code-row.add::before{background:#98c379}
+.code-row.del::before{background:repeating-linear-gradient(45deg,#e06c75 0 1.5px,transparent 1.5px 3px)}
+.code-row.add .diff-mark{color:#98c379}
+.code-row.del .diff-mark{color:#ef8a92}
+.diff-legend{display:flex;flex-wrap:wrap;gap:4px 18px;margin:0 0 10px;font-size:12px;line-height:1.6;color:#5b6b82}
+.diff-legend b{display:inline-block;width:1.3em;font:700 13px ui-monospace,SFMono-Regular,Menlo,monospace}
+.diff-legend .diff-add{color:#1d7a45}
+.diff-legend .diff-del{color:#b4323c}
+
+.code-toggle{display:inline-flex;gap:2px;padding:3px;margin:16px 0 12px;border-radius:8px;background:#eef2f6}
+.code-toggle button{padding:6px 12px;border-radius:6px;font-size:12px;font-weight:550;color:#53647c}
+.code-toggle button:hover{color:#0c1528}
+.code-toggle button[aria-pressed=true]{background:#fff;color:#0c1528;box-shadow:0 1px 2px #12213824,0 0 0 1px #dfe6ee}

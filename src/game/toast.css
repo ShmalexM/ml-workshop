@@ -1,0 +1,41 @@
+/* Loaded with the main app: the post-lesson toast and chest art appear outside the game page. */
+.loot-toast {
+  position: fixed; right: 22px; bottom: 22px; z-index: 60; display: flex; gap: 14px; align-items: center;
+  max-width: 380px; padding: 14px 40px 14px 14px; border-radius: 12px;
+  background: linear-gradient(160deg, #1b1f31, #0f121c); border: 1px solid #3a3352;
+  box-shadow: 0 14px 40px rgba(10, 10, 20, .45), 0 0 0 1px rgba(228, 188, 106, .12) inset;
+  color: #ebe7dc; animation: toast-in .35s cubic-bezier(.2, 1.2, .4, 1) both;
+}
+.loot-toast-text { display: grid; gap: 4px; }
+.loot-toast-text strong { font-family: 'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif; color: #e4bc6a; font-size: 15px; }
+.loot-toast-text span { font-size: 13px; color: #c9c5b8; }
+.loot-toast-text .loot-toast-lesson { color: #ebe7dc; font-weight: 600; }
+.loot-toast-actions { display: flex; gap: 14px; margin-top: 4px; }
+.loot-toast-actions a { color: #f2cf7c; font-weight: 650; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; }
+.loot-toast-close { position: absolute; top: 8px; right: 8px; color: #aaa79c; padding: 4px; border-radius: 4px; }
+.loot-toast-close:hover { color: #fff; background: #2a2f45; }
+.nav-badge { display: inline-grid; place-items: center; min-width: 18px; height: 18px; margin-left: 6px; padding: 0 5px; border-radius: 9px; background: #c4462f; color: #fff; font-size: 11px; font-weight: 700; }
+@keyframes toast-in { from { transform: translateY(20px); opacity: 0; } }
+@media (max-width: 700px) { .loot-toast { left: 12px; right: 12px; bottom: 12px; max-width: none; } }
+
+/* Chest art */
+.chest-art { overflow: visible; }
+.chest-art .chest-rays { animation: g-spin 18s linear infinite; }
+.chest-art .chest-lid { transition: transform .5s cubic-bezier(.3, 1.6, .5, 1); }
+.chest-art.open .chest-lid { transform: translateY(-14px) rotateX(0) scaleY(-.55); }
+.chest-art .chest-runes, .chest-art .chest-cracks { animation: g-flicker 2.2s ease-in-out infinite; }
+.chest-art .chest-sparks circle { animation: g-twinkle 2s ease-in-out infinite; }
+.chest-art .chest-beam { animation: g-beam .9s ease-out both; transform-origin: 60px 56px; }
+.chest-art.shake { animation: g-shake .12s linear infinite; }
+@keyframes g-flicker { 50% { opacity: .45; } }
+@keyframes g-twinkle { 50% { opacity: .2; } }
+@keyframes g-beam { from { transform: scaleY(0); opacity: 0; } to { transform: scaleY(1); opacity: 1; } }
+@keyframes g-shake { 0% { transform: translate(0, 0) rotate(0); } 25% { transform: translate(-2px, 1px) rotate(-1.5deg); } 75% { transform: translate(2px, -1px) rotate(1.5deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .loot-toast, .chest-art * { animation: none !important; transition: none !important; }
+}
+.game-toggle { display: flex; gap: 10px; align-items: center; font-size: 14px; margin: 10px 0 4px; cursor: pointer; }
+.game-toggle input { width: 18px; height: 18px; accent-color: var(--green, #079455); }
+.game-toggle-note { font-size: 12px; color: #5b6b82; margin-bottom: 18px; }
+.game-toggle-error { font-size: 12px; color: #b4323c; margin: 4px 0; }

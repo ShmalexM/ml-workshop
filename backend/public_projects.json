@@ -1,0 +1,336 @@
+{
+  "version": 1,
+  "updatedAt": "2026-10-05",
+  "coverage": "Public projects, ordered from Start small to Capstone. Each links to a starting file on GitHub. Links need internet. Repository code is not bundled.",
+  "projects": [
+    {
+      "id": "public-micrograd",
+      "title": "micrograd",
+      "repoUrl": "https://github.com/karpathy/micrograd",
+      "visibility": "public",
+      "localPath": "",
+      "tracks": [
+        "foundations",
+        "pytorch"
+      ],
+      "level": "Start small",
+      "firstLesson": "foundations-3",
+      "entryPoint": {
+        "label": "micrograd/engine.py",
+        "url": "https://github.com/karpathy/micrograd/blob/master/micrograd/engine.py"
+      },
+      "summary": "Read how an automatic-differentiation engine records arithmetic and works backward to compute gradients.",
+      "why": "Its small scalar engine makes the path from arithmetic to gradients unusually easy to follow.",
+      "requirements": "Python and the foundations gradient lesson. Reading the engine needs no GPU; upstream tests use PyTorch.",
+      "steps": [
+        "Open Value.__mul__ in engine.py. For a=2 and b=3, write the forward value and both local derivatives before reading the backward callback.",
+        "Trace backward through one multiplication and one addition. Draw the dependency graph and explain why contributions to the same input must add.",
+        "Compare your pencil-and-paper gradients with one case in test/test_engine.py. Change one input in your own small fixture and predict the result."
+      ],
+      "deliverable": "An annotated three-operation graph with predicted gradients and one reproducible comparison.",
+      "evidence": "Checked 2026-10-05: README and micrograd/engine.py. Not installed or run."
+    },
+    {
+      "id": "public-todomvc",
+      "title": "TodoMVC · React",
+      "repoUrl": "https://github.com/tastejs/todomvc",
+      "visibility": "public",
+      "localPath": "",
+      "tracks": [
+        "web",
+        "interactive"
+      ],
+      "level": "Start small",
+      "firstLesson": "web-1",
+      "entryPoint": {
+        "label": "examples/react/src/todo/reducer.js",
+        "url": "https://github.com/tastejs/todomvc/blob/master/examples/react/src/todo/reducer.js"
+      },
+      "summary": "A to-do app with a small state reducer. Follow one action from the UI through the state update.",
+      "why": "The shared application specification gives you observable behavior to compare against each implementation.",
+      "requirements": "JavaScript objects and the web-state lesson. Read the reducer first; running the React example needs its documented Node setup.",
+      "steps": [
+        "Open the reducer and choose one action. Write a before/after state containing two to-dos, without opening the rest of the application yet.",
+        "Follow that action from its UI control into the reducer. Identify what changes and which object or array must remain unchanged.",
+        "Use app-spec.md to choose one edge case, such as editing to an empty title. Draft an interaction test and compare it with the implementation."
+      ],
+      "deliverable": "A single action trace and an observable UI test for one edge case.",
+      "evidence": "Checked 2026-10-05: README and examples/react/src/todo/reducer.js. Not installed or run."
+    },
+    {
+      "id": "public-gymnasium",
+      "title": "Gymnasium · CartPole",
+      "repoUrl": "https://github.com/Farama-Foundation/Gymnasium",
+      "visibility": "public",
+      "localPath": "",
+      "tracks": [
+        "rl",
+        "interactive"
+      ],
+      "level": "Start small",
+      "firstLesson": "rl-1",
+      "entryPoint": {
+        "label": "gymnasium/envs/classic_control/cartpole.py",
+        "url": "https://github.com/Farama-Foundation/Gymnasium/blob/main/gymnasium/envs/classic_control/cartpole.py"
+      },
+      "summary": "CartPole keeps an RL environment’s observations and step logic in one module.",
+      "why": "CartPole makes observation, action, reward and episode endings concrete in a single environment module.",
+      "requirements": "The RL environment lesson. Source reading is CPU-only; local rendering needs the classic-control extra described upstream.",
+      "steps": [
+        "Find reset and step. List the observation components and legal actions; separate the agent’s choice from the environment’s state update.",
+        "Follow one step to its reward and termination condition. Then locate where an external time limit is applied outside the base environment.",
+        "Write a seeded random-policy evaluation plan: episode length, total reward and both ending flags. Keep training out of this first experiment."
+      ],
+      "deliverable": "A one-page environment contract and a baseline evaluation record you can reproduce.",
+      "evidence": "Checked 2026-10-05: README and gymnasium/envs/classic_control/cartpole.py. Not installed or run."
+    },
+    {
+      "id": "public-pytorch",
+      "title": "PyTorch · regression example",
+      "repoUrl": "https://github.com/pytorch/examples",
+      "visibility": "public",
+      "localPath": "",
+      "tracks": [
+        "pytorch",
+        "foundations"
+      ],
+      "level": "Build next",
+      "firstLesson": "pytorch-5",
+      "entryPoint": {
+        "label": "regression/main.py",
+        "url": "https://github.com/pytorch/examples/blob/main/regression/main.py"
+      },
+      "summary": "Follow a regression training loop from generated examples to learned parameters.",
+      "why": "The complete script uses the prediction, loss, and optimizer steps from the PyTorch lessons.",
+      "requirements": "PyTorch tensor and optimizer lessons. Inspect the synthetic regression example before trying examples that download datasets.",
+      "steps": [
+        "Locate model creation, generated examples and the loss in regression/main.py. Write the shape and role of each input.",
+        "Find zero_grad, backward and step. Explain why that order matters and what would change if gradients accumulated accidentally.",
+        "Plan a small repeatable experiment changing only the learning rate. Record seed, step count and held-out error before comparing outcomes."
+      ],
+      "deliverable": "An annotated training loop and a controlled one-variable experiment.",
+      "evidence": "Checked 2026-10-05: README and regression/main.py. Not installed or run."
+    },
+    {
+      "id": "public-keras",
+      "title": "Keras · engineering introduction",
+      "repoUrl": "https://github.com/keras-team/keras-io",
+      "visibility": "public",
+      "localPath": "",
+      "tracks": [
+        "tensorflow",
+        "foundations"
+      ],
+      "level": "Build next",
+      "firstLesson": "tensorflow-3",
+      "entryPoint": {
+        "label": "guides/intro_to_keras_for_engineers.py",
+        "url": "https://github.com/keras-team/keras-io/blob/master/guides/intro_to_keras_for_engineers.py"
+      },
+      "summary": "Read the Keras explanations beside the model-building and training code they describe.",
+      "why": "The explanations and code live together, so you can study one section without rebuilding the documentation site.",
+      "requirements": "TensorFlow tensors and the Keras model lesson. Choose the TensorFlow backend; upstream sections may download datasets.",
+      "steps": [
+        "Open the guide’s first model-building section. Identify inputs, layers and output shape; stop before running a full training example.",
+        "Trace compile, fit and evaluate in the relevant section. Explain the optimizer, loss and metric roles in your own words.",
+        "Adapt only the model-shape idea to a tiny synthetic fixture. Compare one prediction before and after a controlled training step."
+      ],
+      "deliverable": "A model shape diagram and a small TensorFlow-backed training comparison.",
+      "evidence": "Checked 2026-10-05: README and guides/intro_to_keras_for_engineers.py. Not installed or run."
+    },
+    {
+      "id": "public-smolagents",
+      "title": "smolagents",
+      "repoUrl": "https://github.com/huggingface/smolagents",
+      "visibility": "public",
+      "localPath": "",
+      "tracks": [
+        "harness",
+        "modern"
+      ],
+      "level": "Build next",
+      "firstLesson": "harness-1",
+      "entryPoint": {
+        "label": "src/smolagents/agents.py",
+        "url": "https://github.com/huggingface/smolagents/blob/main/src/smolagents/agents.py"
+      },
+      "summary": "Find the loop that runs an agent, records tool results, and decides when to stop.",
+      "why": "You can trace the harness separately from model quality and begin with a fake model response.",
+      "requirements": "Harness state and tool-input lessons. Read source or use mocked tools first; live agents need a model and may invoke external tools.",
+      "steps": [
+        "Find the main agent run loop and its step limit. Sketch the states for continuing, finishing and failing before reading every helper.",
+        "Trace one proposed tool call into validation and execution. Identify which errors become recorded observations and which stop the run.",
+        "Design a fake-model test with an invalid tool name and another with too many steps. State the expected trace and stopping behavior."
+      ],
+      "deliverable": "A run-loop state chart and two deterministic harness test cases.",
+      "evidence": "Checked 2026-10-05: README and src/smolagents/agents.py. Not installed or run."
+    },
+    {
+      "id": "public-fastapi",
+      "title": "Full Stack FastAPI Template",
+      "repoUrl": "https://github.com/fastapi/full-stack-fastapi-template",
+      "visibility": "public",
+      "localPath": "",
+      "tracks": [
+        "backend",
+        "web",
+        "reliability"
+      ],
+      "level": "Build next",
+      "firstLesson": "backend-1",
+      "entryPoint": {
+        "label": "backend/app/api/routes/items.py",
+        "url": "https://github.com/fastapi/full-stack-fastapi-template/blob/master/backend/app/api/routes/items.py"
+      },
+      "summary": "Trace an item request from a React client to API validation and storage.",
+      "why": "The item route is a manageable slice of a complete service; start there instead of booting the entire stack.",
+      "requirements": "Backend validation and web-state lessons. The full app needs the documented database and service setup; the first walkthrough is read-only.",
+      "steps": [
+        "Read one item route and its request/response model. Write the contract and identify where the current user affects access.",
+        "Locate the matching frontend call and trace loading, success and failure states. Keep an API error distinct from an empty list.",
+        "Choose a route test and describe an additional invalid-input or ownership case using synthetic users and items."
+      ],
+      "deliverable": "One end-to-end request diagram and a concrete API regression-test case.",
+      "evidence": "Checked 2026-10-05: README and backend/app/api/routes/items.py. Not installed or run."
+    },
+    {
+      "id": "public-llamaindex",
+      "title": "LlamaIndex · document schema",
+      "repoUrl": "https://github.com/run-llama/llama_index",
+      "visibility": "public",
+      "localPath": "",
+      "tracks": [
+        "data",
+        "modern"
+      ],
+      "level": "Build next",
+      "firstLesson": "modern-5",
+      "entryPoint": {
+        "label": "llama-index-core/llama_index/core/schema.py",
+        "url": "https://github.com/run-llama/llama_index/blob/main/llama-index-core/llama_index/core/schema.py"
+      },
+      "summary": "Document and TextNode types show how a retrieval pipeline tracks sources and chunks.",
+      "why": "Starting with data structures avoids requiring a hosted model to understand a retrieval pipeline.",
+      "requirements": "Document and chunking lessons. Use synthetic text; live embedding or cloud parsing examples have separate setup requirements.",
+      "steps": [
+        "Locate Document and TextNode in the core schema. Identify text, identity, metadata and relationships, and explain why those fields differ.",
+        "Sketch how a document becomes two overlapping chunks while retaining a link to its source. Use five invented sentences.",
+        "Create three queries with known relevant chunk IDs and calculate recall at k. Explain why retrieval success does not itself verify a generated answer."
+      ],
+      "deliverable": "A document-to-chunk diagram and a small retrieval evaluation table.",
+      "evidence": "Public README and schema path reviewed on 2026-10-05. The README describes a shift in company focus toward parsing; this walkthrough targets the available OSS core schema, not a cloud product."
+    },
+    {
+      "id": "public-temporal",
+      "title": "Temporal · retry example",
+      "repoUrl": "https://github.com/temporalio/samples-python",
+      "visibility": "public",
+      "localPath": "",
+      "tracks": [
+        "reliability",
+        "backend"
+      ],
+      "level": "Build next",
+      "firstLesson": "reliability-1",
+      "entryPoint": {
+        "label": "hello/hello_activity_retry.py",
+        "url": "https://github.com/temporalio/samples-python/blob/main/hello/hello_activity_retry.py"
+      },
+      "summary": "Follow a failing activity through the retries set by its workflow.",
+      "why": "One activity failure is enough to study attempts, retry policy and durable workflow behavior.",
+      "requirements": "Python async basics and bounded retries. Reading needs no server; execution requires the upstream Temporal CLI/dev-server setup.",
+      "steps": [
+        "Open hello_activity_retry.py and identify the workflow, activity and retry policy. Describe what intentionally fails and when it succeeds.",
+        "Write the sequence of attempts on paper. Explain why a retried activity that writes externally must account for repeated execution.",
+        "Design a test for an exhausted retry policy and another for an idempotent repeated request. Record final status separately from attempt count."
+      ],
+      "deliverable": "An attempt timeline and two failure-focused test specifications.",
+      "evidence": "Checked 2026-10-05: README and hello/hello_activity_retry.py. Not installed or run."
+    },
+    {
+      "id": "public-cuda",
+      "title": "NVIDIA · vector addition",
+      "repoUrl": "https://github.com/NVIDIA/cuda-samples",
+      "visibility": "public",
+      "localPath": "",
+      "tracks": [
+        "cuda",
+        "pytorch"
+      ],
+      "level": "Build next",
+      "firstLesson": "cuda-2",
+      "entryPoint": {
+        "label": "cpp/0_Introduction/vectorAdd/vectorAdd.cu",
+        "url": "https://github.com/NVIDIA/cuda-samples/blob/master/cpp/0_Introduction/vectorAdd/vectorAdd.cu"
+      },
+      "summary": "Compare a native CUDA vector-addition kernel with the indexing code from the CUDA path.",
+      "why": "Vector addition is a small enough kernel to compare directly with the workshop’s simulated indexing exercises.",
+      "requirements": "The CUDA path and basic C++ reading. Native execution requires supported NVIDIA hardware and toolkit; a Mac can still be used for the source walkthrough.",
+      "steps": [
+        "Trace the host-side allocation, copy, kernel launch and cleanup. Label which pointer belongs to which memory location.",
+        "Calculate thread indices for a five-element vector using four threads per block. Find the kernel’s guard for the extra threads.",
+        "Read the result verification and error handling. Write a later hardware experiment that separates correctness checks from timing measurements."
+      ],
+      "deliverable": "A host/device memory diagram and an indexing trace; hardware timing is a separate optional follow-up.",
+      "evidence": "Checked 2026-10-05: README and cpp/0_Introduction/vectorAdd/vectorAdd.cu. Not installed or run."
+    },
+    {
+      "id": "public-pokerl",
+      "title": "PokeRL · Pokémon Red",
+      "repoUrl": "https://github.com/ShmalexM/PokeRL",
+      "visibility": "public",
+      "localPath": "",
+      "tracks": [
+        "rl",
+        "pytorch",
+        "reliability"
+      ],
+      "level": "Capstone",
+      "firstLesson": "rl-1",
+      "entryPoint": {
+        "label": "v2/red_gym_env_v2.py",
+        "url": "https://github.com/pwhiddy/PokemonRedExperiments/blob/master/v2/red_gym_env_v2.py"
+      },
+      "summary": "Study how a Pokémon Red environment turns game state into observations and rewards.",
+      "why": "PokeRL’s short README credits PokemonRedExperiments. This walkthrough follows that upstream implementation.",
+      "requirements": "Finish the RL path and the Gymnasium project first. Emulator runs need user-supplied game assets and the upstream dependencies.",
+      "steps": [
+        "Open the upstream v2 environment. Trace reset and one step, listing action, observation, reward components and stopping signals.",
+        "Choose one reward component and explain the behavior it encourages. Invent a failure case where improving that reward would not imply useful game progress.",
+        "Plan evaluation with fixed seeds, a random-policy baseline, checkpoint identity and separate metrics for rewards and task progress."
+      ],
+      "deliverable": "An environment/reward diagram and a reproducible evaluation plan before attempting training.",
+      "evidence": "PokeRL’s public README is a brief project link and credits the original work. The starting file is in PWhiddy/PokemonRedExperiments (MIT), verified on 2026-10-05. No game assets or upstream code are bundled."
+    },
+    {
+      "id": "public-vigil-home",
+      "title": "Vigil at Home",
+      "repoUrl": "https://github.com/ShmalexM/Vigil-at-Home",
+      "visibility": "public",
+      "localPath": "",
+      "tracks": [
+        "harness",
+        "backend",
+        "web",
+        "interactive",
+        "reliability"
+      ],
+      "level": "Capstone",
+      "firstLesson": "harness-1",
+      "entryPoint": {
+        "label": "apps/desktop/README.md",
+        "url": "https://github.com/ShmalexM/Vigil-at-Home/blob/main/apps/desktop/README.md"
+      },
+      "summary": "Follow an alert through a desktop security app, from local rules to AI explanations and user actions.",
+      "why": "Trace a single alert to separate detection logic from agent recommendations and user-controlled actions.",
+      "requirements": "The Agent harness, Backend & API, and Web app paths. Begin with source and tests. Installing privileged helpers is outside this walkthrough.",
+      "steps": [
+        "Read the desktop architecture and choose one alert flow. Draw event → rule decision → stored result → UI, marking process boundaries.",
+        "Find where an AI recommendation reaches the interface. Compare its authority with the user’s action and the deterministic rule engine.",
+        "Design a synthetic UI test for unavailable explanation service, duplicate alert and app restart. Define expected state without operating on real security events."
+      ],
+      "deliverable": "A process/authority diagram and three synthetic acceptance cases.",
+      "evidence": "Public README and desktop entry point checked on 2026-10-05. Upstream describes an early-alpha macOS app; no release, helper installation or live detection was verified here."
+    }
+  ]
+}
