@@ -1,35 +1,124 @@
 name: Release
 
-# Pushing a tag such as v1.0.0 publishes the archives that install.sh and install.ps1 download.
+# A release publishes the archives that install.sh and install.ps1 download.
+# Two ways to release:
+# - Bump "version" in package.json and merge to main. The first push to main with a
+#   version that has no release yet publishes v<version>. Later pushes do nothing.
+# - Push a tag such as v1.2.0 (a hyphen, as in v2.0.0-beta.1, makes a prerelease).
+# After publishing, the verify job installs from the public one-line command on macOS,
+# Linux and Windows, exactly as a new user would.
 on:
   push:
+    branches: [main]
     tags: ['v*']
+  workflow_dispatch:
 
 permissions:
   contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
   release:
     name: Build and publish installer archives
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    outputs:
+      tag: ${{ steps.plan.outputs.tag }}
+      publish: ${{ steps.plan.outputs.publish }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
+      - name: Decide whether to publish
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            tag="$GITHUB_REF_NAME"
+          else
+            tag="v$(node -p "require('./package.json').version")"
+          fi
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $tag already exists; nothing to publish."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        if: steps.plan.outputs.publish == 'true'
         with:
           node-version-file: .nvmrc
           cache: npm
-      - run: npm ci
-      - run: npm run build
-      - run: python3 scripts/package_release.py
+      - if: steps.plan.outputs.publish == 'true'
+        run: npm ci
+      - if: steps.plan.outputs.publish == 'true'
+        run: npm run build
+      - if: steps.plan.outputs.publish == 'true'
+        run: python3 scripts/package_release.py
       - name: Publish the release
+        if: steps.plan.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ steps.plan.outputs.tag }}
         run: |
-          # A tag with a hyphen (v2.0.0-beta.1) is a prerelease, so installers keep using the last full release.
           prerelease=
           case "$TAG" in *-*) prerelease=--prerelease ;; esac
-          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes $prerelease release/*
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes $prerelease release/*
+          else
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --generate-notes $prerelease release/*
+          fi
+
+  verify:
+    name: ${{ matrix.os }} install from the public command
+    needs: release
+    if: needs.release.outputs.publish == 'true' && !contains(needs.release.outputs.tag, '-')
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - name: Install with the one-line command (macOS and Linux)
+        if: runner.os != 'Windows'
+        shell: bash
+        env:
+          EW_HOME: ${{ runner.temp }}/ew home
+          EW_LIGHT: '1'
+          EW_NO_LAUNCH: '1'
+          EW_NO_SHORTCUTS: '1'
+          SCRIPT: https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/install.sh
+        run: |
+          set -euo pipefail
+          # The release can take a moment to become "latest"; retry the download a few times.
+          for attempt in 1 2 3 4 5; do
+            if curl -fsSL "$SCRIPT" | env PATH=/usr/bin:/bin:/usr/sbin:/sbin sh; then break; fi
+            [ "$attempt" = 5 ] && exit 1
+            sleep 20
+          done
+          env PATH=/usr/bin:/bin:/usr/sbin:/sbin "$EW_HOME/app/.venv/bin/python" "$EW_HOME/app/tests/check_install.py" "$EW_HOME"
+      - name: Install with the one-line command (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        env:
+          EW_HOME: ${{ runner.temp }}\ew home
+          EW_LIGHT: '1'
+          EW_NO_LAUNCH: '1'
+          EW_NO_SHORTCUTS: '1'
+          SCRIPT: https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/install.ps1
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # As on a new computer: no Node.js, Python or Git from the runner image on PATH.
+          $env:Path = "$env:SystemRoot\System32;$env:SystemRoot;$env:SystemRoot\System32\WindowsPowerShell\v1.0"
+          foreach ($attempt in 1..5) {
+            try { Invoke-RestMethod $env:SCRIPT | Invoke-Expression; break }
+            catch { if ($attempt -eq 5) { throw }; Start-Sleep -Seconds 20 }
+          }
+          & "$env:EW_HOME\app\.venv\Scripts\python.exe" "$env:EW_HOME\app\tests\check_install.py" "$env:EW_HOME"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
