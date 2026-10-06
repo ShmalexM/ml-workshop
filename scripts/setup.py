@@ -24,9 +24,11 @@ def light_requirements():
             and re.split(r'[<>=!~;\[]', line.strip(), maxsplit=1)[0].lower() not in ML_PACKAGES]
 
 
-def check_prerequisites():
+def check_prerequisites(need_node=True):
     if sys.version_info < (3, 12):
         raise RuntimeError('Engineering Workshop needs Python 3.12 or newer. Install it and rerun setup.')
+    if not need_node:
+        return None
     node = shutil.which('node')
     npm = shutil.which('npm.cmd' if sys.platform == 'win32' else 'npm')
     if not node or not npm:
@@ -46,8 +48,11 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--no-ml', action='store_true', help='Skip ML packages; keep Python/JavaScript engineering lessons and book imports.')
     parser.add_argument('--no-launch', action='store_true', help='Install and build without starting the server or opening a browser.')
+    parser.add_argument('--no-build', action='store_true', help='Use the prebuilt dist/ folder from a release archive; skip the Node.js check and the interface build.')
     args = parser.parse_args(argv)
-    npm = check_prerequisites()
+    npm = check_prerequisites(need_node=not args.no_build)
+    if args.no_build and not (ROOT / 'dist/index.html').exists():
+        raise RuntimeError('dist/index.html is missing. Run setup without --no-build to build the interface.')
     uv = shutil.which('uv')
     python = venv_python()
     if not python.exists():
@@ -63,8 +68,9 @@ def main(argv=None):
         # An existing uv-created environment may not contain pip.
         run([python, '-m', 'ensurepip', '--upgrade'])
         run([python, '-m', 'pip', 'install', *packages])
-    run([npm, 'ci'])
-    run([npm, 'run', 'build'])
+    if not args.no_build:
+        run([npm, 'ci'])
+        run([npm, 'run', 'build'])
     if args.no_ml:
         print('Light install complete. ML lessons need another setup run without --no-ml. Existing ML packages are kept.', flush=True)
     if not args.no_launch:

@@ -52,6 +52,26 @@ class SetupTests(unittest.TestCase):
                     self.assertIn([python, '-m', 'ensurepip', '--upgrade'], commands)
                     self.assertIn([python, '-m', 'pip', 'install', 'pypdf>=6.19,<7'], commands)
 
+    def test_no_build_uses_release_dist_without_node(self):
+        # The one-line installers run setup from a release archive that already has dist/.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'requirements.txt').write_text((ROOT / 'requirements.txt').read_text())
+            (root / 'dist').mkdir()
+            (root / 'dist/index.html').write_text('<!doctype html>')
+            python = root / '.venv/bin/python'
+            which = lambda name: 'uv' if name == 'uv' else None
+            with patch.object(setup, 'ROOT', root), patch.object(setup, 'venv_python', return_value=python), patch.object(setup.shutil, 'which', side_effect=which), patch.object(setup, 'run') as run:
+                setup.main(['--no-build', '--no-launch', '--no-ml'])
+            commands = [call.args[0] for call in run.call_args_list]
+            self.assertEqual(commands[0][:2], ['uv', 'venv'])
+            self.assertIn(['uv', 'pip', 'install', '--python', python, 'pypdf>=6.19,<7'], commands)
+            self.assertFalse(any('npm' in str(arg) for command in commands for arg in command))
+            (root / 'dist/index.html').unlink()
+            with patch.object(setup, 'ROOT', root), patch.object(setup, 'run') as run, self.assertRaisesRegex(RuntimeError, 'dist/index.html'):
+                setup.main(['--no-build'])
+            run.assert_not_called()
+
     def test_full_install_launches_after_build(self):
         with patch.object(setup, 'check_prerequisites', return_value='npm'), patch.object(setup.shutil, 'which', return_value='uv'), patch.object(setup, 'run') as run:
             setup.main([])

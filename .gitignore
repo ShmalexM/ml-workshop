@@ -15,6 +15,7 @@ __pycache__/
 *.pdf
 public/pdfjs/
 .local/
+release/
 
 # Machine-specific launcher and regenerable icon intermediates.
 scripts/launcher.applescript
