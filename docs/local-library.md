@@ -4,7 +4,7 @@ Open **Books** in Engineering Workshop. Imported PDFs and EPUBs are available of
 
 ## Import your own copy
 
-Run Setup first, then import from the project directory:
+In a clone, run Setup first, then import from the project directory:
 
 ```sh
 .venv/bin/python scripts/import-books.py \
@@ -17,6 +17,22 @@ Use either option separately if you only have one book. For another book:
 ```sh
 .venv/bin/python scripts/import-books.py --file "/path/to/book.pdf" --id my-book
 ```
+
+In a copy made by the install command, run the importer with the Python in its `app` folder. On macOS and Linux:
+
+```sh
+~/.local/share/engineering-workshop/app/.venv/bin/python \
+  ~/.local/share/engineering-workshop/app/scripts/import-books.py --epub "$HOME/Downloads/GPU-Glossary.epub"
+```
+
+On Windows, in PowerShell:
+
+```powershell
+& "$env:LOCALAPPDATA\EngineeringWorkshop\app\.venv\Scripts\python.exe" `
+  "$env:LOCALAPPDATA\EngineeringWorkshop\app\scripts\import-books.py" --pdf "$HOME\Desktop\Inference Engineering.pdf"
+```
+
+Books then go into the `data` folder next to `app`, so updates keep them.
 
 Reload the app after importing. The importer copies the original into `data/library/<id>/`, builds a local text index, and prints its SHA-256 checksum. It never modifies the supplied file. Reimporting an identical edition is safe; an older index format is rebuilt when needed. Use a new ID for a different edition so existing reading positions remain meaningful.
 

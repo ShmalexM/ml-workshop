@@ -42,6 +42,26 @@ class PlatformPathsTests(unittest.TestCase):
                 with patch.dict(os.environ, {'ML_WORKSHOP_PORT': value}), self.assertRaises(ValueError):
                     paths.port()
 
+    def test_installed_copy_keeps_data_next_to_the_app(self):
+        # Updates replace app/, so tools must not default to app/data in an installed copy.
+        with tempfile.TemporaryDirectory() as directory:
+            install = Path(directory) / 'install folder'
+            app = install / 'app'
+            app.mkdir(parents=True)
+            with patch.dict(os.environ, {}, clear=True):
+                self.assertFalse(paths.installed(app))
+                self.assertEqual(paths.data_dir(app), (app / 'data').resolve())
+                (install / paths.INSTALL_MARKER).write_text('Created by the Engineering Workshop installer.')
+                self.assertTrue(paths.installed(app))
+                self.assertEqual(paths.data_dir(app), (install / 'data').resolve())
+                # A clone that is not named app/ is never treated as installed.
+                clone = install / 'ml-workshop'
+                clone.mkdir()
+                self.assertFalse(paths.installed(clone))
+                self.assertEqual(paths.data_dir(clone), (clone / 'data').resolve())
+            with patch.dict(os.environ, {'ML_WORKSHOP_DATA_DIR': str(install / 'elsewhere')}):
+                self.assertEqual(paths.data_dir(app), (install / 'elsewhere').resolve())
+
     def test_detached_flags(self):
         with ExitStack() as stack:
             for name, value in [('DETACHED_PROCESS', 8), ('CREATE_NEW_PROCESS_GROUP', 512), ('CREATE_NO_WINDOW', 134217728)]:
@@ -145,6 +165,14 @@ class StopTests(unittest.TestCase):
 
 
 class LaunchTests(unittest.TestCase):
+    def test_missing_files_message_names_the_right_fix(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.object(launch, 'data_dir', return_value=Path(directory)), patch.object(launch, 'health', return_value=None), patch.object(launch, 'venv_python', return_value=Path(directory) / 'missing'):
+                with patch.object(launch, 'installed', return_value=True), self.assertRaisesRegex(RuntimeError, 'Run the install command again'):
+                    launch.main()
+                with patch.object(launch, 'installed', return_value=False), self.assertRaisesRegex(RuntimeError, 'setup wrapper'):
+                    launch.main()
+
     def test_reuse_and_browser_choice(self):
         with tempfile.TemporaryDirectory() as directory:
             with patch.object(launch, 'data_dir', return_value=Path(directory)), patch.object(launch, 'port', return_value=17319), patch.object(launch, 'health', return_value={'app': 'ml-workshop'}), patch.object(launch.subprocess, 'Popen') as spawn, patch.object(launch.webbrowser, 'open') as browser:

@@ -87,6 +87,7 @@ class RunnerPlatformTests(unittest.TestCase):
     def test_missing_package_message_in_code_and_checks(self):
         result = runner.execute('import workshop_missing_fixture_package', [])
         self.assertIn("Missing Python module 'workshop_missing_fixture_package'", result['error'])
+        self.assertIn('Run the install command again', result['error'])
         self.assertIn('without --no-ml', result['error'])
         result = runner.execute('', [{'label': 'import', 'expr': '__import__("workshop_missing_fixture_package")'}])
         self.assertFalse(result['passed'])

@@ -6,14 +6,23 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+# install.sh and install.ps1 write this file into the install folder, next to app/ and data/.
+INSTALL_MARKER = '.engineering-workshop'
 
 
 def venv_python(root=ROOT):
     return root / '.venv' / ('Scripts/python.exe' if sys.platform == 'win32' else 'bin/python')
 
 
+def installed(root=ROOT):
+    """True for a copy made by the one-line installer: <install folder>/app with the marker next to it."""
+    return root.name == 'app' and (root.parent / INSTALL_MARKER).is_file()
+
+
 def data_dir(root=ROOT):
-    path = Path(os.environ.get('ML_WORKSHOP_DATA_DIR', root / 'data'))
+    # Updates replace app/, so an installed copy keeps progress in the data/ folder next to it.
+    default = root.parent / 'data' if installed(root) else root / 'data'
+    path = Path(os.environ.get('ML_WORKSHOP_DATA_DIR', default))
     # Relative overrides have the same meaning in the launcher and server.
     return (root / path).resolve()
 

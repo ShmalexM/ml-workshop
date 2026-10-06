@@ -20,7 +20,10 @@ from book_study import study_guides
 import game
 
 ROOT=Path(__file__).resolve().parents[1]
-DATA=Path(os.environ.get('ML_WORKSHOP_DATA_DIR',ROOT/'data'))
+# Same rule as the launcher: data/ in a clone, the data folder next to app/ in an installed copy.
+sys.path.append(str(ROOT/'scripts'))
+from platform_paths import data_dir
+DATA=data_dir()
 DATA.mkdir(parents=True,exist_ok=True)
 DB=DATA/'workshop.sqlite3'
 TOKEN=secrets.token_urlsafe(32)

@@ -7,7 +7,7 @@ import time
 import urllib.request
 import webbrowser
 
-from platform_paths import ROOT, data_dir, detached_options, file_lock, port, venv_python
+from platform_paths import ROOT, data_dir, detached_options, file_lock, installed, port, venv_python
 
 
 def health(url):
@@ -28,6 +28,8 @@ def main():
         if not status or status.get('app') != 'ml-workshop':
             python = venv_python()
             if not python.exists() or not (ROOT / 'dist/index.html').exists():
+                if installed():
+                    raise RuntimeError('Engineering Workshop is missing files. Run the install command again; your progress is kept.')
                 raise RuntimeError(f'Engineering Workshop needs setup. Run the setup wrapper for your OS in {ROOT}; see README.md.')
             with (data / 'server.log').open('ab') as log:
                 process = subprocess.Popen(

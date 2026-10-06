@@ -22,8 +22,9 @@ def apply_limits():
         resource.setrlimit(resource.RLIMIT_FSIZE,(1024*1024,1024*1024))
 
 def missing_package(exc):
-    return (f"Missing Python module '{exc.name}'. Rerun Engineering Workshop setup "
-            "without --no-ml to install the lesson packages. See README.md.")
+    # Installed copies and clones fix this differently; the message names both.
+    return (f"Missing Python module '{exc.name}'. Run the install command again, "
+            "or in a clone rerun setup without --no-ml. See README.md.")
 
 def stopped_message(language, code):
     name='JavaScript' if language=='javascript' else 'Python'
@@ -135,7 +136,7 @@ def execute(code, checks, timeout=50, simulator=False, language='python'):
     if language not in ('python','javascript'):raise ValueError('Unsupported exercise language')
     node=node_binary() if language=='javascript' else None
     if language=='javascript' and not node:
-        return dict(error='Node.js is missing. Install Node.js 22.13 or newer and rerun Engineering Workshop setup; see README.md.',checks=[],passed=False,stdout='',duration=0)
+        return dict(error='Node.js is missing. Run the install command again, or in a clone install Node.js 22.13 or newer and rerun setup. See README.md.',checks=[],passed=False,stdout='',duration=0)
     start=time.monotonic()
     with tempfile.TemporaryDirectory(prefix='ml-workshop-') as directory:
         work=Path(directory)
