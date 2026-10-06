@@ -49,8 +49,8 @@ export class BattleEngine{
  private ring:THREE.Mesh;private cursorRing:THREE.Mesh;private shieldMesh:THREE.Mesh
  private cleanups:(()=>void)[]=[]
  constructor(private canvas:HTMLCanvasElement,private overlay:HTMLElement,private setup:BattleSetup,private cb:Callbacks){
-  this.renderer=createRenderer(canvas,{shadows:true});this.scene.environment=environment(this.renderer)
-  const made=createComposer(this.renderer,this.scene,this.camera,{strength:.75,radius:.5,threshold:.96});this.composer=made.composer;this.bloomPass=made.bloom
+  this.renderer=createRenderer(canvas,{shadows:true});this.scene.environment=environment(this.renderer);this.scene.environmentIntensity=.45
+  const made=createComposer(this.renderer,this.scene,this.camera,{strength:.22,radius:.4,threshold:1.4});this.composer=made.composer;this.bloomPass=made.bloom
   let s=(setup.seed>>>0)||7;this.rng=()=>{s^=s<<13;s^=s>>>17;s^=s<<5;return (s>>>0)/4294967296}
   const def=stageDef(setup.stage);this.arena=buildArena(def.theme,setup.seed);this.scene.add(this.arena.group)
   this.scene.background=this.arena.fog.clone();this.scene.fog=new THREE.Fog(this.arena.fog,28,62)
