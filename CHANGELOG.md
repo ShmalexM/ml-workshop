@@ -2,6 +2,16 @@
 
 This file lists the notable changes in each release. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and version numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2] - 2026-10-06
+
+### Fixed
+
+- The install download now includes the license texts of the npm packages compiled into the app. The build had stripped some of them, such as the CodeMirror and Lezer notices. `npm run build` now collects them in `dist/THIRD_PARTY_LICENSES.txt`.
+
+### Added
+
+- An **Open-source licenses** link in Settings that opens `THIRD_PARTY_LICENSES.txt`.
+
 ## [1.1.1] - 2026-10-06
 
 ### Fixed
@@ -61,6 +71,7 @@ First public release.
 - Setup and launch scripts for Apple silicon Macs, and an optional launcher in your Applications folder.
 - CI that runs every lesson on macOS and the API tests on Linux.
 
+[1.1.2]: https://github.com/ShmalexM/ml-workshop/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/ShmalexM/ml-workshop/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/ShmalexM/ml-workshop/compare/a493fba...v1.1.0
 [1.0.0]: https://github.com/ShmalexM/ml-workshop/tree/a493fba31f2016f17edeb1bc551db9e0d46b498d
