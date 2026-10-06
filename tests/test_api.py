@@ -37,6 +37,10 @@ class ApiTests(unittest.TestCase):
     def request(self,path,body=None,headers=None):
         req=urllib.request.Request(self.url+path,data=json.dumps(body).encode() if body is not None else None,headers={'Content-Type':'application/json','X-Workshop-Token':self.token,**(headers or {})})
         with urllib.request.urlopen(req,timeout=60) as r:return json.load(r)
+    def test_health_reports_the_package_version(self):
+        version=json.loads((ROOT/'package.json').read_text(encoding='utf-8'))['version']
+        health=self.request('/api/health')
+        self.assertEqual((health['app'],health['version']),('ml-workshop',version))
     def test_origin_and_session_guards(self):
         payload={'lessonId':'foundations-1','code':'print(1)','mode':'run'}
         for headers in [{'Origin':'https://example.com'},{'X-Workshop-Token':'wrong'},{'Sec-Fetch-Site':'cross-site'},{'Host':'attacker.example'}]:

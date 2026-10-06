@@ -47,7 +47,7 @@ class PackageReleaseTests(unittest.TestCase):
             'README.md': 'readme', 'install.sh': '#!/bin/sh\n', 'scripts/setup.py': '', 'docs/guide.md': 'public',
             '.gitignore': 'dist/\n__pycache__/\n', 'dist/index.html': '<!doctype html>',
             # Tracked or not, these must never reach a release.
-            'docs/claude-notes.md': 'private', 'PLAN.md': 'private', 'data/workshop.sqlite3': 'progress',
+            'docs/claude-notes.md': 'private', 'PLAN.md': 'private', 'data/workshop.sqlite3': 'progress', 'docs/hero.jpg': 'x',
             '.local/state': 'x', '.codex/environment.toml': 'x', 'scripts/__pycache__/setup.cpython-312.pyc': 'x',
         }
         with tempfile.TemporaryDirectory() as directory:

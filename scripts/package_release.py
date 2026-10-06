@@ -18,12 +18,14 @@ ROOT = Path(__file__).resolve().parents[1]
 NAME = 'engineering-workshop'
 # Learner data, local environments, build tools, private notes and agent settings.
 EXCLUDED_TOP = {'.git', '.claude', '.codex', '.local', '.venv', 'data', 'node_modules', 'release', 'PLAN.md'}
+# Screenshots and the social preview are for the GitHub page; the app never shows them.
+DOC_IMAGES = ('.png', '.jpg', '.jpeg', '.gif', '.webp')
 
 
 def included(path):
     parts = PurePosixPath(path).parts
     return (parts[0] not in EXCLUDED_TOP
-            and not (parts[0] == 'docs' and parts[-1].startswith('claude-'))
+            and not (parts[0] == 'docs' and (parts[-1].startswith('claude-') or parts[-1].lower().endswith(DOC_IMAGES)))
             and '__pycache__' not in parts and not path.endswith('.pyc'))
 
 
