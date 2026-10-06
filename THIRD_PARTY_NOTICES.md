@@ -40,4 +40,6 @@ SOFTWARE.
 
 The built interface in `dist/` includes code from npm packages such as React, CodeMirror, three.js and pdf.js. Minifying removes some of their license comments, so `npm run build` collects the license of every bundled package into `dist/THIRD_PARTY_LICENSES.txt`. In the app, open it from Settings → **Open-source licenses**.
 
+`@uiw/react-codemirror` and `@uiw/codemirror-extensions-basic-setup` ship without a license file, so the list uses the MIT license from their repository, kept in `scripts/licenses/uiw-react-codemirror.txt`.
+
 The PDF reader's fonts (Foxit, Liberation), character maps (Adobe) and decoders (JBIG2, OpenJPEG, QCMS) ship with their own license files in `dist/pdfjs/`.

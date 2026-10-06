@@ -12,6 +12,10 @@ This file lists the notable changes in each release. The format follows [Keep a 
 
 - An **Open-source licenses** link in Settings that opens `THIRD_PARTY_LICENSES.txt`.
 
+### Changed
+
+- The install download no longer includes pdf.js's engine for scripts inside PDFs (QuickJS). The app never ran PDF scripts.
+
 ## [1.1.1] - 2026-10-06
 
 ### Fixed
