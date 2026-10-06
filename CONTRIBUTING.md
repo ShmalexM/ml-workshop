@@ -2,6 +2,18 @@
 
 Engineering Workshop is a personal learning project that grows through use. Small lesson improvements, clearer explanations, better checks, and reproducible bug reports are welcome. Discuss larger features in an issue first. See [the roadmap](ROADMAP.md) for direction.
 
+Everyone who takes part follows the [code of conduct](CODE_OF_CONDUCT.md).
+
+## Report a problem
+
+Use the [issue forms](https://github.com/ShmalexM/ml-workshop/issues/new/choose):
+
+- **Bug report** for something in the app or the installer that does not work.
+- **Problem with a lesson** for a wrong or unclear explanation, a check that accepts a wrong answer or rejects a correct one, or a broken example.
+- **Feature or lesson idea** for something you want to learn or see in the app.
+
+Remove personal notes, local paths and secrets from logs and screenshots before you post them. Report security problems privately, as [SECURITY.md](SECURITY.md) describes.
+
 ## Develop locally
 
 Follow the [setup instructions for a clone](README.md#set-up-a-clone). Work on a branch. To edit the frontend, start the app and run:
@@ -64,4 +76,4 @@ CI builds the frontend and runs the full suite on Apple Silicon macOS with Pytho
 
 To publish a release, raise `version` in `package.json`, add the changes to [CHANGELOG.md](CHANGELOG.md), and merge to `main`. The release workflow then publishes `v<version>` with the archives the install command downloads, and installs it on macOS, Linux and Windows with the public command as a final check. Pushing a tag such as `v1.2.0` also works; a tag with a hyphen makes a prerelease.
 
-Keep generated files, learner progress, notes, logs, and credentials out of commits. Include what changed, why, and what you tested in your pull request. Contributions are provided under the project's MIT license.
+Keep generated files, learner progress, notes, logs, and credentials out of commits. The [pull request template](.github/PULL_REQUEST_TEMPLATE.md) lists what to include: what changed, why, and what you tested. Contributions are provided under the project's MIT license.

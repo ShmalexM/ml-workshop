@@ -1,0 +1,28 @@
+name: Feature or lesson idea
+description: Suggest a lesson, a project or a change to the app.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like?
+      description: A lesson topic, a public project to study, or a change to the app.
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Why is it useful?
+      description: For a lesson, say what a learner should be able to do afterward.
+    validations:
+      required: true
+  - type: textarea
+    id: exercise
+    attributes:
+      label: Suggested exercise
+      description: For a lesson, a small exercise that runs offline, and what the learner should know first. See "Add a lesson" in CONTRIBUTING.md.
+  - type: textarea
+    id: references
+    attributes:
+      label: References
+      description: Primary documentation or public code that the lesson or feature can link to.
