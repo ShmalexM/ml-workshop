@@ -24,7 +24,7 @@ curl -fsSL https://raw.githubusercontent.com/ShmalexM/ml-workshop/main/install.s
 irm https://raw.githubusercontent.com/ShmalexM/ml-workshop/main/install.ps1 | iex
 ```
 
-The installer downloads Engineering Workshop, Python 3.12 and the ML libraries (about 2 GB). It also downloads Node.js if your computer does not have version 22.13 or newer. The first install can take a while. When it finishes, Engineering Workshop opens in your browser.
+The installer downloads Engineering Workshop, Python 3.12 and the ML libraries, which take about 2 GB of disk space. It also downloads Node.js if your computer does not have version 22.13 or newer. The first install can take a while. When it finishes, Engineering Workshop opens in your browser.
 
 To open it later:
 
@@ -70,8 +70,8 @@ All lessons are open from the start. The **Paths** page suggests an order for fo
 Finished work earns rewards in a small fantasy game next to the lessons. The game is optional. Turn it off in **Settings** to hide it completely.
 
 - **Chests.** Every finished lesson, path, project walkthrough and reading guide earns one chest. Harder work earns a better chest. A lesson's chest depends on its path and on how far into the path the lesson is. A finished path earns one of the two best chests.
-- **Gear.** You create one hero from 13 World of Warcraft races and 12 classes. Chests hold only gear that your class can use, in five rarities: Basic (white), Common (green), Rare (blue), Epic (red) and Legendary (orange). Better gear looks more ornate on the 3D hero and in your bags. Over the full curriculum, a player opens about 140 items, and about 4 of them are Legendary.
-- **Battles.** Each of these chests also earns one fight in a top-down arena. Click to move and attack, and press Q, W, E and R to use your class's abilities. Each stage ends with a boss. A new hero usually loses at first. The damage you deal to a boss carries over between fights, and better gear makes your hero stronger. The **Auto** button plays the fight for you.
+- **Gear.** You create one hero from 13 World of Warcraft races and 12 classes. Chests hold only gear that your class can use, in five rarities: Basic (white), Common (green), Rare (blue), Epic (red) and Legendary (orange). Better gear looks more ornate on the 3D hero and in your bags. Finishing every lesson, path and project opens about 140 items, and 3 or 4 of them are Legendary.
+- **Battles.** Each of these chests also earns one fight in a top-down arena. Click to move and attack, and press Q, W, E and R to use your class's abilities. Each stage ends with a boss, and beating it earns a chest. A new hero usually loses at first. The damage you deal to a boss carries over between fights, and better gear makes your hero stronger. The **Auto** button plays the fight for you.
 
 ![The Hero armory: a 3D hero with equipped gear, and a list of chests earned from lessons](docs/hero-screenshot.jpg)
 
@@ -93,7 +93,7 @@ See [SECURITY.md](SECURITY.md) and the [architecture notes](docs/architecture.md
 
 ### Do I need a GPU?
 
-No. The CUDA lessons run your kernels in Numba's CPU simulator, so they work on any computer. You learn thread indexing, bounds checks, memory transfers and shared memory. The simulator does not test compilation, timing or performance on a real NVIDIA GPU. The other lessons use small inputs that run on the CPU. See [CUDA notes](docs/cuda-notes.md).
+No. The CUDA lessons run your kernels in Numba's CPU simulator instead of on a GPU. You learn thread indexing, bounds checks, memory transfers and shared memory. The simulator does not test compilation, timing or performance on a real NVIDIA GPU. The other lessons use small inputs that run on the CPU. See [CUDA notes](docs/cuda-notes.md).
 
 ### Does it send my code or data anywhere?
 
@@ -129,14 +129,14 @@ CI runs on macOS, Linux and Windows for every pull request and every push to `ma
 
 ### Can I turn the game off?
 
-Yes. Open **Settings** and turn off **Hero game**. The Hero tab and the reward pop-ups go away. Your progress still earns rewards, so nothing is lost if you turn the game back on later.
+Yes. Open **Settings** and, under **Hero game**, clear **Earn chests and battles as you finish lessons**. The Hero tab and the reward pop-ups go away. Your progress still earns rewards, so nothing is lost if you turn the game back on later.
 
 ## Troubleshooting
 
 - **The install command stops with an error.** It prints the reason and the path of `install.log` in the install folder. Fix the cause, such as a lost internet connection, and run the command again.
 - **The app does not open.** Run the install command again. It repairs the app and keeps your progress.
-- **Port 7318 is in use.** The app uses port 7318 on `127.0.0.1`. Stop the other program that uses it. If another Engineering Workshop server already runs on that port, the app opens that server.
-- **Saving fails after a restart.** The page gets a new session token on its next save. If saving still fails, reload the page.
+- **Port 7318 is in use.** The app uses port 7318 on `127.0.0.1`. Stop the other program that uses it. If another copy of Engineering Workshop already runs on that port, the app opens that copy and shows its progress.
+- **Saving fails after the server restarts.** The page normally gets a new session token and retries the save by itself. If saving still fails, reload the page.
 - **Something else goes wrong.** Look in `server.log` in the `data` folder. Remove personal information before you share it.
 
 ## Run from a clone

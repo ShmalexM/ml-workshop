@@ -1,10 +1,10 @@
 # Roadmap
 
-Engineering Workshop grows from actual use. These are planned areas of work, with no dates. Suggest improvements in [GitHub Issues](https://github.com/ShmalexM/ml-workshop/issues).
+These are planned areas of work, with no dates. Suggest improvements in [GitHub Issues](https://github.com/ShmalexM/ml-workshop/issues).
 
 ## Available now
 
-- 58 coding lessons across 12 paths spanning ML, GPUs, agents, backend, web, RL, data, reliability and interactive systems.
+- 58 coding lessons in 12 paths on ML, GPUs, agents, backend, web, RL, data, reliability and interactive systems.
 - Python and JavaScript exercises that run locally, with checks, hints, solutions, notes and XP.
 - Every lesson has an explanation, a runnable example, a prediction question and a solution you can open at any time.
 - Tests that make sure plausible wrong answers fail the lesson checks.
@@ -12,7 +12,7 @@ Engineering Workshop grows from actual use. These are planned areas of work, wit
 - Local progress storage and JSON export.
 - A one-line install for macOS, Linux and Windows. Running it again updates the app and keeps your progress.
 - Setup and launch scripts for clones on macOS, Linux and Windows, and an optional native Mac window.
-- A curated catalog of 12 public projects, each with a starting file, a preparation lesson and walkthrough steps with notes saved locally.
+- A list of 12 public projects, each with a starting file, a preparation lesson and walkthrough steps with notes saved locally.
 - PDF and EPUB reading, with reading guides linked to lessons.
 - An optional Hero game: finished lessons, paths, project walkthroughs and reading guides earn chests of gear and arena battles.
 

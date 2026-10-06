@@ -1,6 +1,6 @@
 # Contributing
 
-Engineering Workshop is a personal learning project that grows through use. Small lesson improvements, clearer explanations, better checks, and reproducible bug reports are welcome. Discuss larger features in an issue first. See [the roadmap](ROADMAP.md) for direction.
+Engineering Workshop is a personal project. Small lesson improvements, clearer explanations, better checks, and reproducible bug reports are welcome. Discuss larger features in an issue first. See [the roadmap](ROADMAP.md) for direction.
 
 Everyone who takes part follows the [code of conduct](CODE_OF_CONDUCT.md).
 
@@ -93,7 +93,7 @@ All platforms cap returned output at 24,000 bytes and clean up exercise process 
 
 - **Setup cannot find Python or Node/npm:** install the prerequisites, reopen your terminal, and rerun setup. uv is optional.
 - **Frontend not built or packages missing:** rerun setup from the checkout directory.
-- **Port 7318 is occupied:** set `ML_WORKSHOP_PORT` to an unused port or stop the other Engineering Workshop instance. The launcher reuses an existing Engineering Workshop server on the selected port.
+- **Port 7318 is in use:** stop the program that uses it, or set `ML_WORKSHOP_PORT` to an unused port. If it is another Engineering Workshop server, the launcher opens that server.
 
 ## Develop locally
 
@@ -109,7 +109,7 @@ To edit the frontend, start the app and run `npm run dev`. It watches and rebuil
 
 ## Add a lesson
 
-Lessons live in `backend/courses.py`, `backend/courses_extra.py`, `backend/extra_lessons.py`, and `backend/engineering_courses.py`. The public schema is described by `src/types.ts`; start from a nearby lesson.
+Lessons live in `backend/courses.py`, `backend/extra_lessons.py` and `backend/engineering_courses.py`. The public schema is described by `src/types.ts`; start from a nearby lesson.
 
 1. Give the lesson a stable, unique ID. Progress is keyed by ID, so preserve existing IDs.
 2. Explain one concept with a worked case, three diagram steps, three tasks, and three hints that go from a nudge to nearly the answer. Define each term where it is first used. Link to primary documentation.
