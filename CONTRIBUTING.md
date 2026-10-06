@@ -4,7 +4,7 @@ Engineering Workshop is a personal learning project that grows through use. Smal
 
 ## Develop locally
 
-Follow the [setup instructions](README.md#install). Work on a branch. To edit the frontend, start the app and run:
+Follow the [setup instructions for a clone](README.md#set-up-a-clone). Work on a branch. To edit the frontend, start the app and run:
 
 ```sh
 npm run dev
