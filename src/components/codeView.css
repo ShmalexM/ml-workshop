@@ -1,4 +1,4 @@
-/* Line numbers, diff rows and view toggle adapted from beautiful-ui CodeBlock (github.com/slev12397/beautiful-ui), MIT License, Copyright (c) 2026 Shane Levine. */
+/* Line numbers, diff rows and view toggle adapted from beautiful-ui CodeBlock (github.com/slev12397/beautiful-ui), MIT License, Copyright (c) 2026 Shane Levine; see THIRD_PARTY_NOTICES.md. */
 pre.code-view{padding:14px 0;tab-size:4}
 .code-view>code{display:block;width:max-content;min-width:100%;font:inherit}
 .code-row{display:flex;position:relative}

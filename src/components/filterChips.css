@@ -1,4 +1,4 @@
-/* Status chips adapted from beautiful-ui FilterTable (github.com/slev12397/beautiful-ui), MIT License, Copyright (c) 2026 Shane Levine. */
+/* Status chips adapted from beautiful-ui FilterTable (github.com/slev12397/beautiful-ui), MIT License, Copyright (c) 2026 Shane Levine; see THIRD_PARTY_NOTICES.md. */
 .filter-chips{display:flex;flex-wrap:wrap;gap:6px}
 .filter-chips button{display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 8px 0 12px;border:1px solid #d8e1e9;border-radius:999px;background:#fff;color:#53647c;font-size:13px;font-weight:550;white-space:nowrap}
 .filter-chips button:hover{background:#f3f7f5}

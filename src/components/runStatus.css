@@ -1,4 +1,4 @@
-/* Pixel-grid loader adapted from beautiful-ui LoadingState (github.com/slev12397/beautiful-ui), MIT License, Copyright (c) 2026 Shane Levine. */
+/* Pixel-grid loader adapted from beautiful-ui LoadingState (github.com/slev12397/beautiful-ui), MIT License, Copyright (c) 2026 Shane Levine; see THIRD_PARTY_NOTICES.md. */
 .pixel-loader{display:inline-grid;grid-template-columns:repeat(3,4px);gap:1.5px;flex:none}
 .pixel-loader>i{width:4px;height:4px;border-radius:1px;background:currentColor;opacity:.15;animation:pixel-on 650ms ease-in-out infinite}
 @keyframes pixel-on{0%,100%{opacity:.15}18%,42%{opacity:1}62%{opacity:.15}}

@@ -1,4 +1,4 @@
-// Status chips adapted from beautiful-ui FilterTable (github.com/slev12397/beautiful-ui), MIT License, Copyright (c) 2026 Shane Levine.
+// Status chips adapted from beautiful-ui FilterTable (github.com/slev12397/beautiful-ui), MIT License, Copyright (c) 2026 Shane Levine; see THIRD_PARTY_NOTICES.md.
 import {ArrowRight,CheckCircle2,Code2,Flame,PencilLine,Trophy} from 'lucide-react'
 import {useState} from 'react'
 import type {Course,Lesson,State} from '../types'

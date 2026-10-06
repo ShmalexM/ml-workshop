@@ -1,4 +1,4 @@
-// Line-numbered code and line diff adapted from beautiful-ui CodeBlock (github.com/slev12397/beautiful-ui), MIT License, Copyright (c) 2026 Shane Levine.
+// Line-numbered code and line diff adapted from beautiful-ui CodeBlock (github.com/slev12397/beautiful-ui), MIT License, Copyright (c) 2026 Shane Levine; see THIRD_PARTY_NOTICES.md.
 import {useMemo} from 'react'
 import {highlightCode,tagHighlighter,tags as t} from '@lezer/highlight'
 import {pythonLanguage} from '@codemirror/lang-python'

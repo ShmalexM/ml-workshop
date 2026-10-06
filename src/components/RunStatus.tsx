@@ -1,4 +1,4 @@
-// Pixel-grid loader adapted from beautiful-ui LoadingState (github.com/slev12397/beautiful-ui), MIT License, Copyright (c) 2026 Shane Levine.
+// Pixel-grid loader adapted from beautiful-ui LoadingState (github.com/slev12397/beautiful-ui), MIT License, Copyright (c) 2026 Shane Levine; see THIRD_PARTY_NOTICES.md.
 import {useEffect,useState} from 'react'
 import './runStatus.css'
 
