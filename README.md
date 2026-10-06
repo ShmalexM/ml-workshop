@@ -168,7 +168,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow, lesson auth
 - **Setup cannot find Python or Node/npm:** install the prerequisites, reopen your terminal, and rerun setup. uv is optional.
 - **Frontend not built or packages missing:** rerun Setup from the checkout directory.
 - **Port 7318 is occupied:** set `ML_WORKSHOP_PORT` to an unused port or stop the other Engineering Workshop instance. The launcher reuses an existing Engineering Workshop server on the selected port.
-- **Session expired after restart:** reload the browser to get a fresh session token.
+- **Session expired after restart:** the page gets a new session token on its next save. If saving still fails, reload the page.
 - **Unexpected failure:** inspect `data/server.log`. Remove personal information before sharing logs.
 
 ## License

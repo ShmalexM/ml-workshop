@@ -90,7 +90,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.headers.get('Sec-Fetch-Site')=='cross-site':
             self.send({'error':'Cross-site requests are disabled.'},403);return False
         if write and not secrets.compare_digest(self.headers.get('X-Workshop-Token',''),TOKEN):
-            self.send({'error':'Session expired. Reload the page to reconnect.'},403);return False
+            self.send({'error':'Session expired. Reload the page to reconnect.','code':'session-expired'},403);return False
         return True
     def do_GET(self):
         if not self.allowed():return

@@ -1,6 +1,6 @@
 import {lazy,Suspense,useCallback,useEffect,useRef,useState} from 'react'
 import {CodeXml,Settings as SettingsIcon,Menu,LoaderCircle,X} from 'lucide-react'
-import {api,bootstrap} from './api'
+import {api,bootstrap,serverReachable} from './api'
 import type {Course,Lesson,State,Runtime,RunResult,LearningStage} from './types'
 import type {Portfolio,ProjectState} from './portfolioTypes'
 import Curriculum from './components/Curriculum'
@@ -44,6 +44,13 @@ export default function App(){
  const timers=useRef<Record<string,ReturnType<typeof setTimeout>>>({});const [loaded,setLoaded]=useState(false)
  // Hero game: a summary drives the nav badge; the full state loads only on the Hero page.
  const [game,setGame]=useState<GameSummary|null>(null);const [loot,setLoot]=useState<LootNotice|null>(null);const closeLoot=useCallback(()=>setLoot(null),[])
+ // Ask the server every 15 s while this tab is visible, so the header dot turns red when it stops answering.
+ const [online,setOnline]=useState(true)
+ useEffect(()=>{let timer:ReturnType<typeof setInterval>|undefined
+  const check=()=>{void serverReachable().then(setOnline)}
+  const schedule=()=>{clearInterval(timer);if(document.visibilityState==='visible'){check();timer=setInterval(check,15000)}}
+  schedule();document.addEventListener('visibilitychange',schedule)
+  return()=>{clearInterval(timer);document.removeEventListener('visibilitychange',schedule)}},[])
  const saveProject=useCallback(async(projectId:string,value:ProjectState)=>{try{await api('/project/state',{projectId,...value});setProjectSave('Saved on this computer')}catch{setProjectSave('Saved in this browser · server not reachable')}},[])
  useEffect(()=>{let active=true;(async()=>{try{
    await bootstrap()
@@ -77,7 +84,7 @@ export default function App(){
  async function notifyLoot(lessonId:string,title:string){try{const g=await gameApi.state();setGame(summarize(g));if(g.enabled)setLoot({lesson:title,chest:g.chests.unopened.find(c=>c.source==='lesson:'+lessonId)||null,battles:g.battles.available})}catch{/* rewards are derived from progress, so a missed toast loses nothing */}}
  async function showSolution(){try{const r=await api<{solution:string}>('/solution/'+id);setSolution(r.solution)}catch(e){setError((e as Error).message)}}
  async function backup(){await Promise.all([...Object.entries(cacheRef.current).map(([lessonId,draft])=>api('/draft',{lessonId,...draft})),...Object.entries(library.readingState).map(([bookId,reading])=>api('/library/state',{bookId,...reading})),...Object.entries(portfolioRef.current.projectState).filter(([projectId])=>portfolioRef.current.projects.some(p=>p.id===projectId)).map(([projectId,value])=>api('/project/state',{projectId,...value}))]);return api<{url:string;filename:string}>('/backup',{})}
- return <div className="app"><header className="app-header"><div className="brand-area">{page==='learn'&&<button className="icon-button mobile-only" aria-label="Show lessons" onClick={()=>setDrawer(true)}><Menu size={21}/></button>}<button className="brand" onClick={()=>showPage('paths')}><CodeXml size={29}/><span>Engineering Workshop</span></button></div><nav aria-label="Main navigation">{(game?.enabled?['paths','learn','projects','books','progress','hero'] as const:['paths','learn','projects','books','progress'] as const).map(p=><button key={p} className={page===p?'active':''} onClick={()=>showPage(p)}>{p[0].toUpperCase()+p.slice(1)}{p==='hero'&&game&&game.unopened>0&&<span className="nav-badge" aria-label={`${game.unopened} unopened chests`}>{game.unopened}</span>}</button>)}</nav><div className="header-right"><button className="runtime-status" onClick={()=>setSettings(true)}><span/>Local runtime</button><button className="icon-button" aria-label="Open settings" onClick={()=>setSettings(true)}><SettingsIcon size={20}/></button></div></header>
+ return <div className="app"><header className="app-header"><div className="brand-area">{page==='learn'&&<button className="icon-button mobile-only" aria-label="Show lessons" onClick={()=>setDrawer(true)}><Menu size={21}/></button>}<button className="brand" onClick={()=>showPage('paths')}><CodeXml size={29}/><span>Engineering Workshop</span></button></div><nav aria-label="Main navigation">{(game?.enabled?['paths','learn','projects','books','progress','hero'] as const:['paths','learn','projects','books','progress'] as const).map(p=><button key={p} className={page===p?'active':''} onClick={()=>showPage(p)}>{p[0].toUpperCase()+p.slice(1)}{p==='hero'&&game&&game.unopened>0&&<span className="nav-badge" aria-label={`${game.unopened} unopened chests`}>{game.unopened}</span>}</button>)}</nav><div className="header-right"><button className={'runtime-status'+(online?'':' offline')} title={online?'Local runtime':'Server not reachable'} onClick={()=>setSettings(true)}><span/>{online?'Local runtime':'Server not reachable'}</button><button className="icon-button" aria-label="Open settings" onClick={()=>setSettings(true)}><SettingsIcon size={20}/></button></div></header>
  {loot&&page!=='hero'&&<LootToast notice={loot} onClose={closeLoot}/>}
   {error&&<div role="alert" className="error-toast"><span>{error}</span><button aria-label="Dismiss error" onClick={()=>setError('')}><X size={17}/></button></div>}
  <div className="app-body">{page==='learn'&&<Curriculum courses={courses} lessons={lessons} state={state} current={lesson} onSelect={selectLesson} open={drawer} onClose={()=>setDrawer(false)}/>}
