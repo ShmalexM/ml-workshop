@@ -1,0 +1,11 @@
+/* Status chips adapted from beautiful-ui FilterTable (github.com/slev12397/beautiful-ui), MIT License, Copyright (c) 2026 Shane Levine. */
+.filter-chips{display:flex;flex-wrap:wrap;gap:6px}
+.filter-chips button{display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 8px 0 12px;border:1px solid #d8e1e9;border-radius:999px;background:#fff;color:#53647c;font-size:13px;font-weight:550;white-space:nowrap}
+.filter-chips button:hover{background:#f3f7f5}
+.filter-chips button[aria-pressed=true]{border-color:#079455;background:#e9f7ee;color:#065f38}
+.chip-dot{width:7px;height:7px;border-radius:50%;background:#98a6b8}
+.chip-dot.started{background:#d08a1c}
+.chip-dot.done{background:#079455}
+.chip-count{min-width:22px;padding:1px 6px;border-radius:5px;background:#f1f4f7;color:#53647c;font-size:11px;line-height:1.5;text-align:center;font-variant-numeric:tabular-nums}
+.filter-chips button[aria-pressed=true] .chip-count{background:#d3eedd;color:#065f38}
+.practice-status.started{background:#fdf1dc;color:#9a5b00}

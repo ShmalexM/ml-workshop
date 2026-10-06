@@ -109,7 +109,7 @@ flowchart LR
   D -->|All checks pass| F[Lesson complete, then a project]
 ```
 
-Use **Run code** (⌘ Enter; Ctrl Enter on Linux and Windows) to see output, then **Check answer** (⌘ Shift Enter; Ctrl Shift Enter) to run the checks and earn XP. XP is awarded once per lesson. You can open any lesson, reveal hints in order, and view the solution. **Paths** suggests an order by role, and **All lessons** lists every lesson, with filters by path and for completed lessons. See the [ML learning guide](docs/learning-plan.md).
+Use **Run code** (⌘ Enter; Ctrl Enter on Linux and Windows) to see output, then **Check answer** (⌘ Shift Enter; Ctrl Shift Enter) to run the checks and earn XP. XP is awarded once per lesson. You can open any lesson, reveal hints in order, and view the solution. **Paths** suggests an order by role, and **All lessons** lists every lesson, with filters by path and by status (not started, in progress, completed). See the [ML learning guide](docs/learning-plan.md).
 
 Every lesson follows **Understand → See an example → Try it yourself**, with a small runnable example, a prediction question and feedback. **Show solution** is available at any time and lists the checks the solution passes; **Load into editor** replaces your code with it. Running examples does not overwrite drafts or award XP.
 
