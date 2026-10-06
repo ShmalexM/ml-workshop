@@ -28,6 +28,7 @@ DATA.mkdir(parents=True,exist_ok=True)
 DB=DATA/'workshop.sqlite3'
 TOKEN=secrets.token_urlsafe(32)
 RUN_LOCK=threading.Lock()
+VERSION=json.loads((ROOT/'package.json').read_text(encoding='utf-8'))['version']
 LIBRARY=Library(DATA)
 
 def connect():
@@ -71,7 +72,7 @@ def runtime():
     return dict(python=sys.version.split()[0],javascript=bool(node_binary()),packages=packages,cudaMode='CPU simulator (Numba); no NVIDIA GPU execution')
 
 class Handler(BaseHTTPRequestHandler):
-    server_version='MLWorkshop/1.0'
+    server_version=f'MLWorkshop/{VERSION}'
     def log_message(self,fmt,*args):
         # Do not log request bodies or learner source.
         sys.stderr.write('%s %s\n'%(self.log_date_time_string(),fmt%args))
@@ -116,7 +117,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send_book_file(file,media_type)
                 return self.send({'error':'Unknown library endpoint'},404)
             except (KeyError,ValueError):return self.send({'error':'Unknown book page or asset'},404)
-        if path=='/api/health':return self.send(dict(app='ml-workshop',version='1.0',busy=RUN_LOCK.locked()))
+        if path=='/api/health':return self.send(dict(app='ml-workshop',version=VERSION,busy=RUN_LOCK.locked()))
         if path=='/api/bootstrap':return self.send(dict(token=TOKEN))
         if path=='/api/curriculum':return self.send(public_curriculum())
         if path=='/api/state':return self.send(state())

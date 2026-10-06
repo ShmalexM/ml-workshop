@@ -5,7 +5,10 @@ import type {FxSpec} from './gear'
 const VERT=`attribute float size;attribute float alpha;attribute vec3 tint;varying float vAlpha;varying vec3 vTint;uniform float scale;
 void main(){vAlpha=alpha;vTint=tint;vec4 mv=modelViewMatrix*vec4(position,1.0);gl_PointSize=size*scale/max(.1,-mv.z);gl_Position=projectionMatrix*mv;}`
 const FRAG=`uniform sampler2D map;varying float vAlpha;varying vec3 vTint;
-void main(){vec4 t=texture2D(map,gl_PointCoord);gl_FragColor=vec4(vTint*1.6,t.a*vAlpha);if(gl_FragColor.a<.01)discard;}`
+void main(){vec4 t=texture2D(map,gl_PointCoord);gl_FragColor=vec4(vTint*1.6,t.a*vAlpha);if(gl_FragColor.a<.01)discard;
+#include <tonemapping_fragment>
+#include <colorspace_fragment>
+}`
 
 export type Burst={count:number;color:string;speed:number;size:number;life:number;gravity?:number;spread?:number;up?:number}
 

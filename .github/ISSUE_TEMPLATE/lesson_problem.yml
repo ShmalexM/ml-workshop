@@ -1,0 +1,49 @@
+name: Problem with a lesson
+description: A wrong or unclear explanation, a check that accepts a wrong answer, or a broken example.
+labels: [bug, lesson]
+body:
+  - type: input
+    id: lesson
+    attributes:
+      label: Lesson
+      description: The lesson title and path, or the lesson ID from the address bar (the part after `#learn/`, such as `foundations-1`).
+      placeholder: Make a prediction (ML foundations)
+    validations:
+      required: true
+  - type: dropdown
+    id: problem
+    attributes:
+      label: What is wrong?
+      options:
+        - The explanation is wrong or unclear
+        - A check accepts a wrong answer
+        - A check rejects a correct answer
+        - The worked example is broken or prints something else
+        - The prediction question or its feedback is wrong
+        - A hint or the solution is wrong
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: Quote the text, the check name or the output. Then say what you expected instead and why.
+    validations:
+      required: true
+  - type: textarea
+    id: code
+    attributes:
+      label: Your code
+      description: For a problem with a check, paste the code that the check accepted or rejected. Keep it short.
+      render: text
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - macOS on Apple silicon
+        - macOS on Intel
+        - Linux
+        - Windows 10
+        - Windows 11

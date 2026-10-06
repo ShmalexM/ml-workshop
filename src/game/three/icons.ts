@@ -39,11 +39,11 @@ function render(look:GearLook){
  // The browser can take the context back when too many are open; start a new renderer then.
  if(renderer?.getContext().isContextLost()){renderer.dispose();renderer=null}
  if(!renderer){const canvas=document.createElement('canvas');canvas.width=canvas.height=SIZE;renderer=createRenderer(canvas,{alpha:true,preserve:true});renderer.setPixelRatio(1);renderer.setSize(SIZE,SIZE,false)}
- const scene=new THREE.Scene();scene.environment=environment(renderer)
+ const scene=new THREE.Scene();scene.environment=environment(renderer);scene.environmentIntensity=.45
  const glowColor=RARITY_COLOR[look.rarity].glow
- scene.add(new THREE.HemisphereLight('#ffffff','#30303a',1.1))
- const key=new THREE.DirectionalLight('#fff4e6',2.4);key.position.set(-2,3,4);scene.add(key)
- const rim=new THREE.DirectionalLight(glowColor,look.rarity==='basic'?1:2.6);rim.position.set(3,1,-3);scene.add(rim)
+ scene.add(new THREE.HemisphereLight('#ffffff','#30303a',.65))
+ const key=new THREE.DirectionalLight('#fff4e6',1.6);key.position.set(-2,3,4);scene.add(key)
+ const rim=new THREE.DirectionalLight(glowColor,look.rarity==='basic'?.5:.85);rim.position.set(3,1,-3);scene.add(rim)
  const holder=new THREE.Group();scene.add(holder)
  const weapon=look.slot==='mainhand'||look.slot==='offhand'
  let rigRoot:THREE.Object3D|null=null

@@ -18,11 +18,12 @@ export const EFFECT_FX:Record<string,FxSpec>={
 
 function kit(look:GearLook){
  const p=palette(look.rarity,look.seed);const ri=RARITY_INDEX[look.rarity];const rand=seeded(look.seed^0x9e3779b9)
- const metal=mat(p.metal,{metal:[.5,.7,.85,.75,.9][ri],rough:[.7,.45,.28,.35,.22][ri]})
+ // Rarity reads through shape and color; broad metal surfaces should not emit light.
+ const metal=mat(p.metal,{metal:[.5,.65,.75,.7,.8][ri],rough:[.7,.55,.45,.48,.4][ri]})
  const dark=mat(p.metalDark,{metal:.6,rough:.5})
- const trim=ri>=3?mat(p.trim,{emissive:p.trim,glow:p.emissive*.9,metal:.5,rough:.4}):mat(p.trim,{metal:ri>=1?.85:.1,rough:ri>=1?.35:.8})
- const gem=mat(p.gem,{emissive:p.gem,glow:ri>=2?1.8:.35,rough:.15,metal:.1})
- const rune=mat(p.glow,{emissive:p.glow,glow:Math.max(1,p.emissive*1.4)})
+ const trim=ri>=3?mat(p.trim,{emissive:p.trim,glow:p.emissive*.2,metal:.5,rough:.5}):mat(p.trim,{metal:ri>=1?.65:.1,rough:ri>=1?.5:.8})
+ const gem=mat(p.gem,{emissive:p.gem,glow:ri>=2?.65:.2,rough:.35,metal:.1})
+ const rune=mat(p.glow,{emissive:p.glow,glow:Math.max(.25,p.emissive*.45)})
  const fabric=mat(p.fabric,{rough:.95}),fabricDark=mat(p.fabricDark,{rough:.95})
  const leather=mat(p.leather,{rough:.8}),wood=mat(p.wood,{rough:.85})
  const mail=mat(p.metal,{map:mailMap(),metal:.7,rough:.45})
@@ -158,7 +159,7 @@ function tome(k:Kit){
 
 function orb(k:Kit){
  const g=new THREE.Group();const {ri}=k
- const glass=mesh(new THREE.IcosahedronGeometry(.09,ri>=2?2:1),mat(k.p.gem,{emissive:k.p.gem,glow:.8+ri*.5,rough:.1,opacity:.85}),g);glass.userData.float=1
+ const glass=mesh(new THREE.IcosahedronGeometry(.09,ri>=2?2:1),mat(k.p.gem,{emissive:k.p.gem,glow:.3+ri*.15,rough:.35,opacity:.85}),g);glass.userData.float=1
  mesh(new THREE.IcosahedronGeometry(.14+ri*.02,1),glow(k.p.glow,.18+ri*.06),g)
  for(let i=0;i<(ri>=3?4:3);i++){const a=i/(ri>=3?4:3)*Math.PI*2;const claw=mesh(new THREE.ConeGeometry(.012,.11,4),ri===4?k.metal:k.dark,g,Math.cos(a)*.08,-.07,Math.sin(a)*.08);claw.rotation.set(Math.sin(a)*.6,0,-Math.cos(a)*.6)}
  if(ri>=4)for(let i=0;i<4;i++){const mote=mesh(new THREE.OctahedronGeometry(.016),k.gem,g);mote.userData.orbit={r:.17,speed:2,phase:i*Math.PI/2,y:0}}

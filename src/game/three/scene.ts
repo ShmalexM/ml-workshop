@@ -8,7 +8,7 @@ import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js'
 export function createRenderer(canvas:HTMLCanvasElement,opts:{alpha?:boolean;shadows?:boolean;preserve?:boolean}={}){
  const renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:opts.alpha??false,preserveDrawingBuffer:opts.preserve??false,powerPreference:'high-performance'})
  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2))
- renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05
+ renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=.95
  renderer.outputColorSpace=THREE.SRGBColorSpace
  if(opts.shadows){renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFShadowMap}
  return renderer
@@ -22,7 +22,7 @@ export function environment(renderer:THREE.WebGLRenderer){
  return tex
 }
 
-export function createComposer(renderer:THREE.WebGLRenderer,scene:THREE.Scene,camera:THREE.Camera,bloom={strength:.85,radius:.55,threshold:.82}){
+export function createComposer(renderer:THREE.WebGLRenderer,scene:THREE.Scene,camera:THREE.Camera,bloom={strength:.22,radius:.4,threshold:1.4}){
  const size=renderer.getSize(new THREE.Vector2())
  const composer=new EffectComposer(renderer)
  composer.addPass(new RenderPass(scene,camera))

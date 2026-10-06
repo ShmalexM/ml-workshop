@@ -94,12 +94,12 @@ export function buildArena(theme:Theme,seed:number):Arena{
  const ring=new THREE.Mesh(new THREE.TorusGeometry(2.3,.32,6,24),mat(look.rim,{rough:.8}));ring.position.y=2.6;gate.add(ring)
  const swirl=new THREE.Mesh(new THREE.CircleGeometry(2.05,32),glow(look.accent,.55,THREE.DoubleSide));swirl.position.y=2.6;swirl.userData.spin=1;gate.add(swirl);animated.push(swirl)
  for(const s of [-1,1]){const pillar=new THREE.Mesh(new THREE.CylinderGeometry(.35,.45,3.2,6),mat(look.rim,{rough:.9}));pillar.position.set(s*2.5,1.6,0);pillar.castShadow=true;gate.add(pillar)}
- const portalLight=new THREE.PointLight(look.accent,18,14,1.6);portalLight.position.set(0,2.6,1.4);gate.add(portalLight)
- group.add(new THREE.HemisphereLight(look.sky,look.ground,.85))
- const key=new THREE.DirectionalLight(look.light,2.1);key.castShadow=true;key.shadow.mapSize.set(2048,2048)
+ const portalLight=new THREE.PointLight(look.accent,7,10,2);portalLight.position.set(0,2.6,1.4);gate.add(portalLight)
+ group.add(new THREE.HemisphereLight(look.sky,look.ground,.65))
+ const key=new THREE.DirectionalLight(look.light,1.5);key.castShadow=true;key.shadow.mapSize.set(2048,2048)
  const cam=key.shadow.camera;cam.left=-18;cam.right=18;cam.top=18;cam.bottom=-18;cam.near=1;cam.far=60;key.shadow.bias=-.0005
  group.add(key);group.add(key.target)
- if(look.crack)for(let i=0;i<5;i++){const l=new THREE.PointLight(look.crack,7,10,1.8);const a=rand()*Math.PI*2,r=rand()*ARENA_RADIUS;l.position.set(Math.cos(a)*r,.6,Math.sin(a)*r);group.add(l)}
+ if(look.crack)for(let i=0;i<5;i++){const l=new THREE.PointLight(look.crack,2,6,2);const a=rand()*Math.PI*2,r=rand()*ARENA_RADIUS;l.position.set(Math.cos(a)*r,.6,Math.sin(a)*r);group.add(l)}
  const update=(t:number)=>{for(const o of animated){if(o.userData.spin)o.rotation.z=t*o.userData.spin;if(o.userData.flicker)o.scale.y=1+Math.sin(t*12+o.id)*.18;if(o.userData.float)o.position.y=4.8+Math.sin(t*1.5+o.id)*.15}}
  return {group,key,portal,fog:new THREE.Color(look.fog),accent:look.accent,animated,update,dispose:()=>{for(const x of own)x.dispose();key.shadow.dispose()}}
 }

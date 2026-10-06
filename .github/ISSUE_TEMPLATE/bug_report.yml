@@ -1,0 +1,63 @@
+name: Bug report
+description: Something in the app or the installer does not work.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Report security problems privately, as [SECURITY.md](https://github.com/ShmalexM/ml-workshop/blob/main/SECURITY.md) describes. For a wrong explanation, check or example in one lesson, use **Problem with a lesson** instead.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Include the exact error message if there is one.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open ...
+        2. Click ...
+        3. See ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How did you install it?
+      options:
+        - One-line install command
+        - Git clone and setup
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - macOS on Apple silicon
+        - macOS on Intel
+        - Linux
+        - Windows 10
+        - Windows 11
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: For an installed copy, the `version` line in `app/package.json` in the install folder. For a clone, the output of `git rev-parse --short HEAD`.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log
+      description: For an install problem, the end of `install.log` in the install folder. For an app problem, the end of `server.log` in the `data` folder. Remove personal notes, local paths and secrets first.
+      render: text
