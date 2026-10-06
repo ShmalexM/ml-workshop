@@ -85,3 +85,90 @@ jobs:
             [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$parseErrors) | Out-Null
             if ($parseErrors.Count) { throw ($parseErrors | Out-String) }
           }
+
+  installer:
+    name: ${{ matrix.os }} one-line installer
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version-file: .python-version
+      - run: npm ci
+      - run: npm run build
+      - run: python scripts/package_release.py
+      - name: Install, check, update and remove (macOS and Linux)
+        if: runner.os != 'Windows'
+        shell: bash
+        env:
+          EW_HOME: ${{ runner.temp }}/ew home
+          EW_ARCHIVE: ${{ github.workspace }}/release/engineering-workshop.tar.gz
+          EW_LIGHT: '1'
+          EW_NO_LAUNCH: '1'
+        run: |
+          set -euo pipefail
+          # As on a new computer: no Node.js or Python from the runner image on PATH.
+          bare() { env PATH=/usr/bin:/bin:/usr/sbin:/sbin "$@"; }
+          python="$EW_HOME/app/.venv/bin/python"
+          bare EW_NO_SHORTCUTS=1 sh install.sh
+          bare "$python" tests/check_install.py "$EW_HOME"
+          echo progress > "$EW_HOME/data/keep.txt"
+          # Update in place, this time with the app shortcut in a scratch home folder.
+          export HOME="$RUNNER_TEMP/home"
+          bare sh install.sh
+          if [ "$RUNNER_OS" = macOS ]; then
+            shortcut="$HOME/Applications/Engineering Workshop.app"
+          else
+            shortcut="${XDG_DATA_HOME:-$HOME/.local/share}/applications/engineering-workshop.desktop"
+          fi
+          test -e "$shortcut"
+          bare "$python" tests/check_install.py "$EW_HOME"
+          bare sh install.sh --uninstall
+          test -f "$EW_HOME/data/keep.txt" && test -f "$EW_HOME/data/workshop.sqlite3"
+          test ! -e "$EW_HOME/app" && test ! -e "$EW_HOME/runtime" && test ! -e "$shortcut"
+          bare sh install.sh --uninstall --purge
+          test ! -e "$EW_HOME"
+      - name: Install, check, update and remove (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        env:
+          EW_HOME: ${{ runner.temp }}\ew home
+          EW_ARCHIVE: ${{ github.workspace }}\release\engineering-workshop.zip
+          EW_LIGHT: '1'
+          EW_NO_LAUNCH: '1'
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # As on a new computer: no Node.js, Python or Git from the runner image on PATH.
+          $env:Path = "$env:SystemRoot\System32;$env:SystemRoot;$env:SystemRoot\System32\WindowsPowerShell\v1.0"
+          $python = "$env:EW_HOME\app\.venv\Scripts\python.exe"
+          $env:EW_NO_SHORTCUTS = '1'
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
+          if ($LASTEXITCODE) { throw "install.ps1 failed with exit code $LASTEXITCODE" }
+          & $python tests\check_install.py $env:EW_HOME
+          if ($LASTEXITCODE) { throw 'The installed app failed its checks.' }
+          Set-Content -LiteralPath "$env:EW_HOME\data\keep.txt" -Value progress
+          # Update in place the way users run it (irm | iex), this time with shortcuts.
+          Remove-Item env:EW_NO_SHORTCUTS
+          Get-Content -Raw .\install.ps1 | Invoke-Expression
+          $links = @([Environment]::GetFolderPath('Programs'), [Environment]::GetFolderPath('Desktop')) | ForEach-Object { Join-Path $_ 'Engineering Workshop.lnk' }
+          foreach ($link in $links) { if (-not (Test-Path -LiteralPath $link)) { throw "Missing shortcut $link" } }
+          $target = (New-Object -ComObject WScript.Shell).CreateShortcut($links[0]).TargetPath
+          if (-not $target.EndsWith('pythonw.exe') -or -not (Test-Path -LiteralPath $target)) { throw "Unexpected shortcut target $target" }
+          & $python tests\check_install.py $env:EW_HOME
+          if ($LASTEXITCODE) { throw 'The updated app failed its checks.' }
+          & ([scriptblock]::Create((Get-Content -Raw .\install.ps1))) -Uninstall
+          foreach ($path in "$env:EW_HOME\data\keep.txt", "$env:EW_HOME\data\workshop.sqlite3") { if (-not (Test-Path -LiteralPath $path)) { throw "Uninstall removed $path" } }
+          foreach ($path in @("$env:EW_HOME\app", "$env:EW_HOME\runtime") + $links) { if (Test-Path -LiteralPath $path) { throw "Uninstall left $path" } }
+          & ([scriptblock]::Create((Get-Content -Raw .\install.ps1))) -Uninstall -Purge
+          if (Test-Path -LiteralPath $env:EW_HOME) { throw 'Purge left the install folder.' }
