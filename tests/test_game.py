@@ -287,7 +287,7 @@ class GameStateTests(unittest.TestCase):
         return game.handle(self.db, action, body, self.progress, rng or random.Random(55))
 
     def hero(self, cid='warrior'):
-        return self.action('hero', dict(name='  Thrall  ', race='orc', **{'class': cid}))['game']
+        return self.action('hero', dict(name='  Durgan  ', race='orc', **{'class': cid}))['game']
 
     def add_item(self, cid, slot, base):
         with self.db:
@@ -742,7 +742,7 @@ class GameApiTests(unittest.TestCase):
                 db.execute('DELETE FROM ' + table)
 
     def hero(self, **patches):
-        body = dict(name='Thrall', race='orc', **{'class': 'warrior'})
+        body = dict(name='Durgan', race='orc', **{'class': 'warrior'})
         return self.request('/api/game/hero', {**body, **patches})['game']
 
     def test_http_lifecycle_and_backup(self):
@@ -753,8 +753,8 @@ class GameApiTests(unittest.TestCase):
                                        'luck', 'enabled', 'battles', 'campaign',
                                        'lifetime', 'history', 'catalog'})
         self.assertEqual((len(initial['catalog']['races']), len(initial['catalog']['classes'])), (13, 12))
-        saved = self.hero(name='  Thrall  ')
-        self.assertEqual(saved['hero']['name'], 'Thrall')
+        saved = self.hero(name='  Durgan  ')
+        self.assertEqual(saved['hero']['name'], 'Durgan')
         self.assertEqual(len(saved['items']), 5)
         self.assertTrue(all(i['equipped'] for i in saved['items']))
         self.assertEqual(set(saved['equipment']), {'chest', 'legs', 'feet', 'mainhand', 'offhand'})
@@ -959,7 +959,7 @@ class GameApiTests(unittest.TestCase):
         self.assertEqual(after['chests']['unopened'], [])
 
     def test_game_routes_keep_request_guards(self):
-        body = dict(name='Thrall', race='orc', **{'class': 'warrior'})
+        body = dict(name='Durgan', race='orc', **{'class': 'warrior'})
         for headers in ({'X-Workshop-Token': None}, {'X-Workshop-Token': 'wrong'},
                         {'Origin': 'https://example.com'}, {'Sec-Fetch-Site': 'cross-site'},
                         {'Host': 'attacker.example'}):
@@ -971,11 +971,11 @@ class GameApiTests(unittest.TestCase):
         self.assert_error('/api/game', None, 403, {'Origin': 'https://example.com'})
 
     def test_invalid_names_and_action_payloads(self):
-        for name in ('', 'A', '123', 'A  B', '-Thrall', "Thrall'", 'A_B', 'éowyn',
+        for name in ('', 'A', '123', 'A  B', '-Durgan', "Durgan'", 'A_B', 'éowyn',
                      'A' * 17, 'A\nB', 'A\tB', None, 3, [], {}):
             self.assert_error('/api/game/hero', dict(name=name, race='orc', **{'class': 'warrior'}))
         for patch_body in ({'race': 'bad'}, {'race': []}, {'class': 'bad'}, {'class': {}}):
-            self.assert_error('/api/game/hero', {**dict(name='Thrall', race='orc',
+            self.assert_error('/api/game/hero', {**dict(name='Durgan', race='orc',
                                                       **{'class': 'warrior'}), **patch_body})
         self.assertIsNone(self.request('/api/game')['hero'])
         self.hero(name="O'Neil-Sun")

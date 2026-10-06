@@ -133,7 +133,7 @@ check_tools() {
 }
 
 prepare_home() {
-  if { [ -e "$APP" ] || [ -e "$RUNTIME" ]; } && [ ! -f "$MARKER" ]; then
+  if { [ -e "$APP" ] || [ -e "$RUNTIME" ] || [ -e "$DATA" ]; } && [ ! -f "$MARKER" ]; then
     fail "$EW_HOME has files that this installer did not create. Set EW_HOME to another folder."
   fi
   mkdir -p "$EW_HOME" "$DATA" "$RUNTIME" || fail "Could not create $EW_HOME."

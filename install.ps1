@@ -183,7 +183,7 @@ param([switch]$Uninstall, [switch]$Purge)
     }
 
     function Initialize-Root {
-        if (((Test-Path -LiteralPath $S.App) -or (Test-Path -LiteralPath $S.Runtime)) -and -not (Test-Path -LiteralPath $S.Marker)) {
+        if (((Test-Path -LiteralPath $S.App) -or (Test-Path -LiteralPath $S.Runtime) -or (Test-Path -LiteralPath $S.Data)) -and -not (Test-Path -LiteralPath $S.Marker)) {
             Fail "$($S.Root) has files that this installer did not create. Set EW_HOME to another folder."
         }
         foreach ($folder in $S.Root, $S.Data, $S.Runtime) { New-Folder $folder }
