@@ -10,7 +10,8 @@ Engineering Workshop grows from actual use. These are planned areas of work, wit
 - Tests that make sure plausible wrong answers fail the lesson checks.
 - Offline exercises using small synthetic inputs, including CUDA CPU simulation.
 - Local progress storage and JSON export.
-- Setup and launch scripts for macOS, Linux and Windows, and an optional Mac app.
+- A one-line install for macOS, Linux and Windows. Running it again updates the app and keeps your progress.
+- Setup and launch scripts for clones on macOS, Linux and Windows, and an optional native Mac window.
 - A curated catalog of 12 public projects, each with a starting file, a preparation lesson and walkthrough steps with notes saved locally.
 - PDF and EPUB reading, with reading guides linked to lessons.
 - An optional Hero game: finished lessons, paths, project walkthroughs and reading guides earn chests of gear and arena battles.
