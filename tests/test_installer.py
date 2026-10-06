@@ -45,7 +45,7 @@ class PackageReleaseTests(unittest.TestCase):
     def test_archives_hold_source_and_build_only(self):
         files = {
             'README.md': 'readme', 'install.sh': '#!/bin/sh\n', 'scripts/setup.py': '', 'docs/guide.md': 'public',
-            '.gitignore': 'dist/\n__pycache__/\n', 'dist/index.html': '<!doctype html>',
+            '.gitignore': 'dist/\n__pycache__/\n', 'dist/index.html': '<!doctype html>', 'dist/THIRD_PARTY_LICENSES.txt': 'react 19.3.0',
             # Tracked or not, these must never reach a release.
             'docs/claude-notes.md': 'private', 'PLAN.md': 'private', 'data/workshop.sqlite3': 'progress', 'docs/hero.jpg': 'x',
             '.local/state': 'x', '.codex/environment.toml': 'x', 'scripts/__pycache__/setup.cpython-312.pyc': 'x',
@@ -66,7 +66,8 @@ class PackageReleaseTests(unittest.TestCase):
             out = Path(directory) / 'release'
             tar_path, zip_path, sums_path = package_release.package(root, out)
             expected = {f'engineering-workshop/{path}' for path in
-                        ['README.md', 'install.sh', 'scripts/setup.py', 'docs/guide.md', '.gitignore', 'dist/index.html', 'new.txt']}
+                        ['README.md', 'install.sh', 'scripts/setup.py', 'docs/guide.md', '.gitignore', 'dist/index.html',
+                         'dist/THIRD_PARTY_LICENSES.txt', 'new.txt']}
             with tarfile.open(tar_path) as archive:
                 self.assertEqual(set(archive.getnames()), expected)
                 if os.name != 'nt':
@@ -81,8 +82,14 @@ class PackageReleaseTests(unittest.TestCase):
             self.assertEqual((tar_path.read_bytes(), zip_path.read_bytes()), first)
 
     def test_requires_a_built_interface(self):
-        with tempfile.TemporaryDirectory() as directory, self.assertRaisesRegex(SystemExit, 'npm run build'):
-            package_release.release_files(Path(directory))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with self.assertRaisesRegex(SystemExit, 'dist/index.html is missing. Run `npm run build`'):
+                package_release.release_files(root)
+            (root / 'dist').mkdir()
+            (root / 'dist/index.html').write_text('<!doctype html>')
+            with self.assertRaisesRegex(SystemExit, 'dist/THIRD_PARTY_LICENSES.txt is missing. Run `npm run build`'):
+                package_release.release_files(root)
 
 
 if __name__ == '__main__':unittest.main()

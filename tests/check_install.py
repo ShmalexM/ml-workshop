@@ -1,7 +1,8 @@
 """Check a copy made by install.sh or install.ps1.
 
-Starts it on a free port without opening a browser, checks /api/health, runs one
-Python and one JavaScript exercise, then stops it. CI runs this after the installer.
+Checks that the build includes the open-source license list, starts the app on a free
+port without opening a browser, checks /api/health, runs one Python and one JavaScript
+exercise, then stops it. CI runs this after the installer.
 
 Usage: python tests/check_install.py <install folder>
 """
@@ -28,6 +29,8 @@ def call(url, data=None, token=None):
 
 def main(install):
     install = Path(install).resolve()
+    licenses = install / 'app' / 'dist' / 'THIRD_PARTY_LICENSES.txt'
+    check(licenses.is_file() and 'react' in licenses.read_text(encoding='utf-8'), f'{licenses} is missing or does not list react')
     python = install / 'app' / '.venv' / ('Scripts/python.exe' if os.name == 'nt' else 'bin/python')
     command = [str(python), str(install / 'app' / 'scripts' / 'installed.py')]
     with socket.socket() as sock:
