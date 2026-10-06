@@ -46,15 +46,15 @@ class LowestRoll(random.Random):
 class LootTests(unittest.TestCase):
     def test_campaign_names_and_health_scaling(self):
         expected = [
-            ('Blighted Outskirts', 'Gorefang the Alpha'),
+            ('Blighted Outskirts', 'Grimpelt the Alpha'),
             ('The Bonefields', 'Bonelord Varak'),
-            ('Webwood Hollow', 'Broodmother Ixis'),
+            ('Silkweb Hollow', 'Broodmother Ixis'),
             ('Drowned Crypt', 'Stitchgut the Abomination'),
             ('Ember Wastes', 'Pyrelord Akkar'),
             ('Hellhound Kennels', 'Cerberax the Twin-Maw'),
             ('The Void Rift', 'The Unmaker'),
-            ('Fel Foundry', 'Magmaw Colossus'),
-            ('Shadow Citadel', 'Dreadlord Malachar'),
+            ('Brimstone Foundry', 'Slagheart Colossus'),
+            ('Shadow Citadel', 'Malachar the Dread'),
             ('The Burning Gate', 'Azgaroth, Lord of Cinders'),
         ]
         for stage, names in enumerate(expected, 1):
@@ -502,7 +502,7 @@ class GameStateTests(unittest.TestCase):
         self.assertEqual(reward['source'], 'boss:1')
         self.assertEqual(reward['kind'], 'boss')
         self.assertEqual(reward['tier'], 2)
-        self.assertEqual(reward['title'], 'Gorefang the Alpha defeated')
+        self.assertEqual(reward['title'], 'Grimpelt the Alpha defeated')
         self.assertEqual(reward['subtitle'], 'Stage 1 · Blighted Outskirts')
         self.assertEqual(saved['campaign']['bossDamage'], 0)
         self.assertEqual(saved['campaign']['bossRemaining'], 5100)

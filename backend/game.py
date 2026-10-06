@@ -156,7 +156,7 @@ EFFECT_DETAILS = [
     ('inferno', 'Inferno',
      'Your attacks and abilities ignite enemies, burning them for 40% extra damage over 3 sec.',
      ['Emberheart', 'Cinderfall', 'Pyreborn'], 'the Burning Sun',
-     'Ash from Blackrock Mountain is sealed within the runes.'),
+     'Ash from the Cinderpeak forges is sealed within the runes.'),
     ('stormcall', 'Stormcall',
      'Every 4th attack releases chain lightning that leaps to 3 enemies.',
      ['Thunderwake', 'Stormrend', 'Skysplitter'], 'the Endless Tempest',
@@ -205,15 +205,15 @@ MAX_BATTLE_DAMAGE = 2**53 - 1
 CAMPAIGN_STAGES = [
     dict(stage=stage, name=name, boss=boss)
     for stage, (name, boss) in enumerate([
-        ('Blighted Outskirts', 'Gorefang the Alpha'),
+        ('Blighted Outskirts', 'Grimpelt the Alpha'),
         ('The Bonefields', 'Bonelord Varak'),
-        ('Webwood Hollow', 'Broodmother Ixis'),
+        ('Silkweb Hollow', 'Broodmother Ixis'),
         ('Drowned Crypt', 'Stitchgut the Abomination'),
         ('Ember Wastes', 'Pyrelord Akkar'),
         ('Hellhound Kennels', 'Cerberax the Twin-Maw'),
         ('The Void Rift', 'The Unmaker'),
-        ('Fel Foundry', 'Magmaw Colossus'),
-        ('Shadow Citadel', 'Dreadlord Malachar'),
+        ('Brimstone Foundry', 'Slagheart Colossus'),
+        ('Shadow Citadel', 'Malachar the Dread'),
         ('The Burning Gate', 'Azgaroth, Lord of Cinders'),
     ], 1)
 ]

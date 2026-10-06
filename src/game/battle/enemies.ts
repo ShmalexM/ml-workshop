@@ -8,11 +8,11 @@ export const ARCHETYPES:Record<EnemyKind,Archetype>={
  ghoul:{name:'Ghoul',hp:160,dmg:11,speed:3.2,range:1.7,interval:1.2,radius:.5},
  skeleton:{name:'Skeleton Warrior',hp:110,dmg:10,speed:3.4,range:1.8,interval:1.2,radius:.45},
  archer:{name:'Skeleton Archer',hp:90,dmg:9,speed:3.2,range:7.5,interval:1.8,radius:.45,ranged:'#e8e0c8'},
- spider:{name:'Webwood Spider',hp:100,dmg:8,speed:4.8,range:1.5,interval:.9,radius:.55},
+ spider:{name:'Silkweb Spider',hp:100,dmg:8,speed:4.8,range:1.5,interval:.9,radius:.55},
  imp:{name:'Imp',hp:85,dmg:9,speed:3.6,range:7,interval:1.7,radius:.4,ranged:'#ff7a2a'},
  hellhound:{name:'Hellhound',hp:150,dmg:12,speed:5,range:1.6,interval:1,radius:.6},
  wraith:{name:'Void Wraith',hp:140,dmg:12,speed:3.4,range:6.5,interval:1.6,radius:.5,ranged:'#b06cff',floats:true},
- infernal:{name:'Infernal',hp:260,dmg:18,speed:2.6,range:2,interval:1.6,radius:.8},
+ infernal:{name:'Brimstone Golem',hp:260,dmg:18,speed:2.6,range:2,interval:1.6,radius:.8},
  dreadknight:{name:'Dreadknight',hp:220,dmg:15,speed:3.2,range:2,interval:1.3,radius:.55},
  demon:{name:'Doom Fiend',hp:300,dmg:20,speed:3,range:2.2,interval:1.4,radius:.8},
 }
@@ -28,7 +28,7 @@ const STAGES:StageDef[]=[
  {theme:'kennels',minions:['hellhound'],boss:{kind:'hellhound',scale:2.6,variant:'twin'}},
  {theme:'void',minions:['wraith'],boss:{kind:'wraith',scale:2.9,variant:'unmaker'}},
  {theme:'foundry',minions:['infernal','imp'],boss:{kind:'infernal',scale:2.4,variant:'colossus'}},
- {theme:'citadel',minions:['dreadknight','imp'],boss:{kind:'demon',scale:2.2,variant:'dreadlord'}},
+ {theme:'citadel',minions:['dreadknight','imp'],boss:{kind:'demon',scale:2.2,variant:'dread'}},
  {theme:'gate',minions:['demon','hellhound','imp'],boss:{kind:'demon',scale:2.8,variant:'azgaroth'}},
 ]
 export function stageDef(stage:number):StageDef{
@@ -138,7 +138,7 @@ export function buildEnemy(kind:EnemyKind,variant='',scale=1):EnemyModel{
   case 'wraith':model=wraith(variant==='unmaker'?'#1a0f2e':'#2a1a40','#b06cff');break
   case 'infernal':model=golem(variant==='colossus'?'#2a2622':'#3a3430',variant==='colossus'?'#ff6a1a':'#7aff3a');break
   case 'dreadknight':model=humanoid('#2a2630','#ff3a3a',{armor:'#3a3442',weapon:'sword',horns:'#1a1418'});break
-  case 'demon':model=humanoid(variant==='dreadlord'?'#3a2a4a':'#7a1f1a','#ffcf3a',{horns:'#1a1210',wings:variant==='dreadlord'?'#2a1a3a':'#3a1010',tail:true,weapon:variant==='azgaroth'?'flamesword':'claws',crown:variant==='azgaroth',height:1.1});break
+  case 'demon':model=humanoid(variant==='dread'?'#3a2a4a':'#7a1f1a','#ffcf3a',{horns:'#1a1210',wings:variant==='dread'?'#2a1a3a':'#3a1010',tail:true,weapon:variant==='azgaroth'?'flamesword':'claws',crown:variant==='azgaroth',height:1.1});break
  }
  model.object.scale.setScalar(scale);model.height*=scale
  return model
