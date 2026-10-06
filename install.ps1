@@ -490,6 +490,8 @@ param([switch]$Uninstall, [switch]$Purge)
         [Environment]::CurrentDirectory = $savedDirectory
         Pop-Location
     }
+    # Tools such as robocopy return nonzero codes on success; do not leave one behind after a good run.
+    if (-not $failed) { $global:LASTEXITCODE = 0 }
     # Set an exit code when run as a file. With irm | iex, exit would close the PowerShell window.
     if ($failed -and $PSCommandPath) { exit 1 }
 }

@@ -671,7 +671,7 @@ class GameStateTests(unittest.TestCase):
 class GameApiTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.tmp = tempfile.TemporaryDirectory(prefix='ml-game-api-')
+        cls.tmp = tempfile.TemporaryDirectory(prefix='ml-game-api-', ignore_cleanup_errors=True)
         cls.addClassCleanup(cls.tmp.cleanup)
         directory = Path(cls.tmp.name)
         project = dict(id='sample', title='Sample project', summary='Synthetic fixture',
@@ -737,9 +737,14 @@ class GameApiTests(unittest.TestCase):
     def setUp(self):
         self.request('/api/game/retire', dict(confirm='RETIRE'))
         self.request('/api/game/settings', dict(enabled=True))
-        with sqlite3.connect(Path(self.tmp.name) / 'workshop.sqlite3') as db:
-            for table in ('completions', 'project_state', 'reading_state'):
-                db.execute('DELETE FROM ' + table)
+        # Close explicitly: `with connect()` only commits, and Windows cannot delete an open database.
+        db = sqlite3.connect(Path(self.tmp.name) / 'workshop.sqlite3')
+        try:
+            with db:
+                for table in ('completions', 'project_state', 'reading_state'):
+                    db.execute('DELETE FROM ' + table)
+        finally:
+            db.close()
 
     def hero(self, **patches):
         body = dict(name='Durgan', race='orc', **{'class': 'warrior'})

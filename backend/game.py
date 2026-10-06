@@ -1,6 +1,6 @@
 """Local hero inventory and earned loot; no learning progress is written here."""
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 import random
 import re
@@ -265,10 +265,14 @@ def boss_chests(db):
         "SELECT stage,finished FROM game_battles WHERE outcome='victory'")]
 
 
+EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
+
+
 def from_millis(value):
     # Existing progress accepts JS-safe integers, including dates beyond year 9999.
+    # Add to the epoch instead of datetime.fromtimestamp, which Windows rejects for far-future dates.
     seconds = min(max(value / 1000, 0), 253402300799)
-    return datetime.fromtimestamp(seconds, timezone.utc).isoformat()
+    return (EPOCH + timedelta(seconds=seconds)).isoformat()
 
 
 def chest(source, kind, tier, title, subtitle, earned_at):
