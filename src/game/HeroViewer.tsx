@@ -51,7 +51,9 @@ export default function HeroViewer({look,accent,flash,label}:{look:Appearance;ac
    if(s.hero){s.hero.object.rotation.y=s.yaw;s.hero.update(dt,t,particles,1)}
    particles.update(dt);composer.render()}
   raf=requestAnimationFrame(frame)
-  return ()=>{cancelAnimationFrame(raf);timer.dispose();ro.disconnect();io.disconnect();el.removeEventListener('pointerdown',down);el.removeEventListener('pointermove',move);el.removeEventListener('pointerup',up);el.removeEventListener('pointercancel',up);s.hero?.dispose();particles.dispose();composer.dispose();(ring.material as THREE.Material).dispose();(aura.material as THREE.Material).dispose();renderer.dispose();stage.current=null}
+  return ()=>{cancelAnimationFrame(raf);timer.dispose();ro.disconnect();io.disconnect();el.removeEventListener('pointerdown',down);el.removeEventListener('pointermove',move);el.removeEventListener('pointerup',up);el.removeEventListener('pointercancel',up);s.hero?.dispose();particles.dispose();for(const pass of composer.passes)pass.dispose();composer.dispose();(ring.material as THREE.Material).dispose();(aura.material as THREE.Material).dispose();key.shadow.dispose()
+   // dispose() alone keeps the WebGL context; browsers allow only a few at once.
+   renderer.dispose();renderer.forceContextLoss();stage.current=null}
  // The scene is built once; look and accent changes are applied by the effects below.
  // eslint-disable-next-line react-hooks/exhaustive-deps
  },[failed])

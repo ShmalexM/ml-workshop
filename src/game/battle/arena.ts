@@ -74,13 +74,15 @@ function scatter(group:THREE.Group,look:Look,rand:()=>number){
   group.add(inst)}
 }
 
-export type Arena={group:THREE.Group;key:THREE.DirectionalLight;portal:THREE.Vector3;fog:THREE.Color;accent:string;animated:THREE.Object3D[];update:(t:number)=>void}
+export type Arena={group:THREE.Group;key:THREE.DirectionalLight;portal:THREE.Vector3;fog:THREE.Color;accent:string;animated:THREE.Object3D[];update:(t:number)=>void;dispose:()=>void}
 
 export function buildArena(theme:Theme,seed:number):Arena{
  const look=LOOKS[theme];const group=new THREE.Group();const rand=seeded(seed||1);const animated:THREE.Object3D[]=[]
- const ground=new THREE.Mesh(new THREE.CircleGeometry(ARENA_RADIUS+9,64),new THREE.MeshStandardMaterial({map:detailTexture(look,seed),roughness:.95,metalness:0}));ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;group.add(ground)
- const shade=new THREE.Mesh(new THREE.CircleGeometry(ARENA_RADIUS+9,64),new THREE.MeshBasicMaterial({map:overlayTexture(look,seed,'shade'),transparent:true,depthWrite:false}));shade.rotation.x=-Math.PI/2;shade.position.y=.006;group.add(shade)
- if(look.crack){const cracks=new THREE.Mesh(new THREE.CircleGeometry(ARENA_RADIUS+9,64),new THREE.MeshBasicMaterial({color:look.crack,alphaMap:overlayTexture(look,seed,'cracks'),transparent:true,depthWrite:false,blending:THREE.AdditiveBlending}));cracks.rotation.x=-Math.PI/2;cracks.position.y=.012;group.add(cracks)}
+ // Textures and materials made for this arena only; shared materials from mat() and glow() stay cached.
+ const own:{dispose:()=>void}[]=[];const keep=<T extends {dispose:()=>void}>(x:T)=>{own.push(x);return x}
+ const ground=new THREE.Mesh(new THREE.CircleGeometry(ARENA_RADIUS+9,64),keep(new THREE.MeshStandardMaterial({map:keep(detailTexture(look,seed)),roughness:.95,metalness:0})));ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;group.add(ground)
+ const shade=new THREE.Mesh(new THREE.CircleGeometry(ARENA_RADIUS+9,64),keep(new THREE.MeshBasicMaterial({map:keep(overlayTexture(look,seed,'shade')),transparent:true,depthWrite:false})));shade.rotation.x=-Math.PI/2;shade.position.y=.006;group.add(shade)
+ if(look.crack){const cracks=new THREE.Mesh(new THREE.CircleGeometry(ARENA_RADIUS+9,64),keep(new THREE.MeshBasicMaterial({color:look.crack,alphaMap:keep(overlayTexture(look,seed,'cracks')),transparent:true,depthWrite:false,blending:THREE.AdditiveBlending})));cracks.rotation.x=-Math.PI/2;cracks.position.y=.012;group.add(cracks)}
  scatter(group,look,rand)
  const outer=new THREE.Mesh(new THREE.RingGeometry(ARENA_RADIUS+9,90,48),mat(look.fog,{rough:1}));outer.rotation.x=-Math.PI/2;outer.position.y=-.02;group.add(outer)
  // A broken wall of rocks marks the edge of the fight.
@@ -99,5 +101,5 @@ export function buildArena(theme:Theme,seed:number):Arena{
  group.add(key);group.add(key.target)
  if(look.crack)for(let i=0;i<5;i++){const l=new THREE.PointLight(look.crack,7,10,1.8);const a=rand()*Math.PI*2,r=rand()*ARENA_RADIUS;l.position.set(Math.cos(a)*r,.6,Math.sin(a)*r);group.add(l)}
  const update=(t:number)=>{for(const o of animated){if(o.userData.spin)o.rotation.z=t*o.userData.spin;if(o.userData.flicker)o.scale.y=1+Math.sin(t*12+o.id)*.18;if(o.userData.float)o.position.y=4.8+Math.sin(t*1.5+o.id)*.15}}
- return {group,key,portal,fog:new THREE.Color(look.fog),accent:look.accent,animated,update}
+ return {group,key,portal,fog:new THREE.Color(look.fog),accent:look.accent,animated,update,dispose:()=>{for(const x of own)x.dispose();key.shadow.dispose()}}
 }

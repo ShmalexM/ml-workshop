@@ -42,10 +42,19 @@ export function heroStats(items:Partial<Record<Slot,Item>>,level:number):HeroSta
 
 export function classOf(game:GameState):ClassInfo|undefined{return game.catalog.classes.find(c=>c.id===game.hero?.class)}
 
+/** Equipped items that equipping `candidate` takes off the other hand; the item comparison does not show them. */
+export function displaced(candidate:Item,items:Partial<Record<Slot,Item>>):Item[]{
+ if(candidate.slot==='offhand'&&items.mainhand?.twoHand)return [items.mainhand]
+ if(candidate.slot==='mainhand'&&candidate.twoHand&&items.offhand)return [items.offhand]
+ return []
+}
+
 /** Positive when `candidate` would raise item level in its slot (two-handers compare against both hands). */
 export function upgradeDelta(candidate:Item,items:Partial<Record<Slot,Item>>){
  const current=items[candidate.slot]
  if(candidate.slot==='mainhand'&&candidate.twoHand&&items.offhand&&!items.mainhand?.twoHand)return candidate.ilvl-Math.round(((items.mainhand?.ilvl||0)+items.offhand.ilvl)/2)
+ // An off-hand takes the place of an equipped two-hander, which counts for both hands.
+ if(candidate.slot==='offhand'&&items.mainhand?.twoHand)return candidate.ilvl-2*items.mainhand.ilvl
  if(!current)return candidate.ilvl
  return candidate.ilvl-current.ilvl
 }

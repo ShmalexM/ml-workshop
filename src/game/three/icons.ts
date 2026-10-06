@@ -30,11 +30,14 @@ function pump(){
  const start=performance.now()
  while(queue.length&&performance.now()-start<16){const look=queue.shift()!;const key=iconKey(look);let url=''
   try{url=render(look)}catch(error){console.warn("Item icon failed to render",key,error);url=""}
-  cache.set(key,url);for(const done of waiting.get(key)||[])done(url);waiting.delete(key)}
+  // Keep failures out of the cache so the icon is tried again next time.
+  if(url)cache.set(key,url);for(const done of waiting.get(key)||[])done(url);waiting.delete(key)}
  if(queue.length)schedule();else pumping=false
 }
 
 function render(look:GearLook){
+ // The browser can take the context back when too many are open; start a new renderer then.
+ if(renderer?.getContext().isContextLost()){renderer.dispose();renderer=null}
  if(!renderer){const canvas=document.createElement('canvas');canvas.width=canvas.height=SIZE;renderer=createRenderer(canvas,{alpha:true,preserve:true});renderer.setPixelRatio(1);renderer.setSize(SIZE,SIZE,false)}
  const scene=new THREE.Scene();scene.environment=environment(renderer)
  const glowColor=RARITY_COLOR[look.rarity].glow

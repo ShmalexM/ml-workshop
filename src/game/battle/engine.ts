@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import {createComposer,createRenderer,environment,reducedMotion} from '../three/scene'
 import {HeroModel,type Appearance} from '../three/hero'
 import {Particles} from '../three/fx'
-import {glow} from '../three/materials'
+import {disposeTree,glow} from '../three/materials'
 import {ARENA_RADIUS,buildArena,type Arena} from './arena'
 import {ARCHETYPES,buildEnemy,stageDef,stageDmg,stageHp,type EnemyKind,type EnemyModel} from './enemies'
 import {KITS,type Ability,type Kit} from './kits'
@@ -11,7 +11,7 @@ import type {HeroStats} from '../stats'
 export type Key='Q'|'W'|'E'|'R'
 export type BattleSetup={appearance:Appearance;classColor:string;stats:HeroStats;name:string;stage:number;stageName:string;bossName:string;bossHp:number;bossRemaining:number;seed:number}
 export type Hud={hp:number;maxHp:number;shield:number;cds:Record<Key,number>;bossHp:number;bossMax:number;bossSeen:boolean;enraged:boolean;time:number;kills:number;bossDamage:number;buffs:{name:string;left:number;color:string}[];auto:boolean;paused:boolean}
-export type BattleEnd={outcome:'victory'|'defeat'|'retreat';bossDamage:number;kills:number;seconds:number}
+export type BattleEnd={outcome:'victory'|'defeat'|'retreat';bossDamage:number;kills:number;seconds:number;timeUp:boolean}
 type Callbacks={hud:(h:Hud)=>void;banner:(text:string,tone:'info'|'boss'|'danger'|'good')=>void;end:(r:BattleEnd)=>void}
 
 type Unit={
@@ -43,6 +43,8 @@ export class BattleEngine{
  private wave=0;private nextWave=0;private over=false;private endT=-1;private outcome:BattleEnd['outcome']='defeat';private paused=false;private auto=false
  private phoenixUsed=false;private stormCount=0;private starwardT=8;private shake=0;private zoom=.88;private camPos=new THREE.Vector3()
  private mouse=new THREE.Vector2();private aim=new THREE.Vector3();private holding=false;private keys=new Set<string>();private raycaster=new THREE.Raycaster();private groundPlane=new THREE.Plane(UP,0)
+ // Abilities aim at the cursor after mouse input, and at the target or nearest enemy after keyboard input.
+ private lastInput:'mouse'|'key'='mouse';private reported=false
  private raf=0;private timer=new THREE.Timer();private hudT=0;private disposed=false;private still=reducedMotion()
  private ring:THREE.Mesh;private cursorRing:THREE.Mesh;private shieldMesh:THREE.Mesh
  private cleanups:(()=>void)[]=[]
@@ -69,18 +71,28 @@ export class BattleEngine{
  setPaused(p:boolean){this.paused=p;this.pushHud(true)}
  setAuto(a:boolean){this.auto=a;this.pushHud(true)}
  retreat(){if(!this.over){this.over=true;this.outcome='retreat';this.finish()}}
- cast(key:Key){this.tryCast(key)}
+ cast(key:Key,keyboard=false){if(keyboard)this.lastInput='key';this.tryCast(key)}
+ /** Ends a fight that is being left without a result (another page, reload, closed tab) and returns what to save, so its boss damage is kept. */
+ abandon():BattleEnd|null{
+  // time is still 0 when React's development double mount tears the first engine down.
+  if(this.reported||this.time===0)return null
+  const outcome=this.over?this.outcome:'retreat';this.over=true;this.reported=true
+  return this.result(outcome)
+ }
  dispose(){
   this.disposed=true;cancelAnimationFrame(this.raf);for(const c of this.cleanups)c()
-  this.hero.dispose();this.particles.dispose();this.composer.dispose()
+  this.hero.dispose();this.particles.dispose()
+  for(const pass of this.composer.passes)pass.dispose();this.composer.dispose()
   this.scene.traverse(o=>{const m=o as THREE.Mesh;if(m.geometry)m.geometry.dispose()})
-  this.renderer.dispose();this.overlay.replaceChildren()
+  this.arena.dispose()
+  // dispose() alone keeps the WebGL context; browsers allow only a few at once.
+  this.renderer.dispose();this.renderer.forceContextLoss();this.overlay.replaceChildren()
  }
 
  // ---------- input ----------
  private bindInput(){
   const c=this.canvas
-  const toGround=(e:PointerEvent)=>{const r=c.getBoundingClientRect();this.mouse.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);this.raycaster.setFromCamera(this.mouse,this.camera);this.raycaster.ray.intersectPlane(this.groundPlane,this.aim)}
+  const toGround=(e:PointerEvent)=>{this.lastInput='mouse';const r=c.getBoundingClientRect();this.mouse.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);this.raycaster.setFromCamera(this.mouse,this.camera);this.raycaster.ray.intersectPlane(this.groundPlane,this.aim)}
   const command=()=>{if(this.over)return;const enemy=this.pick();if(enemy){this.target=enemy;this.moveTo=null}else{this.target=null;this.moveTo=this.clampArena(this.aim.clone());this.cursorRing.position.set(this.moveTo.x,.04,this.moveTo.z);this.cursorRing.visible=true;this.cursorRing.scale.setScalar(1)}}
   const down=(e:PointerEvent)=>{e.preventDefault();c.focus();toGround(e);if(e.button===0||e.button===2){this.holding=true;command()}}
   const move=(e:PointerEvent)=>{toGround(e);if(this.holding&&!this.pick()){this.target=null;this.moveTo=this.clampArena(this.aim.clone())}}
@@ -88,17 +100,26 @@ export class BattleEngine{
   const menu=(e:Event)=>e.preventDefault()
   const wheel=(e:WheelEvent)=>{e.preventDefault();this.zoom=THREE.MathUtils.clamp(this.zoom+e.deltaY*.0008,.72,1.3)}
   const keydown=(e:KeyboardEvent)=>{
+   // Leave browser shortcuts alone: Cmd+R must reload and Cmd+T must open a tab.
+   if(e.metaKey||e.ctrlKey||e.altKey)return
    const k=e.key.length===1?e.key.toUpperCase():e.key
-   if(['Q','W','E','R'].includes(k)){e.preventDefault();this.tryCast(k as Key);return}
-   if(k==='Escape'){e.preventDefault();this.setPaused(!this.paused);return}
+   if(['Q','W','E','R'].includes(k)){e.preventDefault();this.lastInput='key';this.tryCast(k as Key);return}
+   if(k==='Escape'){e.preventDefault();if(!e.repeat)this.setPaused(!this.paused);return}
    if(k==='S'){this.moveTo=null;this.target=null;return}
-   if(k==='T'){this.setAuto(!this.auto);return}
-   if(k.startsWith('Arrow')){e.preventDefault();this.keys.add(k)}
+   if(k==='T'){if(!e.repeat)this.setAuto(!this.auto);return}
+   if(k.startsWith('Arrow')){e.preventDefault();this.lastInput='key';this.keys.add(k)}
   }
   const keyup=(e:KeyboardEvent)=>this.keys.delete(e.key)
+  // A key released in another window never sends keyup here.
+  const blur=()=>this.keys.clear()
   c.addEventListener('pointerdown',down);c.addEventListener('pointermove',move);addEventListener('pointerup',up);c.addEventListener('contextmenu',menu);c.addEventListener('wheel',wheel,{passive:false})
-  addEventListener('keydown',keydown);addEventListener('keyup',keyup)
-  this.cleanups.push(()=>{c.removeEventListener('pointerdown',down);c.removeEventListener('pointermove',move);removeEventListener('pointerup',up);c.removeEventListener('contextmenu',menu);c.removeEventListener('wheel',wheel);removeEventListener('keydown',keydown);removeEventListener('keyup',keyup)})
+  addEventListener('keydown',keydown);addEventListener('keyup',keyup);addEventListener('blur',blur)
+  this.cleanups.push(()=>{c.removeEventListener('pointerdown',down);c.removeEventListener('pointermove',move);removeEventListener('pointerup',up);c.removeEventListener('contextmenu',menu);c.removeEventListener('wheel',wheel);removeEventListener('keydown',keydown);removeEventListener('keyup',keyup);removeEventListener('blur',blur)})
+ }
+ private aimPoint(){
+  if(this.lastInput==='mouse')return this.aim.clone()
+  const t=this.target&&!this.target.dead?this.target:this.nearestEnemy(this.heroPos,40)
+  return t?t.pos.clone():this.heroPos.clone().add(new THREE.Vector3(Math.sin(this.heroFacing),0,Math.cos(this.heroFacing)).multiplyScalar(6))
  }
  private pick(){let best:Unit|null=null,bd=Infinity;for(const u of this.units){if(u.dead)continue;const d=flat(u.pos.clone().sub(this.aim)).length()-u.radius;if(d<.9&&d<bd){bd=d;best=u}}return best}
  private clampArena(v:THREE.Vector3){flat(v);const r=ARENA_RADIUS-.6;if(v.length()>r)v.setLength(r);return v}
@@ -114,7 +135,7 @@ export class BattleEngine{
   this.time+=dt
   if(!this.over)this.spawner()
   this.updateHero(dt);this.updateUnits(dt);this.updateShots(dt);this.updateZones(dt);this.updateFx(dt)
-  if(!this.over&&this.time>240){this.cb.banner('The gate closes','danger');this.over=true;this.outcome='defeat';this.endT=1.2}
+  if(!this.over&&this.time>240){this.cb.banner('Time ran out','danger');this.over=true;this.outcome='defeat';this.endT=1.2}
   if(this.endT>0){this.endT-=dt;if(this.endT<=0)this.finish()}
   this.hudT-=dt;if(this.hudT<=0)this.pushHud()
  }
@@ -123,9 +144,12 @@ export class BattleEngine{
   const boss=this.boss
   this.cb.hud({hp:Math.max(0,Math.round(this.hp)),maxHp:this.maxHp,shield:Math.round(this.shield.amount),cds:{...this.cds},bossHp:boss?Math.max(0,Math.round(boss.hp)):this.setup.bossRemaining,bossMax:this.setup.bossHp,bossSeen:this.bossSpawned,enraged:this.enraged,time:this.time,kills:this.kills,bossDamage:Math.round(this.bossDamage),buffs:this.buffs.map(b=>({name:b.name,left:b.t,color:b.color})),auto:this.auto,paused:this.paused})
  }
+ private result(outcome:BattleEnd['outcome']):BattleEnd{
+  return {outcome,bossDamage:Math.round(Math.min(this.bossDamage,this.setup.bossRemaining)),kills:this.kills,seconds:Math.round(this.time),timeUp:outcome==='defeat'&&this.time>240}
+ }
  private finish(){
-  if(this.disposed)return
-  this.cb.end({outcome:this.outcome,bossDamage:Math.round(Math.min(this.bossDamage,this.setup.bossRemaining)),kills:this.kills,seconds:Math.round(this.time)})
+  if(this.disposed||this.reported)return
+  this.reported=true;this.cb.end(this.result(this.outcome))
   this.endT=-1
  }
 
@@ -241,7 +265,7 @@ export class BattleEngine{
  private tryCast(key:Key){
   if(this.over||this.paused||this.hero.dead||this.cds[key]>0||this.dash||this.spree)return
   const a=this.kit.abilities.find(x=>x.key===key);if(!a)return
-  const aim=this.clampArena(this.aim.clone());const dir=flat(aim.clone().sub(this.heroPos));if(dir.lengthSq()<1e-4)dir.set(Math.sin(this.heroFacing),0,Math.cos(this.heroFacing));dir.normalize()
+  const aim=this.clampArena(this.aimPoint());const dir=flat(aim.clone().sub(this.heroPos));if(dir.lengthSq()<1e-4)dir.set(Math.sin(this.heroFacing),0,Math.cos(this.heroFacing));dir.normalize()
   const within=(range:number)=>{const v=aim.clone().sub(this.heroPos);if(v.length()>range)v.setLength(range);return this.heroPos.clone().add(v)}
   const pow=this.power()*a.power
   switch(a.kind){
@@ -347,7 +371,7 @@ export class BattleEngine{
  private updateUnits(dt:number){
   for(const u of this.units){
    const m=u.model
-   if(u.dead){u.deathT+=dt;m.object.position.y=-u.deathT*.8;m.object.scale.setScalar(Math.max(.01,m.object.scale.x*(1-dt*1.5)));if(u.deathT>1.2){m.object.removeFromParent();u.deathT=99}continue}
+   if(u.dead){u.deathT+=dt;m.object.position.y=-u.deathT*.8;m.object.scale.setScalar(Math.max(.01,m.object.scale.x*(1-dt*1.5)));if(u.deathT>1.2){m.object.removeFromParent();disposeTree(m.object);u.deathT=99}continue}
    for(const b of u.burn){b.t-=dt;u.hp-=b.dps*dt;if(u.boss)this.bossDamage+=b.dps*dt}
    u.burn=u.burn.filter(b=>b.t>0);if(u.hp<=0){this.kill(u);continue}
    u.stun=Math.max(0,u.stun-dt);u.root=Math.max(0,u.root-dt);u.slowT=Math.max(0,u.slowT-dt);if(u.slowT<=0)u.slow=0

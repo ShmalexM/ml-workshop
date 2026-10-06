@@ -33,6 +33,12 @@ export function createComposer(renderer:THREE.WebGLRenderer,scene:THREE.Scene,ca
 
 export function reducedMotion(){return typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches}
 
+let webgl:boolean|null=null
+/** Checked once per page. The test context is released at once, because browsers allow only a few. */
 export function webglAvailable(){
- try{const c=document.createElement('canvas');return !!(c.getContext('webgl2')||c.getContext('webgl'))}catch{return false}
+ if(webgl===null){
+  try{const c=document.createElement('canvas');const gl=c.getContext('webgl2')||c.getContext('webgl');webgl=!!gl;gl?.getExtension('WEBGL_lose_context')?.loseContext()}
+  catch{webgl=false}
+ }
+ return webgl
 }

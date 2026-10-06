@@ -43,7 +43,7 @@ function Guide({ guide, done, onToggle, onLesson }: { guide: StudyGuide; done: b
   </section>
 }
 
-export default function BookLibrary({ data, selection, onLesson, onState }: { data: LibraryData; selection: BookLocation | null; onLesson: (id: string) => void; onState: (bookId: string, state: ReadingState) => void }) {
+export default function BookLibrary({ data, selection, onLesson, onState, onGuidesSaved }: { data: LibraryData; selection: BookLocation | null; onLesson: (id: string) => void; onState: (bookId: string, state: ReadingState) => void; onGuidesSaved?: () => void }) {
   const [states, setStates] = useState(() => restoredState(data))
   const statesRef = useRef(states)
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
@@ -64,8 +64,10 @@ export default function BookLibrary({ data, selection, onLesson, onState }: { da
   const saved = book ? states[book.id] || emptyState() : emptyState()
   useEffect(() => { setSection('contents'); setZoom(1); setFigure(null) }, [book?.id])
 
+  // Books whose reviewed guides changed since the last save; finished guides can earn Hero game rewards.
+  const guidesChanged = useRef(new Set<string>())
   async function persist(bookId: string, value: ReadingState) {
-    try { await api('/library/state', { bookId, ...value }); setSaveStatus('Saved on this computer') }
+    try { await api('/library/state', { bookId, ...value }); setSaveStatus('Saved on this computer'); if (guidesChanged.current.delete(bookId)) onGuidesSaved?.() }
     catch { setSaveStatus('Saved in this browser · server not reachable') }
   }
   function update(bookId: string, patch: Partial<ReadingState>) {
@@ -122,6 +124,7 @@ export default function BookLibrary({ data, selection, onLesson, onState }: { da
   function open(bookId: string, location: number) { setQuery(''); window.location.hash = bookLink(bookId, location).slice(1) }
   function toggleGuide(guide: StudyGuide) {
     const prior = statesRef.current[guide.bookId] || emptyState()
+    guidesChanged.current.add(guide.bookId)
     update(guide.bookId, { completed: prior.completed.includes(guide.id) ? prior.completed.filter(id => id !== guide.id) : [...prior.completed, guide.id] })
   }
   const search = <div className="book-search"><Search size={17} /><input aria-label={book ? 'Search this book' : 'Search all books'} value={query} maxLength={160} onChange={e => setQuery(e.target.value)} placeholder={book ? 'Search this book…' : 'Search your books…'} />{query && <button className="icon-button" aria-label="Clear book search" onClick={() => setQuery('')}><X size={16} /></button>}</div>

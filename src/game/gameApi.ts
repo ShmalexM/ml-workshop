@@ -17,5 +17,5 @@ export const gameApi={
  settings:(enabled:boolean)=>api<WithGame>('/game/settings',{enabled}),
  retire:()=>api<WithGame>('/game/retire',{confirm:'RETIRE'}),
  startBattle:()=>api<WithGame<{battle:Battle}>>('/game/battle/start',{}),
- finishBattle:(body:{battleId:number;outcome:'victory'|'defeat'|'retreat';bossDamage:number;kills:number;seconds:number})=>api<WithGame<{result:BattleResult}>>('/game/battle/finish',body),
+ finishBattle:(body:{battleId:number;outcome:'victory'|'defeat'|'retreat';bossDamage:number;kills:number;seconds:number},options?:{keepalive?:boolean})=>api<WithGame<{result:BattleResult}>>('/game/battle/finish',body,options),
 }

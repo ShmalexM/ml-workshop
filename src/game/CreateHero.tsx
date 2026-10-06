@@ -35,7 +35,7 @@ export default function CreateHero({game,onCreate,busy,error}:{game:GameState;on
    </section>
    <form className="create-form g-panel" onSubmit={e=>{e.preventDefault();if(valid&&!busy)onCreate(trimmed,race,cls)}}>
     <h1>Create a hero</h1>
-    <p className="create-intro">Each lesson, project walkthrough, or reading you finish earns a chest and one battle. Chests only hold gear your class can use. Your first fights at the Burning Gate will go badly. Damage you deal to a boss carries over, and every finished task makes you stronger.</p>
+    <p className="create-intro">Each lesson, project walkthrough, or reading you finish earns a chest and one battle. Chests only hold gear your class can use. Expect to lose your first fights. Damage you deal to a boss carries over, and every finished task makes you stronger.</p>
     {waiting>0&&<div className="create-waiting"><ChestArt tier={Math.max(...game.chests.unopened.map(c=>c.tier))} size={52}/><span>{waiting} {waiting===1?'chest is':'chests are'} already waiting from work you have finished.</span></div>}
     <label className="create-label" htmlFor="hero-name">Name</label>
     <input id="hero-name" className="create-name" value={name} maxLength={16} autoComplete="off" spellCheck={false} placeholder="2–16 letters" onChange={e=>setName(e.target.value)} aria-invalid={name.length>0&&!valid}/>

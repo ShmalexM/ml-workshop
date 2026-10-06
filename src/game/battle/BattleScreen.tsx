@@ -33,7 +33,14 @@ export default function BattleScreen({game,onGame,onExit}:{game:GameState;onGame
   const e=new BattleEngine(canvas.current,overlay.current,{appearance:appearanceOf(hero.race,hero.class,cls.role,gear),classColor:cls.color,stats,name:hero.name,stage:battle.stage,stageName:battle.stageName,bossName:battle.bossName,bossHp:battle.bossHp,bossRemaining:battle.bossRemaining,seed:battle.id*7919+battle.stage},{
    hud:setHud,banner:(text,tone)=>setBanner(b=>({text,tone,n:(b?.n||0)+1})),end:r=>setEnd(r)})
   engine.current=e;e.start();canvas.current.focus()
-  return ()=>{e.dispose();engine.current=null}
+  // Leaving a fight without an ending (another page, reload, closed tab) saves it as a retreat, so its boss damage is kept.
+  const save=(left:BattleEnd|null,keepalive=false)=>left?gameApi.finishBattle({battleId:battle.id,outcome:left.outcome,bossDamage:left.bossDamage,kills:left.kills,seconds:left.seconds},{keepalive}):null
+  let left=false
+  const hide=()=>{const result=e.abandon();if(result){left=true;void save(result,true)?.catch(()=>{})}}
+  // A page restored from the back-forward cache shows a fight that was already saved; go back to the armory.
+  const show=(ev:PageTransitionEvent)=>{if(ev.persisted&&left){void gameApi.state().then(onGame).catch(()=>{});onExit()}}
+  addEventListener('pagehide',hide);addEventListener('pageshow',show)
+  return ()=>{removeEventListener('pagehide',hide);removeEventListener('pageshow',show);const result=e.abandon();e.dispose();engine.current=null;void save(result)?.then(r=>onGame(r.game)).catch(()=>{})}
  // The engine is created once per fight.
  // eslint-disable-next-line react-hooks/exhaustive-deps
  },[phase,battle])
@@ -55,7 +62,7 @@ export default function BattleScreen({game,onGame,onExit}:{game:GameState;onGame
     <h1>{campaign.stageName}</h1>
     <p className="ready-boss"><strong>{campaign.bossName}</strong> · {campaign.bossRemaining.toLocaleString()} of {campaign.bossHp.toLocaleString()} health left</p>
     <div className="g-bar siege"><span style={{width:`${left*100}%`}}/></div>
-    <p>One fight uses one battle. Two waves come first, then the boss. Damage you deal to the boss stays dealt, so a loss still moves you forward.</p>
+    <p>One fight uses one battle. Two waves come first, then the boss. Boss damage carries over between fights. The boss enrages at 2:30, and the fight ends at 4:00.</p>
     <dl className="ready-stats"><div><dt>Level</dt><dd>{hero.level}</dd></div><div><dt>Item level</dt><dd>{stats.itemLevel}</dd></div><div><dt>Health</dt><dd>{stats.maxHp.toLocaleString()}</dd></div><div><dt>Power</dt><dd>{stats.power}</dd></div></dl>
     <div className="ready-kit">{kit.abilities.map(a=>{const Icon=ICON[a.kind];return <div key={a.key} className="kit-row"><span className="kit-key" style={{color:a.color}}><Icon size={16}/>{a.key}</span><div><strong>{a.name}</strong><small>{a.text}</small></div></div>})}</div>
     <p className="ready-controls">Click the ground to move and click an enemy to attack (left or right button). Abilities aim at the cursor. Arrow keys also move. T turns auto-battle on and off. Esc pauses.</p>
@@ -84,7 +91,8 @@ export default function BattleScreen({game,onGame,onExit}:{game:GameState;onGame
      <div className="hud-buffs">{hud.buffs.map((b,i)=><span key={i} style={{borderColor:b.color,color:b.color}}>{b.name} {Math.ceil(b.left)}</span>)}</div></div>
    </div>
    <div className="hud-abilities">{kit.abilities.map(a=>{const Icon=ICON[a.kind];const cd=hud.cds[a.key as Key];const total=a.cd
-    return <button key={a.key} className={`ability${cd>0?' cooling':''}`} title={`${a.name} (${a.key}): ${a.text}`} onClick={()=>engine.current?.cast(a.key as Key)} style={{'--ab':a.color,'--cd':`${Math.min(1,cd/total)*360}deg`} as CSSProperties}>
+    // detail is 0 when the button is pressed with the keyboard, so the ability aims at the target instead of the cursor.
+    return <button key={a.key} className={`ability${cd>0?' cooling':''}`} title={`${a.name} (${a.key}): ${a.text}`} aria-label={`${a.name} (${a.key})`} onClick={ev=>engine.current?.cast(a.key as Key,ev.detail===0)} style={{'--ab':a.color,'--cd':`${Math.min(1,cd/total)*360}deg`} as CSSProperties}>
      <Icon size={22}/><span className="ab-key">{a.key}</span>{cd>0&&<span className="ab-cd">{Math.ceil(cd)}</span>}</button>})}</div>
    <div className="hud-actions">
     <button className={`g-button ghost small${hud.auto?' on':''}`} onClick={()=>engine.current?.setAuto(!hud.auto)} aria-pressed={hud.auto}><Bot size={15}/>Auto</button>
@@ -96,7 +104,7 @@ export default function BattleScreen({game,onGame,onExit}:{game:GameState;onGame
   {(phase==='saving'||phase==='result')&&end&&<div className="battle-result">
    <section className={`result-card g-panel outcome-${result?.outcome||end.outcome}`}>
     <span className="g-eyebrow">Stage {battle?.stage} · {battle?.stageName}</span>
-    <h1>{(result?.outcome||end.outcome)==='victory'?'Victory':(result?.outcome||end.outcome)==='retreat'?'Retreated':'Defeated'}</h1>
+    <h1>{(result?.outcome||end.outcome)==='victory'?'Victory':(result?.outcome||end.outcome)==='retreat'?'Retreated':end.timeUp?'Time ran out':'Defeated'}</h1>
     <p>You dealt <strong>{(result?.damage??end.bossDamage).toLocaleString()}</strong> damage to {battle?.bossName} and defeated {end.kills} {end.kills===1?'enemy':'enemies'} in {fmt(end.seconds)}.</p>
     {battle&&<div className="siege-change"><div className="g-bar siege"><span style={{width:`${Math.max(0,(battle.bossRemaining-(result?.damage??end.bossDamage))/battle.bossHp*100)}%`}}/><i style={{left:`${battle.bossRemaining/battle.bossHp*100}%`}}/></div><small>{result?.stageCleared?'Boss defeated':`${Math.max(0,battle.bossRemaining-(result?.damage??end.bossDamage)).toLocaleString()} health left`}</small></div>}
     {result?.stageCleared&&<div className="result-loot">{result.chest&&<ChestArt tier={result.chest.tier} size={84}/>}<div><strong>Stage {battle?.stage} cleared</strong><span>{result.chest?`${result.chest.tierName} is waiting in the armory.`:'The next stage is open.'} Next: {game.campaign.stageName}.</span></div></div>}

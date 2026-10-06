@@ -1,4 +1,4 @@
-import {useMemo,useState} from 'react'
+import {useEffect,useMemo,useRef,useState} from 'react'
 import {Swords,Trash2} from 'lucide-react'
 import HeroViewer from './HeroViewer'
 import ItemIcon,{lookOf} from './ItemIcon'
@@ -6,7 +6,7 @@ import ItemTooltip from './ItemTooltip'
 import ChestArt from './ChestArt'
 import {appearanceOf} from './three/hero'
 import {RARITY_INDEX,SLOT_NAME} from './rarity'
-import {PRIMARY_NAME,classOf,equipped,heroStats} from './stats'
+import {PRIMARY_NAME,classOf,displaced,equipped,heroStats,upgradeDelta} from './stats'
 import {gameApi} from './gameApi'
 import type {Chest,GameState,Item,Slot} from './types'
 
@@ -21,15 +21,20 @@ export default function Armory({game,onGame,onOpenChest,onFight,flash}:{game:Gam
  const [tab,setTab]=useState<Tab>(game.chests.unopened.length?'chests':'bags')
  const [selected,setSelected]=useState<Item|null>(null);const [hover,setHover]=useState<{item:Item;x:number;y:number}|null>(null)
  const [busy,setBusy]=useState(false);const [error,setError]=useState('');const [sort,setSort]=useState<'new'|'ilvl'|'rarity'>('new')
+ // Selecting an item moves focus to its first action; closing the panel returns focus to the item.
+ const firstAction=useRef<HTMLButtonElement>(null);const opener=useRef<HTMLElement|null>(null)
+ useEffect(()=>{if(selected)firstAction.current?.focus()},[selected])
+ const select=(item:Item,from:HTMLElement)=>{opener.current=from;setSelected(item)}
+ const closeDetail=()=>{setSelected(null);if(opener.current?.isConnected)opener.current.focus()}
  const bags=game.items.filter(i=>!i.equipped)
  const sorted=[...bags].sort((a,b)=>sort==='ilvl'?b.ilvl-a.ilvl:sort==='rarity'?RARITY_INDEX[b.rarity]-RARITY_INDEX[a.rarity]||b.ilvl-a.ilvl:b.id-a.id)
  const c=game.campaign;const siege=c.bossHp?c.bossDamage/c.bossHp:0
  async function act(fn:()=>Promise<{game:GameState}>,flashItem?:Item){
   if(busy)return;setBusy(true);setError('')
-  try{const r=await fn();onGame(r.game,flashItem);setSelected(null)}catch(e){setError((e as Error).message)}finally{setBusy(false)}
+  try{const r=await fn();onGame(r.game,flashItem);closeDetail()}catch(e){setError((e as Error).message)}finally{setBusy(false)}
  }
  const slotCell=(slot:Slot)=>{const item=gear[slot];const blocked=slot==='offhand'&&gear.mainhand?.twoHand
-  return <button key={slot} className={`doll-slot${selected?.id===item?.id&&item?' active':''}`} onClick={()=>item&&setSelected(item)} onMouseEnter={e=>item&&setHover({item,x:e.clientX,y:e.clientY})} onMouseMove={e=>item&&setHover({item,x:e.clientX,y:e.clientY})} onMouseLeave={()=>setHover(null)} aria-label={item?`${SLOT_NAME[slot]}: ${item.name}`:`${SLOT_NAME[slot]}: empty`}>
+  return <button key={slot} className={`doll-slot${selected?.id===item?.id&&item?' active':''}`} onClick={e=>item&&select(item,e.currentTarget)} onMouseEnter={e=>item&&setHover({item,x:e.clientX,y:e.clientY})} onMouseMove={e=>item&&setHover({item,x:e.clientX,y:e.clientY})} onMouseLeave={()=>setHover(null)} aria-label={item?`${SLOT_NAME[slot]}: ${item.name}`:`${SLOT_NAME[slot]}: empty`}>
    <ItemIcon look={item?lookOf(item):blocked&&gear.mainhand?lookOf(gear.mainhand):null} empty={slot} dim={!!blocked} size={50}/>
    <span className="doll-text"><small>{SLOT_NAME[slot]}</small>{item?<strong className={`rt-${item.rarity}`}>{item.name}</strong>:<em>{blocked?'Two-hander equipped':'Empty'}</em>}</span>
   </button>}
@@ -61,13 +66,13 @@ export default function Armory({game,onGame,onOpenChest,onFight,flash}:{game:Gam
     </div>}
     {tab==='bags'&&<div className="bags">
      <div className="bags-tools"><label>Sort <select value={sort} onChange={e=>setSort(e.target.value as typeof sort)}><option value="new">Newest</option><option value="ilvl">Item level</option><option value="rarity">Rarity</option></select></label>{bags.length>0&&<small>Select an item to equip or discard it.</small>}</div>
-     {bags.length===0?<p className="g-empty">Your bags are empty. Items you take off or don't equip land here.</p>:<div className="bag-grid">{sorted.map(item=>{const up=item.ilvl-(gear[item.slot]?.ilvl??0)
-      return <button key={item.id} className={`bag-cell${selected?.id===item.id?' active':''}`} onClick={()=>setSelected(item)} onDoubleClick={()=>act(()=>gameApi.equip(item.id),item)} onMouseEnter={e=>setHover({item,x:e.clientX,y:e.clientY})} onMouseMove={e=>setHover({item,x:e.clientX,y:e.clientY})} onMouseLeave={()=>setHover(null)} aria-label={`${item.name}, item level ${item.ilvl}`}>
+     {bags.length===0?<p className="g-empty">Your bags are empty. Items you take off or don't equip land here.</p>:<div className="bag-grid">{sorted.map(item=>{const up=upgradeDelta(item,gear)
+      return <button key={item.id} className={`bag-cell${selected?.id===item.id?' active':''}`} onClick={e=>select(item,e.currentTarget)} onDoubleClick={()=>act(()=>gameApi.equip(item.id),item)} onMouseEnter={e=>setHover({item,x:e.clientX,y:e.clientY})} onMouseMove={e=>setHover({item,x:e.clientX,y:e.clientY})} onMouseLeave={()=>setHover(null)} aria-label={`${item.name}, item level ${item.ilvl}`}>
        <ItemIcon look={lookOf(item)} size={54}/>{up>0&&<span className="bag-up" aria-hidden>▲</span>}
       </button>})}</div>}
     </div>}
     {tab==='campaign'&&<div className="campaign">
-     <p>Every finished task gives you one fight. Damage you deal to the boss stays dealt, so even a loss moves the siege forward.</p>
+     <p>Every finished task gives you one fight. Boss damage carries over between fights.</p>
      <ol className="stage-list">{c.stages.map(st=><li key={st.stage} className={st.stage<c.stage?'done':st.stage===c.stage?'current':''}><span>{st.stage}</span><div><strong>{st.name}</strong><small>{st.boss}</small></div>{st.stage===c.stage&&<em>{Math.round(siege*100)}%</em>}</li>)}
       {c.stage>10&&<li className="current"><span>{c.stage}</span><div><strong>{c.stageName}</strong><small>{c.bossName}</small></div><em>{Math.round(siege*100)}%</em></li>}</ol>
      <div className="lifetime"><span><strong>{game.lifetime.fights}</strong>fights</span><span><strong>{game.lifetime.victories}</strong>bosses slain</span><span><strong>{game.lifetime.kills}</strong>kills</span><span><strong>{game.lifetime.bestDamage.toLocaleString()}</strong>best boss damage</span></div>
@@ -82,10 +87,11 @@ export default function Armory({game,onGame,onOpenChest,onFight,flash}:{game:Gam
   {selected&&<div className="item-detail g-panel" role="region" aria-label="Selected item">
    <ItemTooltip item={selected} compare={selected.equipped?null:gear[selected.slot]} source={sourceText(selected,game)}/>
    <div className="item-actions">
-    {selected.equipped?<button className="g-button ghost small" disabled={busy} onClick={()=>act(()=>gameApi.unequip(selected.slot))}>Unequip</button>
-    :<><button className="g-button small" disabled={busy} onClick={()=>act(()=>gameApi.equip(selected.id),selected)}>Equip</button>
+    {selected.equipped?<button ref={firstAction} className="g-button ghost small" disabled={busy} onClick={()=>act(()=>gameApi.unequip(selected.slot))}>Unequip</button>
+    :<><button ref={firstAction} className="g-button small" disabled={busy} onClick={()=>act(()=>gameApi.equip(selected.id),selected)}>Equip</button>
+     {displaced(selected,gear).map(other=><small key={other.id} className="item-replaces">{selected.slot==='offhand'?'Replaces':'Also takes off'} <span className={`rt-${other.rarity}`}>{other.name}</span></small>)}
      <button className="g-button danger small" disabled={busy} onClick={()=>{if(confirm(`Discard ${selected.name}? This can't be undone.`))act(()=>gameApi.discard([selected.id]))}}><Trash2 size={14}/>Discard</button></>}
-    <button className="g-button ghost small" onClick={()=>setSelected(null)}>Close</button>
+    <button className="g-button ghost small" onClick={closeDetail}>Close</button>
    </div>
   </div>}
   {hover&&!selected&&<div className="floating-tip" style={{left:Math.min(hover.x+18,innerWidth-330),top:Math.min(hover.y+12,innerHeight-360)}}><ItemTooltip item={hover.item} compare={hover.item.equipped?null:gear[hover.item.slot]}/></div>}
