@@ -1,0 +1,175 @@
+"""Browser uploads use synthetic books and disposable server/data directories."""
+import http.client
+import json
+import os
+from pathlib import Path
+import socket
+import subprocess
+import sys
+import tempfile
+import time
+import unittest
+from unittest.mock import patch
+from urllib.parse import urlencode
+import urllib.request
+import zipfile
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT/'backend'))
+from book_import import import_upload
+from book_study import study_guides, INFERENCE_GUIDE_EDITION
+from library import Library
+from book_fixture import make_epub
+
+
+class UploadTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory(prefix='book-upload-test-')
+        cls.root = Path(cls.tmp.name)
+        cls.data = cls.root/'data'
+        with socket.socket() as sock:
+            sock.bind(('127.0.0.1', 0)); cls.port = sock.getsockname()[1]
+        cls.url = f'http://127.0.0.1:{cls.port}'
+        cls.proc = subprocess.Popen([sys.executable, str(ROOT/'backend/server.py'), '--port', str(cls.port)],
+                                   env={**os.environ, 'ML_WORKSHOP_DATA_DIR': str(cls.data)},
+                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        for _ in range(60):
+            try:
+                cls.token = json.load(urllib.request.urlopen(cls.url+'/api/bootstrap'))['token']; break
+            except OSError: time.sleep(.1)
+        else: raise RuntimeError('Test server unavailable')
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.proc.terminate(); cls.proc.wait(); cls.tmp.cleanup()
+
+    def upload(self, raw, filename='book.epub', book='', headers=None):
+        connection = http.client.HTTPConnection('127.0.0.1', self.port, timeout=10)
+        try:
+            connection.request('POST', '/api/library/import?'+urlencode(dict(filename=filename, book=book)), raw,
+                               {'Content-Type': 'application/octet-stream', 'X-Workshop-Token': self.token, **(headers or {})})
+            response = connection.getresponse()
+            return response.status, json.loads(response.read())
+        finally: connection.close()
+
+    def test_upload_preserves_original_and_duplicate_reading_state(self):
+        source = make_epub(self.root/'fixture.epub'); raw = source.read_bytes()
+        status, result = self.upload(raw, '図とメモ.epub')
+        self.assertEqual(status, 200, result)
+        book = result['book']; book_id = book['id']
+        self.assertFalse(result['alreadyImported'])
+        self.assertEqual((self.data/'library'/book_id/'source.epub').read_bytes(), raw)
+        self.assertNotIn('documents', book)
+        payload = dict(bookId=book_id, location=2, notes='Keep this observation', bookmarks=[2], completed=[], updatedAt=200)
+        request = urllib.request.Request(self.url+'/api/library/state', json.dumps(payload).encode(),
+                                         {'Content-Type': 'application/json', 'X-Workshop-Token': self.token})
+        with urllib.request.urlopen(request) as response: self.assertEqual(response.status, 200)
+        status, again = self.upload(raw, 'renamed.epub')
+        self.assertEqual(status, 200); self.assertTrue(again['alreadyImported'])
+        self.assertEqual(again['book']['id'], book_id)
+        self.assertEqual(again['readingState']['notes'], payload['notes'])
+        self.assertEqual(again['readingState']['location'], 2)
+        self.assertEqual(again['readingState']['bookmarks'], [2])
+
+    def test_pdf_rendering_source_and_filename_fallback(self):
+        from pypdf import PdfWriter
+        source = self.root/'source.pdf'
+        writer = PdfWriter(); writer.add_blank_page(width=432, height=648); writer.write(source)
+        status, result = self.upload(source.read_bytes(), 'Diagrams – 日本語.pdf')
+        self.assertEqual(status, 200, result)
+        self.assertEqual(result['book']['title'], 'Diagrams – 日本語')
+        self.assertEqual(result['book']['format'], 'pdf')
+        url = self.url+'/api/library/'+result['book']['id']+'/asset/source.pdf'
+        with urllib.request.urlopen(url) as response: self.assertEqual(response.read(), source.read_bytes())
+        writer.encrypt('test-only'); writer.write(source)
+        status, result = self.upload(source.read_bytes(), 'locked.pdf')
+        self.assertEqual(status, 400); self.assertIn('Encrypted', result['error'])
+
+    def test_suggested_book_identity_conflicts_and_other_edition(self):
+        source = make_epub(self.root/'suggested.epub')
+        status, result = self.upload(source.read_bytes(), 'wrong.epub', 'gpu-glossary')
+        self.assertEqual(status, 400); self.assertIn('Choose your copy of GPU Glossary', result['error'])
+        with zipfile.ZipFile(source) as archive: files = {n: archive.read(n) for n in archive.namelist()}
+        files['OEBPS/book.opf'] = files['OEBPS/book.opf'].replace(b'Fixture Book', b'GPU Glossary')
+        with zipfile.ZipFile(source, 'w') as archive:
+            for name, raw in files.items(): archive.writestr(name, raw)
+        status, result = self.upload(source.read_bytes(), 'GPU Glossary.epub', 'gpu-glossary')
+        self.assertEqual(status, 200, result); self.assertEqual(result['book']['id'], 'gpu-glossary')
+        original = Library(self.data).book('gpu-glossary')['sha256']
+        with zipfile.ZipFile(source, 'a') as archive: archive.writestr('new-edition.txt', 'new edition')
+        status, result = self.upload(source.read_bytes(), 'GPU Glossary.epub', 'gpu-glossary')
+        self.assertEqual(status, 409); self.assertIn('Add another book', result['error'])
+        self.assertEqual(Library(self.data).book('gpu-glossary')['sha256'], original)
+        status, result = self.upload(source.read_bytes(), 'GPU Glossary.epub')
+        self.assertEqual(status, 200); self.assertNotEqual(result['book']['id'], 'gpu-glossary')
+
+    def test_invalid_uploads_and_guards_leave_library_unchanged(self):
+        before = Library(self.data).catalog()
+        cases = [
+            (b'bad', 'bad.txt', '', {}, 400), (b'', 'empty.pdf', '', {}, 413),
+            (b'bad', '../escape.pdf', '', {}, 400), (b'bad', 'bad.pdf', '../escape', {}, 400),
+            (b'bad', 'bad.pdf', '', {'Content-Length': str(100*1024*1024+1)}, 413),
+            (b'bad', 'bad.pdf', '', {'Content-Type': 'application/json'}, 415),
+            (b'bad', 'bad.pdf', '', {'X-Workshop-Token': 'wrong'}, 403),
+            (b'bad', 'bad.pdf', '', {'Origin': 'https://example.org'}, 403),
+            (b'bad', 'bad.pdf', '', {'Host': 'attacker.example'}, 403),
+            (b'bad', 'bad.epub', '', {}, 400), (b'bad', 'bad.pdf', '', {}, 400),
+        ]
+        for raw, filename, book, headers, expected in cases:
+            with self.subTest(filename=filename, headers=headers):
+                status, result = self.upload(raw, filename, book, headers)
+                self.assertEqual(status, expected, result)
+        self.assertEqual(Library(self.data).catalog(), before)
+        self.assertEqual(list(self.data.glob('.upload-*')), [])
+        self.assertEqual(list(self.data.glob('.parse-*')), [])
+
+    def test_incomplete_upload_releases_lock_without_partial_book(self):
+        before = Library(self.data).catalog()
+        with socket.create_connection(('127.0.0.1', self.port), timeout=5) as connection:
+            connection.sendall((f'POST /api/library/import?filename=interrupted.pdf HTTP/1.0\r\nHost: 127.0.0.1:{self.port}\r\nX-Workshop-Token: {self.token}\r\nContent-Type: application/octet-stream\r\nContent-Length: 100\r\n\r\npartial').encode())
+            connection.shutdown(socket.SHUT_WR)
+            response = b''
+            while chunk := connection.recv(4096): response += chunk
+        self.assertIn(b'400 Bad Request', response)
+        status, result = self.upload(b'bad', 'retry.pdf')
+        self.assertEqual(status, 400, result)  # Not locked after the interrupted upload.
+        self.assertEqual(Library(self.data).catalog(), before)
+
+    def test_concurrent_upload_is_rejected_while_other_requests_work(self):
+        with socket.create_connection(('127.0.0.1', self.port), timeout=5) as connection:
+            connection.sendall((f'POST /api/library/import?filename=slow.pdf HTTP/1.0\r\nHost: 127.0.0.1:{self.port}\r\nX-Workshop-Token: {self.token}\r\nContent-Type: application/octet-stream\r\nContent-Length: 100\r\n\r\npartial').encode())
+            for _ in range(50):
+                if list(self.data.glob('.upload-*/upload.pdf')): break
+                time.sleep(.02)
+            else: self.fail('First upload did not begin')
+            status, result = self.upload(b'bad', 'second.pdf')
+            self.assertEqual(status, 409); self.assertIn('Another book', result['error'])
+            with urllib.request.urlopen(self.url+'/api/health') as response: self.assertEqual(response.status, 200)
+            connection.shutdown(socket.SHUT_WR)
+            while connection.recv(4096): pass
+
+
+class WorkerTests(unittest.TestCase):
+    def test_worker_timeout_never_publishes_partial_book(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary); source = make_epub(root/'source.epub')
+            with patch('book_import.subprocess.run', side_effect=subprocess.TimeoutExpired('worker', 90)):
+                with self.assertRaisesRegex(ValueError, 'too long'): import_upload(source, root, source.name)
+            self.assertEqual(Library(root).catalog(), [])
+            self.assertEqual(list(root.glob('.parse-*')), [])
+
+    def test_numeric_guides_only_apply_to_verified_pdf_edition(self):
+        class FixtureLibrary:
+            def book(self, book_id):
+                if book_id != 'inference-engineering': raise KeyError(book_id)
+                return dict(title='Inference Engineering', format=self.format, sha256=self.sha, toc=[], count=259)
+        library = FixtureLibrary()
+        for kind, sha in [('epub', INFERENCE_GUIDE_EDITION), ('pdf', 'different-edition')]:
+            library.format, library.sha = kind, sha
+            self.assertEqual(study_guides(library), [])
+        library.format, library.sha = 'pdf', INFERENCE_GUIDE_EDITION
+        self.assertEqual(len(study_guides(library)), 8)
+
+
+if __name__ == '__main__': unittest.main()

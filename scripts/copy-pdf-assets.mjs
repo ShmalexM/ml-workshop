@@ -9,7 +9,7 @@ await rm(target, { recursive: true, force: true })
 await mkdir(target, { recursive: true })
 // The app never runs scripts inside PDFs, so pdf.js's script engine (QuickJS) stays out.
 const wanted = path => !basename(path).startsWith('quickjs-eval')
-for (const folder of ['cmaps', 'standard_fonts', 'wasm']) {
+for (const folder of ['cmaps', 'standard_fonts', 'wasm', 'iccs']) {
   await cp(resolve(source, folder), new URL(folder, target), { recursive: true, filter: wanted })
 }
 await cp(resolve(source, 'LICENSE'), new URL('LICENSE', target))

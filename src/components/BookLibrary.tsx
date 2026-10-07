@@ -1,7 +1,8 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { ArrowLeft, ArrowRight, Bookmark, BookOpen, Check, ExternalLink, Search, X, ZoomIn } from 'lucide-react'
 import { api } from '../api'
-import { bookLink, type Book, type BookLocation, type Chapter, type LibraryData, type ReadingState, type SearchHit, type StudyGuide } from '../libraryTypes'
+import { bookLink, type BookImportResult, type BookLocation, type Chapter, type LibraryData, type ReadingState, type SearchHit, type StudyGuide } from '../libraryTypes'
+import BookImports from './BookImports'
 const PdfPage = lazy(() => import('./PdfPage'))
 const cacheKey = 'ml-workshop-reading-v1'
 const emptyState = (): ReadingState => ({ location: 1, notes: '', bookmarks: [], completed: [], updatedAt: 0 })
@@ -43,7 +44,7 @@ function Guide({ guide, done, onToggle, onLesson }: { guide: StudyGuide; done: b
   </section>
 }
 
-export default function BookLibrary({ data, selection, onLesson, onState, onGuidesSaved }: { data: LibraryData; selection: BookLocation | null; onLesson: (id: string) => void; onState: (bookId: string, state: ReadingState) => void; onGuidesSaved?: () => void }) {
+export default function BookLibrary({ data, selection, onLesson, onState, onImported, onGuidesSaved }: { data: LibraryData; selection: BookLocation | null; onLesson: (id: string) => void; onState: (bookId: string, state: ReadingState) => void; onImported: (result: BookImportResult) => void; onGuidesSaved?: () => void }) {
   const [states, setStates] = useState(() => restoredState(data))
   const statesRef = useRef(states)
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
@@ -122,6 +123,12 @@ export default function BookLibrary({ data, selection, onLesson, onState, onGuid
   }, [query, book?.id])
 
   function open(bookId: string, location: number) { setQuery(''); window.location.hash = bookLink(bookId, location).slice(1) }
+  function imported(result: BookImportResult) {
+    const current = statesRef.current[result.book.id]
+    const incoming = result.readingState || emptyState()
+    const next = {...statesRef.current, [result.book.id]: current && current.updatedAt >= incoming.updatedAt ? current : incoming}
+    statesRef.current = next; setStates(next); setQuery(''); onImported(result)
+  }
   function toggleGuide(guide: StudyGuide) {
     const prior = statesRef.current[guide.bookId] || emptyState()
     guidesChanged.current.add(guide.bookId)
@@ -130,20 +137,20 @@ export default function BookLibrary({ data, selection, onLesson, onState, onGuid
   const search = <div className="book-search"><Search size={17} /><input aria-label={book ? 'Search this book' : 'Search all books'} value={query} maxLength={160} onChange={e => setQuery(e.target.value)} placeholder={book ? 'Search this book…' : 'Search your books…'} />{query && <button className="icon-button" aria-label="Clear book search" onClick={() => setQuery('')}><X size={16} /></button>}</div>
   const searchResults = query.trim().length >= 2 && <section className="book-results" aria-live="polite"><h3>{searching ? 'Searching…' : `${hits.length}${hits.length === 60 ? '+' : ''} ${hits.length === 1 ? 'result' : 'results'}`}</h3>{searchError && <p role="alert">{searchError}</p>}{hits.map(hit => <button key={`${hit.bookId}-${hit.location}`} onClick={() => open(hit.bookId, hit.location)}><strong>{hit.title}</strong><small>{hit.bookTitle} · {data.books.find(b => b.id === hit.bookId)?.format === 'pdf' ? 'printed page' : 'section'} {hit.label}</small><span>{hit.excerpt}</span></button>)}</section>
 
-  if (!book) return <main className="book-home"><h1>Books</h1><p className="book-intro">Read imported books and open related lessons. Your library stays on this computer.</p>{search}{searchResults}
+  if (!book) return <main className="book-home" onDragOver={event => { if (event.dataTransfer.types.includes('Files')) event.preventDefault() }} onDrop={event => event.preventDefault()}><h1>Books</h1><p className="book-intro">Build your reading library. Add a PDF or EPUB to read offline, explore diagrams, and keep your notes alongside your lessons.</p>{data.books.length > 0 && search}{searchResults}
     {selection && <p role="alert" className="book-error">This book is not imported on this computer.</p>}
-    {!data.books.length && <section className="book-empty"><BookOpen size={34} /><h2>Import books</h2><p>Import a local PDF or EPUB to get searchable text, chapter navigation, saved notes, and full-resolution figures.</p><p>From the project directory:</p><code>.venv/bin/python scripts/import-books.py --file "/path/to/book.pdf" --id my-book</code><p>Reload the app after importing. Book files are stored in the Git-ignored data/library folder.</p></section>}
-    {data.books.map(item => { const state = states[item.id] || emptyState(); const guides = data.guides.filter(g => g.bookId === item.id); return <section className="book-shelf-entry" key={item.id}>
+    <BookImports books={data.books} states={states} onImported={imported} onOpen={open}>
+    {data.books.filter(item => !['gpu-glossary', 'inference-engineering'].includes(item.id)).map(item => { const state = states[item.id] || emptyState(); const guides = data.guides.filter(g => g.bookId === item.id); return <section className="book-shelf-entry" key={item.id}>
       <div className="book-summary"><div className="book-cover">{item.cover ? <img src={`/api/library/${item.id}/asset/${item.cover}`} alt={`${item.title} cover`} /> : <BookOpen size={43} />}</div><div><h2>{item.title}</h2><p>{item.author}</p><small>{item.count} {item.format === 'pdf' ? 'pages · PDF' : `sections · ${item.assets.length} images`}</small><button className="primary-button" onClick={() => open(item.id, state.location)}>{state.updatedAt ? 'Continue reading' : 'Open book'}<ArrowRight size={16} /></button></div></div>
-      <details className="book-study-overview"><summary>Reading guides · {guides.filter(g => state.completed.includes(g.id)).length} of {guides.length} reviewed</summary><p>Each guide links sections of this book to related lessons.</p>{guides.map(guide => <Guide key={guide.id} guide={guide} done={state.completed.includes(guide.id)} onToggle={() => toggleGuide(guide)} onLesson={onLesson} />)}</details>
-    </section>})}</main>
+      {guides.length > 0 && <details className="book-study-overview"><summary>Reading guides · {guides.filter(g => state.completed.includes(g.id)).length} of {guides.length} reviewed</summary><p>Each guide links sections of this book to related lessons.</p>{guides.map(guide => <Guide key={guide.id} guide={guide} done={state.completed.includes(guide.id)} onToggle={() => toggleGuide(guide)} onLesson={onLesson} />)}</details>}
+    </section>})}</BookImports></main>
 
   const currentTitle = chapter?.title || `Page ${position}`
   return <div className="book-layout">
     <aside className="book-sidebar"><a className="back-link" href="#books"><ArrowLeft size={16} />All books</a><h2>{book.title}</h2><p className="book-author">{book.author}</p>{search}
       {query.trim().length >= 2 ? searchResults : <><div className="tabs book-tabs" role="tablist" aria-label="Book navigation">{(['contents', 'study', 'saved'] as const).map(tab => <button role="tab" aria-selected={section === tab} className={section === tab ? 'active' : ''} key={tab} onClick={() => setSection(tab)}>{tab === 'contents' ? 'Contents' : tab === 'study' ? 'Reading guides' : 'Saved'}</button>)}</div>
         <div className="book-navigation">{section === 'contents' && book.toc.map((entry, i) => <button className={'toc-entry ' + (entry.location === position ? 'selected' : '')} style={{ paddingLeft: `${12 + Math.min(entry.depth, 2) * 12}px` }} key={`${entry.location}-${i}`} onClick={() => open(book.id, entry.location)}><span>{entry.title}</span>{book.format === 'pdf' && <small>{entry.label}</small>}</button>)}
-          {section === 'study' && data.guides.filter(g => g.bookId === book.id).map(guide => <Guide key={guide.id} guide={guide} done={saved.completed.includes(guide.id)} onToggle={() => toggleGuide(guide)} onLesson={onLesson} />)}
+          {section === 'study' && <>{!data.guides.some(g => g.bookId === book.id) && <p className="book-hint">No reading guides match this edition. You can still read every chapter, search, bookmark, and take notes.</p>}{data.guides.filter(g => g.bookId === book.id).map(guide => <Guide key={guide.id} guide={guide} done={saved.completed.includes(guide.id)} onToggle={() => toggleGuide(guide)} onLesson={onLesson} />)}</>}
           {section === 'saved' && <>{!saved.bookmarks.length && <p className="book-hint">Use the bookmark button above a page or section to save it here.</p>}{saved.bookmarks.map(location => <button className="toc-entry" key={location} onClick={() => open(book.id, location)}><Bookmark size={15} /><span>{book.format === 'pdf' ? `PDF page ${location}` : book.toc.find(item => item.location === location)?.title || `Section ${location}`}</span></button>)}</>}
         </div></>}
       <details className="book-notes"><summary>Reading notes</summary><textarea aria-label="Book notes" value={saved.notes} maxLength={30000} placeholder="Explain an idea, capture a question, or plan an experiment…" onChange={e => update(book.id, { notes: e.target.value })} /><small role="status">{saveStatus}</small></details>

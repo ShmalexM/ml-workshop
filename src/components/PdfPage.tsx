@@ -25,6 +25,7 @@ export default function PdfPage({ bookId, page, zoom }: { bookId: string; page: 
       url: `/api/library/${bookId}/asset/source.pdf`,
       cMapUrl: '/pdfjs/cmaps/', cMapPacked: true,
       standardFontDataUrl: '/pdfjs/standard_fonts/', wasmUrl: '/pdfjs/wasm/',
+      iccUrl: '/pdfjs/iccs/',
       enableXfa: false,
     })
     task.promise.then(value => { if (active) setPdf(value) }).catch(e => { if (active) { setError(e.message); setLoading(false) } })

@@ -13,7 +13,7 @@ const LICENSE_FROM_REPO: Record<string, string> = {
 const HEADER = `Engineering Workshop's interface includes the open-source packages below.
 Each package's license text follows its name. The Engineering Workshop code
 itself is under the MIT License; see LICENSE.`
-const FOOTER = `The PDF reader's fonts, character maps and decoders in pdfjs/ carry their own
+const FOOTER = `The PDF reader's fonts, character maps, decoders and color profiles in pdfjs/ carry their own
 license files next to them.`
 
 // The nearest folder at or above a bundled file whose package.json has a name.

@@ -63,7 +63,7 @@ All lessons are open from the start. The **Paths** page suggests an order for fo
 
 **Projects** lists 12 public repositories, from Start small to Capstone. Each has a preparation lesson, a link to a starting file and three walkthrough steps. See [Learn from public projects](docs/project-learning.md).
 
-**Books** is a reader for PDF and EPUB files that you import from your own copies with `scripts/import-books.py`. It has search, bookmarks, notes and a saved reading position. If you import Modal's *GPU Glossary* and Philip Kiely's *Inference Engineering*, 15 reading guides link their sections to lessons. The books are not included in this repository. See [Local book library](docs/local-library.md).
+**Books** is an offline PDF and EPUB reader. Drop your copy onto a book's card or use **Choose file**; **Add another book** accepts other titles and editions. Imports show progress and open without a reload, with search, bookmarks, notes and a saved reading position. Compatible editions of Modal's *GPU Glossary* and Philip Kiely's *Inference Engineering* have 15 reading guides linking their sections to lessons. The book cards link to the publishers; book files are not included in this repository. See [Local book library](docs/local-library.md).
 
 ## Hero game
 

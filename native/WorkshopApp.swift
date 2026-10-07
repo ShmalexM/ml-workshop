@@ -1,5 +1,6 @@
 import AppKit
 import WebKit
+import UniformTypeIdentifiers
 
 // A local window over the existing workshop server. No embedded browser service,
 // remote application content, or separate learner database is introduced.
@@ -151,6 +152,16 @@ final class WorkshopApp: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         return nil
     }
     func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) { download.delegate = self }
+    func webView(_ webView: WKWebView, runOpenPanelWith parameters: WKOpenPanelParameters, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping ([URL]?) -> Void) {
+        guard let url = frame.request.url, isLocal(url) else { completionHandler(nil); return }
+        let panel = NSOpenPanel()
+        panel.title = "Import a book"
+        panel.prompt = "Import"
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [.pdf, UTType(filenameExtension: "epub") ?? .data]
+        panel.beginSheetModal(for: window) { result in completionHandler(result == .OK ? panel.urls : nil) }
+    }
     func webView(_ webView: WKWebView, navigationResponse: WKNavigationResponse, didBecome download: WKDownload) { download.delegate = self }
     func download(_ download: WKDownload, decideDestinationUsing response: URLResponse, suggestedFilename: String, completionHandler: @escaping (URL?) -> Void) {
         let panel = NSSavePanel(); panel.nameFieldStringValue = suggestedFilename
