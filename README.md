@@ -160,6 +160,6 @@ Bug reports, lesson fixes and ideas are welcome. Use the [issue forms](https://g
 
 ## License
 
-[MIT](LICENSE). Dependencies keep their own licenses.
+[MIT](LICENSE). Dependencies keep their own licenses. The licenses of the npm packages built into the interface are in `dist/THIRD_PARTY_LICENSES.txt`, which you can open in the app from Settings → **Open-source licenses**.
 
 The curriculum and interface are original, AI-assisted work, with links to official documentation for deeper study. The code view, run loader and lesson status chips are adapted from [beautiful-ui](https://github.com/slev12397/beautiful-ui) (MIT, Copyright (c) 2026 Shane Levine); its license is in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The learn-by-doing format is inspired by Boot.dev. This is an independent project with no affiliation with Boot.dev or the authors of the frameworks it teaches.

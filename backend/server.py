@@ -151,7 +151,9 @@ class Handler(BaseHTTPRequestHandler):
         if not file.exists():return self.send({'error':'Frontend not built. Run npm run build.'},503)
         body=file.read_bytes()
         self.send_response(200)
-        self.send_header('Content-Type',mimetypes.guess_type(file.name)[0] or 'application/octet-stream')
+        media_type=mimetypes.guess_type(file.name)[0] or 'application/octet-stream'
+        # Some license notices use characters outside ASCII, such as the copyright sign.
+        self.send_header('Content-Type',media_type+'; charset=utf-8' if media_type.startswith('text/') else media_type)
         self.send_header('Content-Length',str(len(body)))
         self.send_header('Cache-Control','no-cache')
         self.send_header('X-Content-Type-Options','nosniff')

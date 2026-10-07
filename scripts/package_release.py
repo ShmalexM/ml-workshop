@@ -35,8 +35,9 @@ def git(root, *args):
 
 def release_files(root=ROOT):
     """Return {archive path: file mode} for tracked and new unignored files plus dist/."""
-    if not (root / 'dist/index.html').is_file():
-        raise SystemExit('dist/index.html is missing. Run `npm run build` first.')
+    for built in ('dist/index.html', 'dist/THIRD_PARTY_LICENSES.txt'):
+        if not (root / built).is_file():
+            raise SystemExit(f'{built} is missing. Run `npm run build` first.')
     modes = {}
     for line in git(root, 'ls-files', '--stage', '-z').decode().split('\0'):
         if line:
