@@ -11,11 +11,14 @@ import secrets
 import sqlite3
 import sys
 import threading
+import tempfile
+import time
 
 from courses import BY_ID, public_curriculum
 from runner import execute, node_binary
 from portfolio import load_portfolio
-from library import Library
+from library import Library, MAX_BOOK_BYTES
+from book_import import import_upload, ImportConflict, SUGGESTED
 from book_study import study_guides
 import game
 
@@ -28,6 +31,7 @@ DATA.mkdir(parents=True,exist_ok=True)
 DB=DATA/'workshop.sqlite3'
 TOKEN=secrets.token_urlsafe(32)
 RUN_LOCK=threading.Lock()
+IMPORT_LOCK=threading.Lock()
 VERSION=json.loads((ROOT/'package.json').read_text(encoding='utf-8'))['version']
 LIBRARY=Library(DATA)
 
@@ -190,6 +194,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.wfile.write(block);remaining-=len(block)
     def do_POST(self):
         if not self.allowed(write=True):return
+        if urlparse(self.path).path=='/api/library/import':return self.import_book_file()
         try:
             length=int(self.headers.get('Content-Length','0'))
             if length<1 or length>128000:return self.send({'error':'Request exceeds the local exercise size limit.'},413)
@@ -265,6 +270,54 @@ class Handler(BaseHTTPRequestHandler):
             import traceback
             traceback.print_exc()
             self.send({'error':'The local server hit an error. Saved progress is safe. Details are in data/server.log.'},500)
+
+    def import_book_file(self):
+        """Receive raw file bytes, with separate limits from small JSON exercise writes."""
+        try:
+            length=int(self.headers.get('Content-Length','0'))
+        except ValueError:
+            return self.send({'error':'Invalid file size.'},400)
+        if length<1 or length>MAX_BOOK_BYTES:
+            return self.send({'error':'Choose a non-empty PDF or EPUB no larger than 100 MB.'},413)
+        if self.headers.get('Transfer-Encoding') or self.headers.get('Content-Type','').split(';')[0]!='application/octet-stream':
+            return self.send({'error':'Expected a PDF or EPUB file upload.'},415)
+        query=parse_qs(urlparse(self.path).query)
+        filename=query.get('filename',[''])[0]
+        suggested=query.get('book',[''])[0]
+        extension=Path(filename).suffix.lower()
+        if not filename or len(filename)>240 or '/' in filename or '\\' in filename or any(ord(c)<32 for c in filename) or extension not in ('.pdf','.epub'):
+            return self.send({'error':'Choose a PDF or EPUB file.'},400)
+        if suggested and suggested not in SUGGESTED:
+            return self.send({'error':'Unknown suggested book.'},400)
+        if not IMPORT_LOCK.acquire(blocking=False):
+            return self.send({'error':'Another book is being imported. Wait for it to finish, then try again.'},409)
+        previous_timeout=self.connection.gettimeout()
+        try:
+            with tempfile.TemporaryDirectory(prefix='.upload-',dir=DATA) as temporary:
+                source=Path(temporary)/('upload'+extension)
+                deadline=time.monotonic()+60
+                with source.open('wb') as stream:
+                    remaining=length
+                    while remaining:
+                        timeout=deadline-time.monotonic()
+                        if timeout<=0:raise TimeoutError()
+                        self.connection.settimeout(min(timeout,15))
+                        block=self.rfile.read1(min(65536,remaining))
+                        if not block:raise ValueError('The file upload was interrupted. Choose the file again to retry.')
+                        stream.write(block);remaining-=len(block)
+                self.connection.settimeout(previous_timeout)
+                book_id,already=import_upload(source,DATA,filename,suggested)
+                self.send(dict(book=LIBRARY.summary(book_id),guides=[g for g in study_guides(LIBRARY) if g['bookId']==book_id],
+                               readingState=reading_state().get(book_id),alreadyImported=already))
+        except ImportConflict as exc:self.send({'error':str(exc)},409)
+        except ValueError as exc:self.send({'error':str(exc)},400)
+        except TimeoutError:self.send({'error':'The upload timed out. Choose the file again to retry.'},408)
+        except (BrokenPipeError,ConnectionResetError):pass
+        except Exception:
+            self.send({'error':'Could not import this book. Check available disk space, then try again. Existing books and notes are safe.'},500)
+        finally:
+            self.connection.settimeout(previous_timeout)
+            IMPORT_LOCK.release()
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('--port',type=int,default=7318)

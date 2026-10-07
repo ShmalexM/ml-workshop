@@ -1,4 +1,7 @@
 """Reading guides with source locations and related lessons."""
+# These printed-page locators were checked against this PDF edition. Other
+# editions/formats remain readable, but must not be linked to unrelated pages.
+INFERENCE_GUIDE_EDITION = 'b297183c38ffc7ffa30100e1aab0af3b1c20b49778939ee976522fe39ac0df89'
 GUIDES = [{'id': 'gpu-threads',
   'bookId': 'gpu-glossary',
   'title': 'From a kernel to a grid',
@@ -167,6 +170,8 @@ def study_guides(library, lesson_id=None):
         try:
             book = library.book(guide['bookId'])
         except KeyError:
+            continue
+        if guide['bookId'] == 'inference-engineering' and (book['format'] != 'pdf' or book['sha256'] != INFERENCE_GUIDE_EDITION):
             continue
         keys = {item.get('key'):item['location'] for item in book['toc']}
         readings = []

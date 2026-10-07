@@ -1,0 +1,77 @@
+"""Bounded browser imports. Parsing runs in a disposable worker, then publishes atomically."""
+import json
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+
+from library import Library, digest, import_book, normalized
+
+SUGGESTED = {'gpu-glossary': 'GPU Glossary', 'inference-engineering': 'Inference Engineering'}
+PARSE_TIMEOUT = 90
+
+
+class ImportConflict(ValueError):
+    pass
+
+
+def import_upload(source, data_dir, filename, suggested=''):
+    data_dir = Path(data_dir)
+    library = Library(data_dir)
+    checksum = digest(source)
+    book_id = suggested or 'book-' + checksum[:24]
+    if suggested and suggested not in SUGGESTED:
+        raise ValueError('Unknown suggested book. Use Add another book instead.')
+    # Repeated drops return the same book and never reset notes or reading position.
+    candidates = [library.book(book_id)] if (library.root/book_id/'book.json').is_file() else []
+    if not suggested:
+        candidates += library.catalog()
+    for book in candidates:
+        if book['sha256'] == checksum:
+            return book['id'], True
+    if candidates and suggested:
+        raise ImportConflict('A different edition is already imported. Use Add another book to keep both copies and preserve your notes.')
+    with tempfile.TemporaryDirectory(prefix='.parse-', dir=data_dir) as temporary:
+        try:
+            result = subprocess.run(
+                [sys.executable, str(Path(__file__).resolve()), str(source), temporary,
+                 book_id, filename, SUGGESTED.get(suggested, '')],
+                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=PARSE_TIMEOUT,
+            )
+        except subprocess.TimeoutExpired:
+            raise ValueError('This book took too long to process. Try a smaller or repaired PDF or EPUB.') from None
+        if result.returncode:
+            try:
+                message = json.loads(result.stdout)['error']
+            except (ValueError, KeyError, TypeError):
+                message = 'Could not read this book. Try a fresh, unencrypted PDF or EPUB.'
+            raise ValueError(message)
+        library.root.mkdir(parents=True, exist_ok=True)
+        target = library.root/book_id
+        if target.exists():
+            # A CLI import may have completed while the worker was parsing.
+            if library.book(book_id)['sha256'] == checksum:
+                return book_id, True
+            raise ImportConflict('A different edition is already imported. Use Add another book to keep both copies.')
+        (Path(temporary)/'library'/book_id).rename(target)
+    return book_id, False
+
+
+def parse(source, destination, book_id, filename, expected_title):
+    book = import_book(source, destination, book_id)
+    if book['title'] == Path(source).stem:
+        book['title'] = Path(filename).stem
+    if expected_title and normalized(expected_title).casefold() not in normalized(book['title']).casefold():
+        raise ValueError(f'This file is titled “{book["title"][:120]}”. Choose your copy of {expected_title}, or use Add another book.')
+    (Path(destination)/'library'/book_id/'book.json').write_text(json.dumps(book, ensure_ascii=False), encoding='utf-8')
+
+
+if __name__ == '__main__':
+    try:
+        parse(*sys.argv[1:])
+    except ValueError as exc:
+        print(json.dumps({'error': str(exc)}))
+        sys.exit(1)
+    except Exception:
+        print(json.dumps({'error': 'Could not read this book. Try a fresh, unencrypted PDF or EPUB.'}))
+        sys.exit(1)

@@ -31,6 +31,8 @@ def main(install):
     install = Path(install).resolve()
     licenses = install / 'app' / 'dist' / 'THIRD_PARTY_LICENSES.txt'
     check(licenses.is_file() and 'react' in licenses.read_text(encoding='utf-8'), f'{licenses} is missing or does not list react')
+    profiles = install / 'app' / 'dist' / 'pdfjs' / 'iccs'
+    check((profiles / 'CGATS001Compat-v2-micro.icc').is_file() and (profiles / 'LICENSE').is_file(), 'PDF color profile or its license is missing')
     python = install / 'app' / '.venv' / ('Scripts/python.exe' if os.name == 'nt' else 'bin/python')
     command = [str(python), str(install / 'app' / 'scripts' / 'installed.py')]
     with socket.socket() as sock:

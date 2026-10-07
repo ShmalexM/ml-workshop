@@ -27,6 +27,10 @@ The Books UI uses hash routes for direct chapter links, cancellable PDF renderin
 
 Library routes inherit the server's Host/Origin checks and token-protected writes. Assets are manifest-allowlisted and path-confined. Original asset responses prohibit active content; the application CSP allows the local PDF worker and WASM decoder. The app does not execute PDF actions, forms, or EPUB scripts.
 
+`POST /api/library/import` streams one raw file to a temporary directory, with a 100 MB limit and a 60-second upload deadline, leaving the smaller exercise JSON limit unchanged. A separate import lock serializes uploads without blocking lesson runs. `backend/book_import.py` parses in a subprocess with a 90-second timeout, checks suggested-book titles, then renames the completed directory into the library. Errors and timeouts clean up staging. Generic IDs derive from file content; duplicates reuse the existing book, and different editions never replace notes or originals. The React import cards update the catalog directly from the response. The native Mac shell supplies a PDF/EPUB file picker through its WebKit UI delegate.
+
+Glossary guides resolve source section keys. Inference guides contain fixed printed-page locators, so they apply only to the verified PDF checksum; other editions and EPUBs remain readable without misleading guide links.
+
 ## Engineering paths and project practice
 
 `backend/engineering_courses.py` adds original, deterministic engineering lessons. A lesson's language selects Python (the default) or JavaScript. JavaScript runs in a fresh Node process via a Python launcher that sets CPU/file limits before `execve`; the threaded server does not use `preexec_fn`. Both languages share wall timeout, output capture, process-group cleanup and completion rules. Node's VM context organizes exercise/check bindings; it is not a security boundary.

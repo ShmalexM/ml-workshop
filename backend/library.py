@@ -174,14 +174,14 @@ def import_book(source, data_dir, book_id):
     target = root/book_id
     refresh = False
     if target.exists():
-        existing = json.loads((target/'book.json').read_text())
+        existing = json.loads((target/'book.json').read_text(encoding='utf-8'))
         if existing['sha256']==checksum:
             if existing.get('importVersion') == IMPORT_VERSION:
                 return existing
             refresh = True
         else:
             raise ValueError('This book ID already contains a different edition; choose a new ID')
-    with tempfile.TemporaryDirectory(prefix='import-',dir=root) as temporary:
+    with tempfile.TemporaryDirectory(prefix='.import-',dir=root) as temporary:
         folder = Path(temporary)
         extension = source.suffix.lower()
         shutil.copyfile(source,folder/('source'+extension))
@@ -189,7 +189,7 @@ def import_book(source, data_dir, book_id):
         if not result['count']:
             raise ValueError('The book has no readable pages or sections')
         result.update(id=book_id,sha256=checksum,sourceFile='source'+extension,bytes=source.stat().st_size,importVersion=IMPORT_VERSION)
-        (folder/'book.json').write_text(json.dumps(result,ensure_ascii=False))
+        (folder/'book.json').write_text(json.dumps(result,ensure_ascii=False),encoding='utf-8')
         # Rename only a complete import into the visible library. No partially loaded books.
         if refresh:
             # Re-index the identical edition without touching reading state or source.
@@ -204,7 +204,7 @@ def import_book(source, data_dir, book_id):
 
 @lru_cache(maxsize=16)
 def _read_book(path,mtime):
-    return json.loads(Path(path).read_text())
+    return json.loads(Path(path).read_text(encoding='utf-8'))
 
 class Library:
     def __init__(self,data_dir):

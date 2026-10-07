@@ -42,4 +42,4 @@ The built interface in `dist/` includes code from npm packages such as React, Co
 
 `@uiw/react-codemirror` and `@uiw/codemirror-extensions-basic-setup` ship without a license file, so the list uses the MIT license from their repository, kept in `scripts/licenses/uiw-react-codemirror.txt`.
 
-The PDF reader's fonts (Foxit, Liberation), character maps (Adobe) and decoders (JBIG2, OpenJPEG, QCMS) ship with their own license files in `dist/pdfjs/`.
+The PDF reader's fonts (Foxit, Liberation), character maps (Adobe), decoders (JBIG2, OpenJPEG, QCMS) and color profiles (CC0) ship with their own license files in `dist/pdfjs/`.

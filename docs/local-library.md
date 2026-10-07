@@ -4,6 +4,16 @@ Open **Books** in Engineering Workshop. Imported PDFs and EPUBs are available of
 
 ## Import your own copy
 
+Open **Books**. The **GPU Glossary** and **Inference Engineering** cards each have a drop area and **Choose file** button. Drop one PDF or EPUB onto the matching card, or choose it from your computer. **Read on Modal** opens the online glossary; **Get a free copy** opens Baseten's download page. The app does not download or bundle either book for you.
+
+Uploads show progress, followed by a chapter/search preparation step. When **Ready to read** appears, choose **Read book** or **Open book**; no reload or terminal command is needed. On the Mac app, **Choose file** opens a native file picker.
+
+Use **Add another book** for any other PDF or EPUB, or to keep a second edition. Reimporting the same file returns the existing copy without resetting notes or reading position. A different edition cannot overwrite a suggested book; import it separately instead. Files must be non-empty and no larger than 100 MB. Invalid, encrypted, or interrupted imports show an error and can be retried without changing existing books.
+
+PDFs preserve their original printed layout, fonts and diagrams. EPUBs use a responsive reading layout and retain original image resolution. Reading guides appear only when their locations match: glossary section keys for EPUB, and the verified PDF edition for *Inference Engineering*. Other editions and formats still support reading, search, notes and bookmarks.
+
+### Optional command-line import
+
 In a clone, run Setup first, then import from the project directory:
 
 ```sh
@@ -36,7 +46,7 @@ Books then go into the `data` folder next to `app`, so updates keep them.
 
 Reload the app after importing. The importer copies the original into `data/library/<id>/`, builds a local text index, and prints its SHA-256 checksum. It never modifies the supplied file. Reimporting an identical edition is safe; an older index format is rebuilt when needed. Use a new ID for a different edition so existing reading positions remain meaningful.
 
-PDF import uses `pypdf`; the browser renders with a locally bundled PDF.js worker, fonts, character maps, and decoders. Setup installs these dependencies. Reading does not use a CDN or a remote document service.
+PDF import uses `pypdf`; the browser renders with a locally bundled PDF.js worker, fonts, character maps, color profiles, and decoders. Setup installs these dependencies. Reading does not use a CDN or a remote document service.
 
 ## Read and study
 
@@ -71,4 +81,4 @@ Original files, extracted text, and images stay in the Git-ignored `data/library
 
 The app's MIT license covers the app source and its reading guides. Imported books and figures retain their own rights and are not distributed with the repository. Obtain your own copies of [Modal's GPU Glossary](https://modal.com/gpu-glossary) and *Inference Engineering* by Philip Kiely. The glossary's supplied license covers its Markdown text under CC BY 4.0; individual figure attributions still apply. The supplied *Inference Engineering* PDF is copyrighted by Baseten Labs Inc.
 
-Book import is a local CLI operation for trusted files, with a 100 MB input limit and a 250 MB expanded EPUB limit. The reader sanitizes EPUB markup and serves only manifest-listed assets behind the existing loopback Host/Origin checks. This is a personal library, not a public document hosting service.
+Browser imports go only to the local Workshop server, with the same Host/Origin and session-token checks as other writes. One upload runs at a time, with a 100 MB input limit, a 60-second upload limit and a 90-second parsing limit. Parsing runs in a disposable subprocess and publishes only a complete book; failed imports remove temporary files. EPUBs have a 250 MB expanded limit. The reader sanitizes EPUB markup and serves only manifest-listed assets. This is a personal library, not a public document hosting service.
