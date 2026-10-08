@@ -65,4 +65,10 @@ function thirdPartyLicenses(): Plugin {
   }
 }
 
-export default defineConfig({ plugins: [react(), thirdPartyLicenses()], build: { chunkSizeWarningLimit: 900 } })
+// Libraries go in their own chunks: the browser compiles them in parallel, and an app update leaves their cached files valid.
+function vendorChunk(id: string) {
+  if (/node_modules\/(@codemirror|@lezer|@uiw|style-mod|w3c-keyname|crelt|@marijn)\//.test(id)) return 'codemirror'
+  if (/node_modules\/(react|react-dom|scheduler)\//.test(id)) return 'react'
+}
+
+export default defineConfig({ plugins: [react(), thirdPartyLicenses()], build: { chunkSizeWarningLimit: 900, rollupOptions: { output: { manualChunks: vendorChunk } } } })
