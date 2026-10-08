@@ -249,7 +249,7 @@ def loss(w):
 
 for step in [1, 0.1, 0.001]:
     print(round((loss(0 + step) - loss(0)) / step, 3))
-''','-5.0\n-5.9\n-5.999',['loss(w) works out (w − 3)². ML calls a function that measures error a loss. Each pass prints the slope between w = 0 and w = step, rounded to 3 decimal places.',
+''','-5.0\n-5.9\n-5.999',['loss(w) works out (w − 3)². ML calls a function that measures error a loss. Each pass prints the slope between w = 0 and w = step, rounded: round(number, 3) gives the number rounded to 3 decimal places, so round(-5.9994, 3) is -5.999.',
  'As step shrinks, the slope gets closer to −6, the derivative at w = 0. ML foundations lesson 3 calls it the gradient.'],'If loss(0 + step) - loss(0) becomes loss(3 + step) - loss(3), what is the last line printed?',['-5.999', '6.0', '0.001'],2,'At w = 3 the curve is at its lowest point, where it is flat. The slopes are 1.0, 0.1 and 0.001, shrinking towards 0.')
 add('python-13','''
 def count_above(values, limit):

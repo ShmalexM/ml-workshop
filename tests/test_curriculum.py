@@ -72,6 +72,14 @@ class CurriculumTests(unittest.TestCase):
             self.assertTrue(3<=len(lesson['checks'])<=5)
             domain=urlparse(lesson['reference']['url']).hostname
             self.assertIn(domain,['developers.google.com','docs.pytorch.org','www.tensorflow.org','huggingface.co','reference.langchain.com','developers.llamaindex.ai','nvidia.github.io','docs.python.org','www.rfc-editor.org','react.dev','gymnasium.farama.org','opentelemetry.io','developer.mozilla.org'])
+    def test_python_from_zero_formulas_are_valid_python(self):
+        # A beginner copies the formula box; U+2212 minus is a SyntaxError in Python.
+        for lesson in LESSONS:
+            if lesson['course']=='python':self.assertNotIn('−',lesson['concept'],lesson['id'])
+        compile(next(l for l in LESSONS if l['id']=='python-12')['concept'],'concept','exec')
+    def test_round_is_explained_where_python_from_zero_first_uses_it(self):
+        first=next(l for l in LESSONS if l['course']=='python' and 'round(' in l['example']['code']+l['starter']+l['solution'])
+        self.assertIn('round(number, 3)',' '.join(first['example']['steps'])+first['explanation'],first['id'])
     def test_constant_answer_does_not_pass(self):
         lesson=next(l for l in LESSONS if l['id']=='foundations-3')
         self.assertFalse(execute('def step(weight,target,learning_rate):return 0.6',lesson['checks'])['passed'])
