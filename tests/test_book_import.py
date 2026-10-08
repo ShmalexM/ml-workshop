@@ -11,6 +11,7 @@ import time
 import unittest
 from unittest.mock import patch
 from urllib.parse import urlencode
+import urllib.error
 import urllib.request
 import zipfile
 
@@ -52,6 +53,40 @@ class UploadTests(unittest.TestCase):
             response = connection.getresponse()
             return response.status, json.loads(response.read())
         finally: connection.close()
+
+    def post_json(self, path, payload, headers=None):
+        connection = http.client.HTTPConnection('127.0.0.1', self.port, timeout=10)
+        try:
+            connection.request('POST', path, json.dumps(payload).encode(),
+                               {'Content-Type': 'application/json', 'X-Workshop-Token': self.token, **(headers or {})})
+            response = connection.getresponse()
+            return response.status, json.loads(response.read())
+        finally: connection.close()
+
+    def test_remove_book_needs_write_token_and_keeps_notes(self):
+        source = make_custom_epub(self.root/'remove.epub', {'one.xhtml': '<html><body><h1>Remove me</h1></body></html>'})
+        status, result = self.upload(source.read_bytes(), 'remove.epub')
+        self.assertEqual(status, 200, result); book_id = result['book']['id']
+        state = dict(bookId=book_id, location=1, notes='Keep these notes', bookmarks=[], completed=[], updatedAt=300)
+        self.assertEqual(self.post_json('/api/library/state', state)[0], 200)
+        for headers in ({'X-Workshop-Token': 'wrong'}, {'Origin': 'https://example.org'},
+                        {'Sec-Fetch-Site': 'cross-site'}, {'Host': 'attacker.example'}):
+            with self.subTest(headers=headers):
+                self.assertEqual(self.post_json('/api/library/remove', {'bookId': book_id}, headers)[0], 403)
+        for bad in ('../library', 'missing-book', 7, None):
+            with self.subTest(bad=bad):
+                self.assertEqual(self.post_json('/api/library/remove', {'bookId': bad})[0], 404)
+        self.assertTrue((self.data/'library'/book_id/'source.epub').is_file())
+        self.assertEqual(self.post_json('/api/library/remove', {'bookId': book_id}), (200, {'ok': True}))
+        self.assertFalse((self.data/'library'/book_id).exists())
+        library = json.load(urllib.request.urlopen(self.url+'/api/library'))
+        self.assertNotIn(book_id, [book['id'] for book in library['books']])
+        self.assertEqual(library['readingState'][book_id]['notes'], 'Keep these notes')
+        with self.assertRaises(urllib.error.HTTPError) as error: urllib.request.urlopen(self.url+f'/api/library/{book_id}/chapter/1')
+        self.assertEqual(error.exception.code, 404)
+        # Importing the same file again brings back the saved notes.
+        status, result = self.upload(source.read_bytes(), 'remove.epub')
+        self.assertEqual(status, 200, result); self.assertEqual(result['readingState']['notes'], 'Keep these notes')
 
     def test_over_limit_epub_returns_plain_error_and_leaves_nothing(self):
         before = Library(self.data).catalog()

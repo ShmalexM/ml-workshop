@@ -223,6 +223,13 @@ class Handler(BaseHTTPRequestHandler):
                 if type(updated)!=int or not 0<=updated<=2**53-1:raise ValueError('Invalid timestamp')
                 with connect() as db:db.execute('INSERT INTO reading_state VALUES (?,?,?,?,?,?) ON CONFLICT(book) DO UPDATE SET location=excluded.location,notes=excluded.notes,bookmarks=excluded.bookmarks,completed=excluded.completed,updated=excluded.updated WHERE excluded.updated>=reading_state.updated',(book_id,location,notes,json.dumps(sorted(set(bookmarks))),json.dumps(sorted(set(completed))),updated))
                 return self.send({'ok':True})
+            if path=='/api/library/remove':
+                # Deletes data/library/<id> only. Reading state stays in SQLite, so a reimport restores notes.
+                if not IMPORT_LOCK.acquire(blocking=False):return self.send({'error':'A book is being imported. Wait for it to finish, then try again.'},409)
+                try:LIBRARY.remove(body.get('bookId'))
+                except KeyError:return self.send({'error':'Unknown book'},404)
+                finally:IMPORT_LOCK.release()
+                return self.send({'ok':True})
             if path=='/api/backup':
                 folder=DATA/'backups';folder.mkdir(exist_ok=True)
                 name='ml-workshop-'+datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S-%f')+'.json'

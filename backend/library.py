@@ -13,6 +13,7 @@ import os
 import posixpath
 import pyexpat
 import re
+import secrets
 import shutil
 import tempfile
 import threading
@@ -396,6 +397,18 @@ class Library:
         if not path.is_relative_to((self.root/book_id).resolve()):
             raise KeyError('Unknown book asset')
         return path,allowed[name]
+
+    def remove(self,book_id):
+        """Delete one imported book's folder. Notes and reading position live in SQLite and stay."""
+        folder = self.folder(book_id)
+        if folder.is_symlink() or folder.resolve().parent!=self.root.resolve():
+            raise KeyError('Unknown book')
+        with _SUMMARY_LOCK:
+            # Hide the book first, so a failed delete never leaves a half-removed book in the catalog.
+            staging = self.root/f'.removing-{book_id}-{secrets.token_hex(4)}'
+            folder.rename(staging)
+            _SUMMARIES.pop(folder/'book.json',None)
+        shutil.rmtree(staging)
 
     def search(self,query,book_id=None):
         query = normalized(query).casefold()

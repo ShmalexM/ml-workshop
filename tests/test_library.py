@@ -1,6 +1,7 @@
 """Book ingestion, source preservation, and safe offline rendering."""
 import hashlib
 import json
+import os
 from pathlib import Path
 import shutil
 import sys
@@ -162,5 +163,20 @@ class StorageTests(unittest.TestCase):
         self.assertEqual(list(self.folder.glob('.*')),[])
         # A command-line reimport rebuilds the old index with the current importer.
         self.assertEqual(import_book(self.root/'test.epub',self.data,'fixture')['importVersion'],2)
+    def test_remove_deletes_only_that_book_folder(self):
+        import_book(make_epub(self.root/'other.epub'),self.data,'other')
+        outside=self.root/'outside';outside.mkdir();(outside/'book.json').write_text(json.dumps({**self.book,'id':'linked'}))
+        os.symlink(outside,self.data/'library/linked')
+        library_=Library(self.data)
+        for book_id in ('linked','../outside','..','',None,'missing','fixture/../other'):
+            with self.subTest(book_id=book_id),self.assertRaises(KeyError):library_.remove(book_id)
+        self.assertTrue((outside/'book.json').is_file())
+        library_.remove('fixture')
+        self.assertFalse(self.folder.exists())
+        self.assertEqual(sorted(p.name for p in (self.data/'library').iterdir()),['linked','other'])
+        self.assertTrue((self.data/'library/other/chapters/1.json').is_file())
+        self.assertNotIn('fixture',{book['id'] for book in library_.catalog()})
+        with self.assertRaises(KeyError):library_.chapter('fixture',1)
+        self.assertEqual(list((self.data/'library').glob('.*')),[])
 
 if __name__=='__main__':unittest.main()
