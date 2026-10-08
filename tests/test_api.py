@@ -58,6 +58,43 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(saved['drafts']['foundations-1'],code)
         self.assertEqual(saved['notes']['foundations-1'],'new note')
         self.assertEqual(saved['draftUpdated']['foundations-1'],20)
+    def test_draft_revisions_cannot_block_later_saves(self):
+        def save(code, revision):
+            return self.request('/api/draft', dict(lessonId='python-3', code=code, notes='', updatedAt=revision))
+        self.assertTrue(save('# first', 1)['applied'])
+        # A revision far ahead of the clock is saved as now, so the next normal edit still replaces it.
+        self.assertTrue(save('# future', 2**53 - 1)['applied'])
+        saved = self.request('/api/state')
+        self.assertLessEqual(saved['draftUpdated']['python-3'], time.time() * 1000 + 1000)
+        time.sleep(.01)
+        self.assertTrue(save('# next edit', int(time.time() * 1000))['applied'])
+        self.assertEqual(self.request('/api/state')['drafts']['python-3'], '# next edit')
+        # An older revision is not applied, and the response says so.
+        self.assertFalse(save('# stale', 5)['applied'])
+        self.assertEqual(self.request('/api/state')['drafts']['python-3'], '# next edit')
+
+    def test_draft_saved_before_revisions_were_checked_does_not_block(self):
+        import sqlite3
+        with sqlite3.connect(Path(self.tmp.name) / 'workshop.sqlite3') as db:
+            db.execute('INSERT OR REPLACE INTO drafts VALUES (?,?,?,?)', ('python-4', '# poisoned', '', 2**63 - 1))
+        self.assertLessEqual(self.request('/api/state')['draftUpdated']['python-4'], time.time() * 1000 + 1000)
+        result = self.request('/api/draft', dict(lessonId='python-4', code='# normal', notes='', updatedAt=int(time.time() * 1000)))
+        self.assertTrue(result['applied'])
+        self.assertEqual(self.request('/api/state')['drafts']['python-4'], '# normal')
+
+    def test_invalid_draft_requests_get_400(self):
+        draft = dict(lessonId='python-2', code='# QA', notes='', updatedAt=1)
+        for patch in ({'updatedAt': 2**63}, {'updatedAt': 2**63 - 1}, {'updatedAt': 1e300}, {'updatedAt': True},
+                      {'updatedAt': 1.5}, {'updatedAt': -1}, {'updatedAt': '123'}, {'updatedAt': None},
+                      {'code': 'x' * 50001}, {'notes': 'x' * 30001}, {'code': 7}):
+            with self.subTest(patch=str(patch)[:40]), self.assertRaises(urllib.error.HTTPError) as error:
+                self.request('/api/draft', {**draft, **patch})
+            self.assertEqual(error.exception.code, 400)
+        with self.assertRaises(urllib.error.HTTPError) as error:
+            self.request('/api/draft', {**draft, 'notes': 'x' * 30001})
+        self.assertIn('Notes are longer than 30,000 characters', json.load(error.exception)['error'])
+        self.assertNotIn('python-2', self.request('/api/state')['drafts'])
+
     def test_failed_check_and_run_do_not_complete(self):
         for mode in ['check','run']:
             result=self.request('/api/run',dict(lessonId='foundations-2',code='print("not an answer")',mode=mode))

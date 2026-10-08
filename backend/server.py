@@ -76,9 +76,13 @@ def reading_state():
     with connect() as db:
         return {r[0]:dict(location=r[1],notes=r[2],bookmarks=json.loads(r[3]),completed=json.loads(r[4]),updatedAt=r[5]) for r in db.execute('SELECT book,location,notes,bookmarks,completed,updated FROM reading_state')}
 
+def now_ms():
+    return time.time_ns()//1_000_000
+
 def state():
     with connect() as db:
-        drafts=db.execute('SELECT lesson,code,notes,updated FROM drafts').fetchall()
+        # A revision stored in the future, from before revisions were checked, reads as now.
+        drafts=db.execute('SELECT lesson,code,notes,MIN(updated,?) FROM drafts',(now_ms(),)).fetchall()
         complete=db.execute('SELECT lesson,at,xp FROM completions').fetchall()
         current=db.execute("SELECT value FROM settings WHERE key='currentLesson'").fetchone()
         return dict(draftUpdated={r[0]:r[3] for r in drafts},drafts={r[0]:r[1] for r in drafts},notes={r[0]:r[2] for r in drafts},completed={r[0]:dict(at=r[1],xp=r[2]) for r in complete},currentLesson=current[0] if current and current[0] in BY_ID else 'foundations-1',activity=[r[0] for r in db.execute('SELECT day FROM activity ORDER BY day')])
@@ -326,11 +330,16 @@ class Handler(BaseHTTPRequestHandler):
             lesson=BY_ID.get(body.get('lessonId'))
             if not lesson:raise ValueError('Unknown lesson')
             if path=='/api/draft':
-                code,notes=body.get('code'),body.get('notes')
-                if not isinstance(code,str) or not isinstance(notes,str) or len(code)>50000 or len(notes)>30000:raise ValueError('Invalid draft size')
-                stamp=int(body.get('updatedAt',0))
-                with connect() as db:db.execute('INSERT INTO drafts VALUES (?,?,?,?) ON CONFLICT(lesson) DO UPDATE SET code=excluded.code,notes=excluded.notes,updated=excluded.updated WHERE excluded.updated>=drafts.updated',(lesson['id'],code,notes,stamp))
-                return self.send({'ok':True})
+                code,notes,stamp=body.get('code'),body.get('notes'),body.get('updatedAt')
+                if not isinstance(code,str) or not isinstance(notes,str):raise ValueError('Invalid draft')
+                if len(code)>50000:raise ValueError('Code is longer than 50,000 characters.')
+                if len(notes)>30000:raise ValueError('Notes are longer than 30,000 characters.')
+                if type(stamp) is not int or not 0<=stamp<=2**53-1:raise ValueError('Invalid draft revision')
+                # A revision ahead of this computer's clock is saved as now, so it cannot block later saves.
+                # A stored revision that is still ahead, from before this check, never blocks a save.
+                now=now_ms()
+                with connect() as db:applied=db.execute('INSERT INTO drafts VALUES (?,?,?,?) ON CONFLICT(lesson) DO UPDATE SET code=excluded.code,notes=excluded.notes,updated=excluded.updated WHERE excluded.updated>=drafts.updated OR drafts.updated>?',(lesson['id'],code,notes,min(stamp,now),now)).rowcount==1
+                return self.send({'ok':True,'applied':applied})
             if path in ('/api/run','/api/example'):
                 is_example=path=='/api/example'
                 code=lesson['example']['code'] if is_example else body.get('code');mode='run' if is_example else body.get('mode')
