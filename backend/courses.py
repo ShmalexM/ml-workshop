@@ -1,12 +1,15 @@
 """Original, offline curriculum and executable reference answers."""
 from textwrap import dedent
+from python_course import COURSES_PYTHON, LESSONS_PYTHON
 
+# Python from zero comes first: it teaches the Python the other paths assume.
 COURSES = [
+    *COURSES_PYTHON,
     dict(id='foundations', title='ML foundations', subtitle='The ideas behind every framework', icon='book', color='green'),
     dict(id='pytorch', title='PyTorch', subtitle='Tensors, autograd and training loops', icon='flame', color='orange'),
     dict(id='tensorflow', title='TensorFlow', subtitle='The same ideas with TensorFlow & Keras', icon='box', color='blue'),
 ]
-LESSONS = []
+LESSONS = list(LESSONS_PYTHON)
 
 def lesson(course, number, title, intro, concept, explanation, tasks, tip, hints, starter, solution, checks, diagram=None, minutes=12):
     refs = {'foundations': ('Google ML Crash Course', 'https://developers.google.com/machine-learning/crash-course/linear-regression'), 'pytorch': ('PyTorch: Learn the Basics', 'https://docs.pytorch.org/tutorials/beginner/basics/intro.html'), 'tensorflow': ('TensorFlow: automatic differentiation', 'https://www.tensorflow.org/guide/autodiff')}

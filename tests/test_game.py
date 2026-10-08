@@ -24,6 +24,9 @@ from courses import COURSES, LESSONS
 from library import import_book
 from book_fixture import make_epub
 
+# Finishing everything earns one chest and one battle per lesson and per path.
+EARNED = len(LESSONS) + len(COURSES)
+
 STAMP = '2026-10-05T22:00:00+00:00'
 
 
@@ -219,7 +222,7 @@ class LootTests(unittest.TestCase):
                          game.roll_chest(*args, random.Random(14)))
 
     def test_curriculum_monte_carlo(self):
-        self.assertEqual((len(LESSONS), len(COURSES)), (58, 12))
+        self.assertEqual((len(LESSONS), len(COURSES)), (71, 13))
         # Welcome, then each path's lessons followed by the path chest.
         tiers = [1]
         for course in COURSES:
@@ -262,7 +265,8 @@ class LootTests(unittest.TestCase):
         self.assertTrue(10 <= means['epic'] <= 22, means)
         self.assertGreaterEqual(minimum_legendary, 1)
         self.assertGreaterEqual(high - low, 35)
-        self.assertTrue(125 <= sum(totals) / 1000 <= 150)
+        # Python from zero added 13 small chests and a path chest: about 17 items.
+        self.assertTrue(125 <= sum(totals) / 1000 <= 165)
         self.assertTrue(40 <= means['rare'] <= 65, means)
         self.assertTrue(.2 <= half_lesson_legendary / 1000 <= 1.2)
         print('\nHero Monte Carlo (1000 fixed-seed players): ' + json.dumps(dict(
@@ -357,7 +361,7 @@ class GameStateTests(unittest.TestCase):
         self.assertIsNone(no_hero['hero'])
         self.assertEqual(no_hero['items'], [])
         self.assertEqual(no_hero['equipment'], {})
-        self.assertEqual(len(no_hero['chests']['unopened']), 70)
+        self.assertEqual(len(no_hero['chests']['unopened']), EARNED)
         with self.assertRaisesRegex(ValueError, 'Create a hero'):
             self.action('open', dict(source='lesson:foundations-1'))
         self.hero()
@@ -427,7 +431,7 @@ class GameStateTests(unittest.TestCase):
         saved = game.state(self.db, self.progress)
         exported = game.export(self.db)
         self.assertEqual(len(saved['chests']['opened']), 40)
-        self.assertEqual(len(exported['chests']), 71)
+        self.assertEqual(len(exported['chests']), EARNED + 1)
         self.assertEqual(len(exported['items']), len(saved['items']))
         self.assertEqual(exported['meta']['sinceEpic'], saved['luck']['sinceEpic'])
         self.assertEqual(exported['meta']['sinceLegendary'], saved['luck']['sinceLegendary'])
@@ -443,9 +447,9 @@ class GameStateTests(unittest.TestCase):
         self.assertEqual(saved['items'], [])
         self.assertEqual(saved['equipment'], {})
         self.assertEqual(saved['chests']['opened'], [])
-        self.assertEqual(len(saved['chests']['unopened']), 70)
+        self.assertEqual(len(saved['chests']['unopened']), EARNED)
         self.assertEqual(saved['luck'], dict(sinceEpic=0, sinceLegendary=0))
-        self.assertEqual(saved['battles'], dict(earned=70, used=0, available=70))
+        self.assertEqual(saved['battles'], dict(earned=EARNED, used=0, available=EARNED))
         self.assertEqual(saved['campaign']['stage'], 1)
         self.assertEqual(saved['campaign']['bossDamage'], 0)
         self.assertEqual(saved['lifetime'], dict(fights=0, victories=0, kills=0,
@@ -528,10 +532,10 @@ class GameStateTests(unittest.TestCase):
         self.action('settings', dict(enabled=False))
         self.progress = full_progress()
         self.assertEqual(game.summary(self.db, self.progress),
-                         dict(enabled=False, hero=False, unopened=70, battles=70, stage=1))
+                         dict(enabled=False, hero=False, unopened=EARNED, battles=EARNED, stage=1))
         saved = self.hero()
         self.assertFalse(saved['enabled'])
-        self.assertEqual(saved['battles'], dict(earned=71, used=0, available=71))
+        self.assertEqual(saved['battles'], dict(earned=EARNED + 1, used=0, available=EARNED + 1))
         battle = self.action('battle/start', {})['battle']
         self.action('battle/finish', dict(battleId=battle['id'], outcome='victory',
                                           bossDamage=3000, kills=1, seconds=30))
@@ -544,20 +548,20 @@ class GameStateTests(unittest.TestCase):
              patch.object(game, 'state', side_effect=AssertionError('full state')):
             summary = game.summary(self.db, self.progress)
         self.db.set_trace_callback(None)
-        self.assertEqual(summary, dict(enabled=False, hero=True, unopened=71, battles=70, stage=2))
+        self.assertEqual(summary, dict(enabled=False, hero=True, unopened=EARNED + 1, battles=EARNED, stage=2))
         self.assertEqual(game.export(self.db), before)
         self.assertTrue(all(q.startswith(('SELECT', 'BEGIN', 'COMMIT')) for q in statements), statements)
         self.assertFalse(any('game_items' in q or 'SELECT data FROM game_chests' in q for q in statements))
         saved = self.action('settings', dict(enabled=True))['game']
-        self.assertEqual(len(saved['chests']['unopened']), 71)
-        self.assertEqual(saved['battles']['available'], 70)
+        self.assertEqual(len(saved['chests']['unopened']), EARNED + 1)
+        self.assertEqual(saved['battles']['available'], EARNED)
         self.action('settings', dict(enabled=False))
         retired = self.action('retire', dict(confirm='RETIRE'))['game']
         self.assertFalse(retired['enabled'])
         self.assertEqual(retired['campaign']['stage'], 1)
         self.assertEqual(retired['campaign']['bossDamage'], 0)
         self.assertEqual(retired['history'], [])
-        self.assertEqual(retired['battles'], dict(earned=70, used=0, available=70))
+        self.assertEqual(retired['battles'], dict(earned=EARNED, used=0, available=EARNED))
         self.assertFalse(any(c['kind'] == 'boss' for c in retired['chests']['unopened']))
         self.assertEqual(game.export(self.db)['battles'], [])
         self.assertFalse(self.hero('mage')['enabled'])
@@ -620,8 +624,8 @@ class GameStateTests(unittest.TestCase):
         self.assertEqual(saved['campaign']['stageName'], 'The Abyss · Depth 7')
         self.assertEqual(saved['campaign']['bossName'], 'Abyssal Behemoth')
         self.assertEqual(saved['campaign']['stagesCleared'], 16)
-        self.assertEqual(saved['battles'], dict(earned=71, used=16, available=55))
-        self.assertEqual(game.summary(self.db, self.progress)['unopened'], 87)
+        self.assertEqual(saved['battles'], dict(earned=EARNED + 1, used=16, available=EARNED + 1 - 16))
+        self.assertEqual(game.summary(self.db, self.progress)['unopened'], EARNED + 1 + 16)
 
     def test_battle_failures_roll_back_and_wrong_stage_is_rejected(self):
         self.progress = full_progress()

@@ -73,7 +73,7 @@ STAT_KEYS = ('primary', 'stamina', *SECONDARIES, 'armor', 'damage')
 SLOT_WEIGHT = dict(head=.80, shoulders=.70, back=.50, chest=1., hands=.65,
                    legs=.90, feet=.65, mainhand=.65, offhand=.50)
 ARMOR_MULT = dict(cloth=.6, leather=1., mail=1.4, plate=2., cloak=.6)
-COURSE_DIFFICULTY = dict(foundations=1, web=1, backend=2, data=2, reliability=2,
+COURSE_DIFFICULTY = dict(python=1, foundations=1, web=1, backend=2, data=2, reliability=2,
                          harness=2, interactive=2, pytorch=2, tensorflow=2,
                          modern=3, rl=3, cuda=3)
 LESSONS_BY_COURSE = {
