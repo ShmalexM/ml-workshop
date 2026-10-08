@@ -1,5 +1,6 @@
 import * as THREE from 'three'
-import {createComposer,createRenderer,environment,reducedMotion} from '../three/scene'
+import {createRenderer,environment,reducedMotion} from '../three/scene'
+import {createComposer} from '../three/composer'
 import {HeroModel,type Appearance} from '../three/hero'
 import {Particles} from '../three/fx'
 import {disposeTree,glow} from '../three/materials'
