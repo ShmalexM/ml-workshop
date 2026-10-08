@@ -21,7 +21,9 @@ class ApiTests(unittest.TestCase):
     def setUpClass(cls):
         cls.tmp=tempfile.TemporaryDirectory(prefix='ml-api-test-')
         project=dict(id='sample',title='Sample project',summary='Synthetic fixture',tracks=['backend'],steps=['Trace request','Test retry'],deliverable='A diagram')
-        (Path(cls.tmp.name)/'portfolio.json').write_text(json.dumps(dict(version=1,projects=[project])))
+        task=lambda tid:dict(id=tid,title=tid.title(),minutes=5,source=dict(path='app.py',lines=[1,2]),do='Read.',change='Edit.',verify=dict(commands=['pytest'],expect='1 passed',check=dict(type='contains',value='1 passed')))
+        hands_on=dict(id='hands-on',title='Hands-on fixture',summary='Synthetic fixture',tracks=['backend'],repoUrl='https://github.com/example/app',pin=dict(ref='b'*40,label='main'),tasks=[task('first'),task('second')],stretch=task('extra'))
+        (Path(cls.tmp.name)/'portfolio.json').write_text(json.dumps(dict(version=1,projects=[project,hands_on])))
         cls.book=import_book(make_epub(Path(cls.tmp.name)/'fixture.epub'),cls.tmp.name,'fixture')
         with socket.socket() as sock:
             sock.bind(('127.0.0.1',0));cls.port=sock.getsockname()[1]
@@ -90,6 +92,39 @@ class ApiTests(unittest.TestCase):
             self.assertEqual(error.exception.code,400)
         with self.assertRaises(urllib.error.HTTPError) as error:self.request('/api/project/state',payload,{'X-Workshop-Token':'wrong'})
         self.assertEqual(error.exception.code,403)
+    def test_task_progress_saves_notes_and_check_times_only(self):
+        tasks=dict(first=dict(notes='Line 18 uses +=',verifiedAt=1700000000000),extra=dict(verifiedAt=1700000000500))
+        payload=dict(projectId='hands-on',notes='',reviewed=[0,1],updatedAt=300,tasks=tasks)
+        self.request('/api/project/state',payload)
+        saved=self.request('/api/portfolio')
+        self.assertEqual(saved['projects'][1]['steps'],['First','Second'])
+        self.assertEqual(saved['projectState']['hands-on']['tasks'],tasks)
+        # A client without task progress keeps the saved map; a stale write changes nothing.
+        self.request('/api/project/state',dict(projectId='hands-on',notes='later',reviewed=[0],updatedAt=400))
+        self.request('/api/project/state',{**payload,'tasks':{},'updatedAt':350})
+        saved=self.request('/api/portfolio')['projectState']['hands-on']
+        self.assertEqual((saved['notes'],saved['reviewed'],saved['tasks']),('later',[0],tasks))
+        backup=self.request(self.request('/api/backup',{})['url'])
+        self.assertEqual(backup['projectState']['hands-on']['tasks'],tasks)
+        self.assertEqual(backup['version'],3)
+        for bad in ({'first':{'output':'/Users/me'}},{'ghost':{}},{'first':{'verifiedAt':'now'}},{'first':{'notes':'x'*5001}},[]):
+            with self.subTest(bad=str(bad)[:40]),self.assertRaises(urllib.error.HTTPError) as error:
+                self.request('/api/project/state',{**payload,'updatedAt':500,'tasks':bad})
+            self.assertEqual(error.exception.code,400)
+        self.assertNotIn('/Users/me',json.dumps(self.request('/api/portfolio')))
+    def test_old_project_table_gains_task_column(self):
+        with tempfile.TemporaryDirectory(prefix='ml-api-migrate-') as directory:
+            import sqlite3
+            db=sqlite3.connect(Path(directory)/'workshop.sqlite3')
+            with db:
+                db.execute('CREATE TABLE project_state (project TEXT PRIMARY KEY, notes TEXT, reviewed TEXT, updated INTEGER)')
+                db.execute("INSERT INTO project_state VALUES ('public-micrograd','old note','[0, 1, 2]',5)")
+            db.close()
+            code='import json,sys;sys.path.insert(0,sys.argv[1]);import server;print(json.dumps(server.project_state()))'
+            for _ in range(2):
+                out=subprocess.run([sys.executable,'-c',code,str(ROOT/'backend')],env={**os.environ,'ML_WORKSHOP_DATA_DIR':directory},capture_output=True,text=True,timeout=60)
+                self.assertEqual(out.returncode,0,out.stderr)
+                self.assertEqual(json.loads(out.stdout),{'public-micrograd':dict(notes='old note',reviewed=[0,1,2],updatedAt=5,tasks={})})
     def test_worked_example_is_separate_from_challenge(self):
         before=self.request('/api/state')
         result=self.request('/api/example',dict(lessonId='foundations-1',code='raise Exception("should not run")',mode='check'))

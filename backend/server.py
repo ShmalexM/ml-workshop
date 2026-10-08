@@ -21,7 +21,7 @@ os.umask(0o077)
 
 from courses import BY_ID, public_curriculum
 from runner import execute, node_binary
-from portfolio import load_portfolio
+from portfolio import load_portfolio, task_progress
 from library import Library, MAX_BOOK_BYTES
 from book_import import import_upload, ImportConflict, SUGGESTED
 from book_study import study_guides
@@ -62,12 +62,15 @@ with connect() as db:
     db.execute('CREATE TABLE IF NOT EXISTS activity (day TEXT PRIMARY KEY)')
     db.execute('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)')
     db.execute('CREATE TABLE IF NOT EXISTS project_state (project TEXT PRIMARY KEY, notes TEXT, reviewed TEXT, updated INTEGER)')
+    # Per-task notes and check times. Older databases gain the column with an empty map.
+    if 'tasks' not in {r[1] for r in db.execute('PRAGMA table_info(project_state)')}:
+        db.execute("ALTER TABLE project_state ADD COLUMN tasks TEXT NOT NULL DEFAULT '{}'")
     db.execute('CREATE TABLE IF NOT EXISTS reading_state (book TEXT PRIMARY KEY, location INTEGER, notes TEXT, bookmarks TEXT, completed TEXT, updated INTEGER)')
     game.ensure_schema(db)
 
 def project_state():
     with connect() as db:
-        return {r[0]:dict(notes=r[1],reviewed=json.loads(r[2]),updatedAt=r[3]) for r in db.execute('SELECT project,notes,reviewed,updated FROM project_state')}
+        return {r[0]:dict(notes=r[1],reviewed=json.loads(r[2]),updatedAt=r[3],tasks=json.loads(r[4])) for r in db.execute('SELECT project,notes,reviewed,updated,tasks FROM project_state')}
 
 def reading_state():
     with connect() as db:
@@ -82,7 +85,8 @@ def state():
 
 def game_progress():
     with connect() as db:completed={r[0]:dict(at=r[1],xp=r[2]) for r in db.execute('SELECT lesson,at,xp FROM completions')}
-    return dict(completed=completed,projects=load_portfolio(DATA)['projects'],projectState=project_state(),readingState=reading_state(),guides=study_guides(LIBRARY))
+    catalog=load_portfolio(DATA)
+    return dict(completed=completed,projects=catalog['projects'],retiredProjects=catalog['retired'],projectState=project_state(),readingState=reading_state(),guides=study_guides(LIBRARY))
 
 def save_backup():
     folder=DATA/'backups';folder.mkdir(mode=0o700,exist_ok=True)
@@ -284,7 +288,9 @@ class Handler(BaseHTTPRequestHandler):
                 if not isinstance(notes,str) or len(notes)>30000:raise ValueError('Invalid project notes')
                 if not isinstance(reviewed,list) or len(reviewed)>len(project['steps']) or any(type(i)!=int or not 0<=i<len(project['steps']) for i in reviewed):raise ValueError('Invalid reviewed steps')
                 if type(updated)!=int or not 0<=updated<=2**53-1:raise ValueError('Invalid timestamp')
-                with connect() as db:db.execute('INSERT INTO project_state VALUES (?,?,?,?) ON CONFLICT(project) DO UPDATE SET notes=excluded.notes,reviewed=excluded.reviewed,updated=excluded.updated WHERE excluded.updated>=project_state.updated',(project['id'],notes,json.dumps(sorted(set(reviewed))),updated))
+                # Clients from before task progress existed send no tasks; keep what is saved.
+                tasks=json.dumps(task_progress(project,body['tasks'])) if 'tasks' in body else None
+                with connect() as db:db.execute("INSERT INTO project_state (project,notes,reviewed,updated,tasks) VALUES (?,?,?,?,COALESCE(?,'{}')) ON CONFLICT(project) DO UPDATE SET notes=excluded.notes,reviewed=excluded.reviewed,updated=excluded.updated,tasks=COALESCE(?,project_state.tasks) WHERE excluded.updated>=project_state.updated",(project['id'],notes,json.dumps(sorted(set(reviewed))),updated,tasks,tasks))
                 return self.send({'ok':True})
             if path=='/api/library/state':
                 book_id=body.get('bookId','')
