@@ -1151,17 +1151,18 @@ class GameApiTests(unittest.TestCase):
         saved = self.request('/api/game/passives', body)['game']['passives']
         self.assertEqual(saved['points'], dict(earned=7, spent=1, available=6))
         self.assertEqual(self.request('/api/game')['passives']['allocated'], ['start-warrior', 'warrior-1'])
-        for headers in ({'X-Workshop-Token': None}, {'Origin': 'https://example.com'}):
+        # Like the other game routes, a change needs the session token and a same-origin request.
+        for headers in ({'X-Workshop-Token': None}, {'X-Workshop-Token': 'wrong'}, {'Origin': 'https://example.com'}):
             self.assert_error('/api/game/passives', dict(allocated=['start-warrior']), 403, headers)
+        self.assertEqual(self.request('/api/game')['passives']['allocated'], ['start-warrior', 'warrior-1'])
         battle = self.request('/api/game/battle/start', {})['battle']
         self.assertIn('fight', self.assert_error('/api/game/passives', dict(allocated=['start-warrior'])))
         self.request('/api/game/battle/finish', dict(battleId=battle['id'], outcome='retreat', bossDamage=0,
                                                      kills=0, seconds=1))
         self.assertEqual(self.request('/api/game/passives', dict(allocated=['start-warrior']))['game']['passives']
                          ['points']['spent'], 0)
-        backup = self.request('/api/backup', {})
-        with urllib.request.urlopen(self.url + backup['url']) as response:
-            self.assertEqual(json.load(response)['game']['meta']['passives'], {'v': 1, 'nodes': []})
+        backup = self.request(self.request('/api/backup', {})['url'])
+        self.assertEqual(backup['game']['meta']['passives'], {'v': 1, 'nodes': []})
 
     def test_invalid_names_and_action_payloads(self):
         for name in ('', 'A', '123', 'A  B', '-Durgan', "Durgan'", 'A_B', 'éowyn',
