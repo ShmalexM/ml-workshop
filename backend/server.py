@@ -26,6 +26,7 @@ from library import Library, MAX_BOOK_BYTES
 from book_import import import_upload, ImportConflict, SUGGESTED
 from book_study import study_guides
 import game
+import assistant
 
 ROOT=Path(__file__).resolve().parents[1]
 # Same rule as the launcher: data/ in a clone, the data folder next to app/ in an installed copy.
@@ -50,6 +51,8 @@ RUN_LOCK=threading.Lock()
 IMPORT_LOCK=threading.Lock()
 VERSION=json.loads((ROOT/'package.json').read_text(encoding='utf-8'))['version']
 LIBRARY=Library(DATA)
+# Optional AI assistant. Its settings and API key are in data/assistant.json, outside SQLite and backups.
+ASSISTANT=assistant.Assistant(DATA)
 
 def connect():
     db=sqlite3.connect(DB,timeout=10)
@@ -219,6 +222,7 @@ class Handler(BaseHTTPRequestHandler):
             progress=game_progress()
             with connect() as db:return self.send(game.summary(db,progress))
         if path=='/api/runtime':return self.send(runtime())
+        if path.startswith('/api/assistant/'):return ASSISTANT.handle_get(self,path)
         if path.startswith('/api/backups/'):
             name=path.rsplit('/',1)[-1]
             if not name.startswith('ml-workshop-') or not name.endswith('.json') or '/' in name or '..' in name:
@@ -292,6 +296,8 @@ class Handler(BaseHTTPRequestHandler):
             except RecursionError:raise ValueError('JSON is nested too deeply.') from None
             if not isinstance(body,dict):raise ValueError('Expected an object')
             path=urlparse(self.path).path
+            # A streamed answer runs on this request's thread and takes no lock that other requests wait for.
+            if path.startswith('/api/assistant/'):return ASSISTANT.handle_post(self,path,body)
             if path=='/api/project/state':
                 project=next((p for p in load_portfolio(DATA)['projects'] if p['id']==body.get('projectId')),None)
                 if not project:raise ValueError('Unknown project')
