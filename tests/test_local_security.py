@@ -116,6 +116,22 @@ class SessionTests(unittest.TestCase):
             urllib.request.urlopen(request, timeout=10)
         self.assertEqual(error.exception.code, 403)
 
+    def test_token_header_is_compared_as_bytes(self):
+        token = self.server.token.encode()
+        for value in ('é'.encode(), b'\xff\xfe', token + 'é'.encode(), token[:-1] + b'\xe9'):
+            for head in (b'GET /api/state HTTP/1.0\r\nHost: HOST\r\nX-Workshop-Token: %s\r\n\r\n' % value,
+                         b'POST /api/run HTTP/1.0\r\nHost: HOST\r\nX-Workshop-Token: %s\r\nContent-Type: application/json\r\nContent-Length: 2\r\n\r\n{}' % value):
+                with self.subTest(value=value, request=head[:4]):
+                    self.assertEqual(self.server.raw(head), b'HTTP/1.0 403 Forbidden')
+        self.assertEqual(self.server.raw(b'GET /api/state HTTP/1.0\r\nHost: HOST\r\nX-Workshop-Token: %s\r\n\r\n' % token), b'HTTP/1.0 200 OK')
+
+    def test_bad_paths_get_400_instead_of_a_dropped_connection(self):
+        for path in (b'/%00', b'/books/%00x', b'/assets/a%00.js'):
+            with self.subTest(path=path):
+                self.assertEqual(self.server.raw(b'GET %s HTTP/1.0\r\nHost: HOST\r\n\r\n' % path), b'HTTP/1.0 400 Bad Request')
+        # The server keeps answering afterwards.
+        self.assertEqual(self.server.request('/api/health')[0], 200)
+
     @unittest.skipUnless(POSIX, 'POSIX file modes')
     def test_data_files_are_private(self):
         backup = json.loads(self.server.request('/api/backup', body={})[2])['filename']
@@ -147,6 +163,29 @@ class RestartTests(unittest.TestCase):
                 self.assertEqual(third.request('/api/state')[0], 200)
             finally:
                 third.stop()
+
+
+class TimeoutTests(unittest.TestCase):
+    def test_stalled_connections_are_closed(self):
+        # Use the real Handler with a 1-second timeout in a separate process, so this test does not wait 15 seconds.
+        script = '''
+import socket, sys, threading, time
+sys.path.insert(0, sys.argv[1])
+import server
+assert server.Handler.timeout == 15, server.Handler.timeout
+server.Handler.timeout = 1
+httpd = server.ThreadingHTTPServer(('127.0.0.1', 0), server.Handler)
+threading.Thread(target=httpd.serve_forever, daemon=True).start()
+with socket.create_connection(httpd.server_address, timeout=10) as sock:
+    sock.sendall(b'GET /api/health HTTP/1.0\\r\\nHost: 127.0.0.1\\r\\n')
+    started = time.monotonic()
+    print(repr(sock.recv(100)), time.monotonic() - started < 5)
+'''
+        with tempfile.TemporaryDirectory(prefix='ml-timeout-test-') as directory:
+            result = subprocess.run([sys.executable, '-c', script, str(ROOT / 'backend')], capture_output=True, text=True, timeout=60,
+                                    env={**os.environ, 'ML_WORKSHOP_DATA_DIR': directory})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.split(), ["b''", 'True'])
 
 
 if __name__ == '__main__':

@@ -4,16 +4,17 @@ from datetime import datetime, timezone
 from importlib.metadata import version, PackageNotFoundError
 from urllib.parse import urlparse, unquote, parse_qs
 import argparse
+import hmac
 import json
 import mimetypes
 import os
 import re
-import secrets
 import sqlite3
 import sys
 import threading
 import tempfile
 import time
+import traceback
 
 # Files and folders this server creates are private to the user: 0600 files, 0700 folders.
 os.umask(0o077)
@@ -39,7 +40,7 @@ if os.name!='nt':
 DB=DATA/'workshop.sqlite3'
 # The token stays the same across restarts. The launcher reads it from the data folder and gives
 # it to the browser in the URL fragment; no endpoint returns it.
-TOKEN=session_token(DATA)
+TOKEN=session_token(DATA).encode()
 SESSION_HELP='Open Engineering Workshop from its shortcut or start command to connect this browser.'
 # Health is polled by the launcher. Book files load by URL from <img> and the PDF viewer, which cannot send the header.
 PUBLIC_API=re.compile(r'/api/health|/api/library/[^/]+/asset/.+')
@@ -90,9 +91,29 @@ def runtime():
 
 class Handler(BaseHTTPRequestHandler):
     server_version=f'MLWorkshop/{VERSION}'
+    # Seconds a client may wait between bytes. A stalled connection then closes and frees its thread.
+    timeout=15
+    responded=False
     def log_message(self,fmt,*args):
         # Do not log request bodies or learner source.
         sys.stderr.write('%s %s\n'%(self.log_date_time_string(),fmt%args))
+    def send_response(self,code,message=None):
+        self.responded=True
+        super().send_response(code,message)
+    def guarded(self,handle):
+        """Answer bad input with 400 and unexpected errors with 500, instead of dropping the connection."""
+        self.responded=False
+        try:handle()
+        except (TimeoutError,ConnectionError):self.close_connection=True
+        except Exception as exc:
+            bad_input=isinstance(exc,ValueError)
+            if not bad_input:traceback.print_exc()
+            if self.responded:self.close_connection=True;return
+            try:self.send({'error':'The server could not read this request.'} if bad_input else {'error':'The local server hit an error. Saved progress is safe. Details are in data/server.log.'},400 if bad_input else 500)
+            except OSError:self.close_connection=True
+    def token_ok(self):
+        # Header values arrive as latin-1 text. Compare bytes, so any value is a mismatch and never an error.
+        return hmac.compare_digest(self.headers.get('X-Workshop-Token','').encode('utf-8','surrogateescape'),TOKEN)
     def send(self,data,status=200):
         body=json.dumps(data).encode()
         self.send_response(status)
@@ -110,10 +131,12 @@ class Handler(BaseHTTPRequestHandler):
             self.send({'error':'Cross-origin requests are disabled.'},403);return False
         if self.headers.get('Sec-Fetch-Site')=='cross-site':
             self.send({'error':'Cross-site requests are disabled.'},403);return False
-        if token and not secrets.compare_digest(self.headers.get('X-Workshop-Token',''),TOKEN):
+        if token and not self.token_ok():
             self.send({'error':SESSION_HELP,'code':'session-expired'},403);return False
         return True
-    def do_GET(self):
+    def do_GET(self):self.guarded(self.handle_get)
+    def do_POST(self):self.guarded(self.handle_post)
+    def handle_get(self):
         parsed=urlparse(self.path);path=parsed.path
         # Every API response with learner data needs the token. Static files and the public routes do not.
         if not self.allowed(token=path.startswith('/api/') and not PUBLIC_API.fullmatch(path)):return
@@ -207,7 +230,7 @@ class Handler(BaseHTTPRequestHandler):
                 block=stream.read(min(65536,remaining))
                 if not block:break
                 self.wfile.write(block);remaining-=len(block)
-    def do_POST(self):
+    def handle_post(self):
         if not self.allowed():return
         if urlparse(self.path).path=='/api/library/import':return self.import_book_file()
         try:
@@ -288,8 +311,8 @@ class Handler(BaseHTTPRequestHandler):
                 finally:RUN_LOCK.release()
             return self.send({'error':'Unknown endpoint'},404)
         except (ValueError,TypeError,json.JSONDecodeError) as exc:self.send({'error':str(exc)},400)
+        except (TimeoutError,ConnectionError):raise
         except Exception:
-            import traceback
             traceback.print_exc()
             self.send({'error':'The local server hit an error. Saved progress is safe. Details are in data/server.log.'},500)
 
