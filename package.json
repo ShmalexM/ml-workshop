@@ -7,7 +7,8 @@
     "dev": "node scripts/copy-pdf-assets.mjs && vite build --watch",
     "build": "node scripts/copy-pdf-assets.mjs && tsc -b && vite build",
     "test": "node scripts/py.mjs -m unittest discover -s tests -v",
-    "start": "node scripts/py.mjs scripts/launch.py"
+    "start": "node scripts/py.mjs scripts/launch.py",
+    "game:sim": "node scripts/game_balance_sim.mjs"
   },
   "dependencies": {
     "@codemirror/lang-python": "^6.1.6",
