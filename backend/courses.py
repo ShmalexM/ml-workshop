@@ -71,10 +71,10 @@ def mse(predictions, targets):
 
 print(mse([2, 4], [1, 6]))
 ''', [('MSE is 2.5', 'mse([2,4],[1,6])==2.5'),
- ('Perfect predictions have zero loss', 'mse([1,2],[1,2])==0'),
  ('Errors of -2 and +2 count the same', 'mse([-2,2],[0,0])==4'),
  ('Empty lists rejected', 'raises(ValueError, lambda: mse([],[]))'),
- ('Mismatched lists rejected', 'raises(ValueError, lambda: mse([1],[1,2]))')], ['Predict','Compare','Average error'])
+ ('Mismatched lists rejected', 'raises(ValueError, lambda: mse([1],[1,2]))'),
+ ('More predictions than targets rejected', 'raises(ValueError, lambda: mse([1,2],[1]))')], ['Predict','Compare','Average error'])
 
 lesson('foundations',3,'Follow the gradient',
 ('The gradient tells you how the loss changes when you nudge a parameter. With one '
@@ -258,7 +258,7 @@ def linear_batch(x, weights, bias):
 
 x = torch.tensor([[1.0, 2.0], [3.0, 4.0]])
 print(linear_batch(x, torch.tensor([[2.0], [1.0]]), 0.5))
-''', [('Computes a batch','torch.allclose(linear_batch(torch.tensor([[1.,2.],[3.,4.]]),torch.tensor([[2.],[1.]]),.5),torch.tensor([[4.5],[10.5]]))'),('Preserves output shape','tuple(linear_batch(torch.zeros(3,2),torch.ones(2,4),1).shape)==(3,4)'),('Broadcasts bias per output','torch.allclose(linear_batch(torch.zeros(1,2),torch.ones(2,2),torch.tensor([1.,2.])),torch.tensor([[1.,2.]]))')], ['x (3, 2)', '@ weights (2, 1)', 'result (3, 1)'])
+''', [('Computes a batch','torch.allclose(linear_batch(torch.tensor([[1.,2.],[3.,4.]]),torch.tensor([[2.],[1.]]),.5),torch.tensor([[4.5],[10.5]]))'),('Preserves output shape','tuple(linear_batch(torch.zeros(3,2),torch.ones(2,4),1).shape)==(3,4)'),('Broadcasts bias per output','torch.allclose(linear_batch(torch.zeros(1,2),torch.ones(2,2),torch.tensor([1.,2.])),torch.tensor([[1.,2.]]))'),('Keeps negative results','torch.allclose(linear_batch(torch.tensor([[-1.]]),torch.tensor([[2.]]),0),torch.tensor([[-2.]]))')], ['x (3, 2)', '@ weights (2, 1)', 'result (3, 1)'])
 
 lesson('pytorch',2,'Let autograd do the math',
 ('If you create a tensor with requires_grad=True, PyTorch records operations that use it. '
@@ -294,7 +294,7 @@ def derivative(value):
     return x.grad.item()
 
 print(derivative(2))
-''', [('Derivative at 2 is 7','abs(derivative(2)-7)<1e-6'),('Derivative at -3 is -3','abs(derivative(-3)+3)<1e-6'),('Derivative at 0 is 3','abs(derivative(0)-3)<1e-6')], ['Record graph','Backward','Read gradient'])
+''', [('Derivative at 2 is 7','abs(derivative(2)-7)<1e-6'),('Derivative at -3 is -3','abs(derivative(-3)+3)<1e-6'),('Derivative at 0 is 3','abs(derivative(0)-3)<1e-6'),('Uses backward() to find the gradient','calls("torch.Tensor.backward", lambda: derivative(2))')], ['Record graph','Backward','Read gradient'])
 
 lesson('pytorch',3,'Build a neural network',
 ('Two Linear layers in a row still compute one linear function. Add ReLU between them to '

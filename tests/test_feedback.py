@@ -130,7 +130,8 @@ class CheckFeedbackTests(unittest.TestCase):
         self.assertIn('returned undefined', result['checks'][0]['explanation'])
         result = execute('function counter(state, action) {\n  return {...state, count: state.count + (action.amount || 0)};\n}\n', checks, language='javascript')
         reset = result['checks'][1]
-        self.assertEqual((reset['call'], reset['expected'], reset['got']), ('counter({count:8},{type:"reset"}).count', '0', '8'))
+        self.assertEqual((reset['call'], reset['expected'], reset['got']),
+                         ('counter({count:8,label:"keep"},{type:"reset"})', "{ count: 0, label: 'keep' }", "{ count: 8, label: 'keep' }"))
 
 
 class CheckNamespaceTests(unittest.TestCase):
