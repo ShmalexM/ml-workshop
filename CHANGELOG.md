@@ -55,6 +55,7 @@ This file lists the notable changes in each release. The format follows [Keep a 
 - Checks in 20 lessons reject the wrong answers that used to pass, and learner code that reuses a name such as `abs` or `raises` no longer breaks grading. A far-future draft revision no longer blocks later saves, results are marked out of date after the code changes, and a draft the server refuses shows the reason.
 - The editor shows "Esc, then Tab, leaves the editor". Key hints are hidden on touch screens.
 - Keyboard use: a skip link, `aria-current` on the active page, page titles, focus that stays in place after stage changes and returns after dialogs close, and Escape to close the lesson list.
+- Checks in 10 more lessons reject wrong answers that used to pass, such as an MSE that fails on perfect predictions, a CUDA wrapper that never launches its kernel, and TensorFlow 2 without `GradientTape`. PyTorch 2 accepts `backward` called through another name. **Test connection** and the assistant report an empty or HTML answer as not from an AI provider, and a refunded skill tree build no longer comes back when the points do.
 
 ## [1.1.2] - 2026-10-06
 
