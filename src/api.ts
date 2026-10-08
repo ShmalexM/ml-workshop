@@ -5,13 +5,15 @@ export const connectMessage = 'Open Engineering Workshop from its shortcut or st
 const tokenKey = 'engineering-workshop-session'
 export const unreachable = 'Cannot reach the local server. Start Engineering Workshop again, then reload this page.'
 
+// A token from this tab's address that storage did not accept. It wins over an older stored token.
+let unsavedToken = ''
 // The launcher opens http://127.0.0.1:<port>/#session=<token>, optionally followed by &<page route>.
 // Keep the token, then remove it from the address bar and from this history entry.
 function takeTokenFromAddress(): string {
   const match = location.hash.match(/^#session=([A-Za-z0-9_-]{32,128})(?:&(.*))?$/)
   if (!match) return ''
   history.replaceState(history.state, '', location.pathname + location.search + (match[2] ? '#' + match[2] : ''))
-  try { localStorage.setItem(tokenKey, match[1]) } catch { /* storage unavailable: keep the token for this tab only */ }
+  try { localStorage.setItem(tokenKey, match[1]); unsavedToken = '' } catch { unsavedToken = match[1] }
   return match[1]
 }
 let tabToken = takeTokenFromAddress()
@@ -19,6 +21,7 @@ let tabToken = takeTokenFromAddress()
 addEventListener('hashchange', () => { const next = takeTokenFromAddress(); if (next) { tabToken = next; location.reload() } })
 // Read storage on every request, so a token that another tab received is used here too.
 function currentToken() {
+  if (unsavedToken) return unsavedToken
   try { return localStorage.getItem(tokenKey) || tabToken } catch { return tabToken }
 }
 
@@ -34,7 +37,13 @@ export function onSessionChange(listener: (connected: boolean) => void) {
   listeners.add(listener); listener(connected)
   return () => { listeners.delete(listener) }
 }
-addEventListener('storage', event => { if (event.key === tokenKey && event.newValue) setConnected(true) })
+// Another tab stored a token, which is newer than one this tab could not store. A tab without a working
+// session loads again with it: the first load may have failed, and the banner must not hide until then.
+addEventListener('storage', event => {
+  if (event.key !== tokenKey || !event.newValue) return
+  unsavedToken = ''
+  if (!connected) location.reload()
+})
 
 const isExpired = (status: number, data: {code?: string} | null) => status === 403 && data?.code === 'session-expired'
 
