@@ -7,7 +7,8 @@ import {codePoint,hasInvisible,parseBlocks,parseInline,splitInvisible,stripInvis
 
 type Shown=Exclude<Block,{kind:'p'|'h'|'quote'|'ul'|'ol'}>|{kind:'p'|'h'|'quote';inline:Inline[]}|{kind:'ul'|'ol';items:Inline[][];start:number}
 
-/** Text with bidirectional controls and zero-width characters shown as ⟨U+202E⟩. */
+/** Text with bidirectional controls and zero-width characters shown as ⟨U+202E⟩. Every text in an answer goes through it,
+ so that hidden characters cannot reorder or hide what the learner reads. */
 function Visible({text}:{text:string}){
  if(!hasInvisible(text))return <>{text}</>
  return <>{splitInvisible(text).map((part,i)=>part.hidden?<span key={i} className="md-invisible" title="Hidden character">⟨{codePoint(part.text)}⟩</span>:part.text)}</>
@@ -17,7 +18,7 @@ function inline(tokens:Inline[],key:string):ReactNode[]{
  return tokens.map((token,i)=>{
   const k=`${key}-${i}`
   switch(token.t){
-   case 'text':return token.v
+   case 'text':return <Visible key={k} text={token.v}/>
    case 'br':return <br key={k}/>
    case 'code':return <code key={k}><Visible text={token.v}/></code>
    case 'strong':return <strong key={k}>{inline(token.c,k)}</strong>
@@ -57,7 +58,7 @@ function Markdown({text}:{text:string}){
    case 'h':return <p key={key} className="md-heading">{inline(block.inline,key)}</p>
    case 'quote':return <blockquote key={key}>{inline(block.inline,key)}</blockquote>
    case 'pre':return <pre key={key} className="md-table"><Visible text={block.text}/></pre>
-   case 'plain':return <p key={key} className="md-plain">{block.text}</p>
+   case 'plain':return <p key={key} className="md-plain"><Visible text={block.text}/></p>
    case 'hr':return <hr key={key}/>
    case 'ul':return <ul key={key}>{block.items.map((item,j)=><li key={j}>{inline(item,key+'-'+j)}</li>)}</ul>
    case 'ol':return <ol key={key} start={block.start}>{block.items.map((item,j)=><li key={j}>{inline(item,key+'-'+j)}</li>)}</ol>
