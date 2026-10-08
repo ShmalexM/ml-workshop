@@ -40,6 +40,12 @@ SOFTWARE.
 
 The built interface in `dist/` includes code from npm packages such as React, CodeMirror, three.js and pdf.js. Minifying removes some of their license comments, so `npm run build` collects the license of every bundled package into `dist/THIRD_PARTY_LICENSES.txt`. In the app, open it from Settings → **Open-source licenses**.
 
-`@uiw/react-codemirror` and `@uiw/codemirror-extensions-basic-setup` ship without a license file, so the list uses the MIT license from their repository, kept in `scripts/licenses/uiw-react-codemirror.txt`.
+`@uiw/react-codemirror` and `@uiw/codemirror-extensions-basic-setup` ship without a license file, so the list uses the MIT license from their repository, kept in `scripts/licenses/uiw-react-codemirror.txt`. The list also includes beautiful-ui, with its license from `scripts/licenses/beautiful-ui.txt`.
 
 The PDF reader's fonts (Foxit, Liberation), character maps (Adobe), decoders (JBIG2, OpenJPEG, QCMS) and color profiles (CC0) ship with their own license files in `dist/pdfjs/`.
+
+## Liberation fonts
+
+Source: https://github.com/liberationfonts/liberation-fonts
+
+The PDF reader uses Liberation Sans (`dist/pdfjs/standard_fonts/LiberationSans-*.ttf`) to draw PDFs that name a standard font without embedding it. These are separate font files, copied unchanged from pdf.js. They are under the GNU General Public License version 2 with a font exception: a document that uses or embeds the fonts is not covered by the GPL because of them. The full terms are in `dist/pdfjs/standard_fonts/LICENSE_LIBERATION`. The fonts do not change the license of Engineering Workshop's own code, which is MIT.

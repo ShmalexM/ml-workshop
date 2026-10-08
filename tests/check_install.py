@@ -31,7 +31,8 @@ def call(url, data=None, token=None):
 def main(install):
     install = Path(install).resolve()
     licenses = install / 'app' / 'dist' / 'THIRD_PARTY_LICENSES.txt'
-    check(licenses.is_file() and 'react' in licenses.read_text(encoding='utf-8'), f'{licenses} is missing or does not list react')
+    listed = licenses.read_text(encoding='utf-8') if licenses.is_file() else ''
+    check('react' in listed and 'beautiful-ui' in listed, f'{licenses} is missing or does not list react and beautiful-ui')
     profiles = install / 'app' / 'dist' / 'pdfjs' / 'iccs'
     check((profiles / 'CGATS001Compat-v2-micro.icc').is_file() and (profiles / 'LICENSE').is_file(), 'PDF color profile or its license is missing')
     python = install / 'app' / '.venv' / ('Scripts/python.exe' if os.name == 'nt' else 'bin/python')

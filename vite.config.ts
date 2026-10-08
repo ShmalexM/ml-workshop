@@ -10,11 +10,18 @@ const LICENSE_FROM_REPO: Record<string, string> = {
   '@uiw/codemirror-extensions-basic-setup': 'scripts/licenses/uiw-react-codemirror.txt',
   '@uiw/react-codemirror': 'scripts/licenses/uiw-react-codemirror.txt',
 }
+// Code adapted into src/ rather than installed from npm. THIRD_PARTY_NOTICES.md lists the adapted files.
+const ADAPTED = [
+  { title: 'beautiful-ui', license: 'MIT', url: 'https://github.com/slev12397/beautiful-ui', file: 'scripts/licenses/beautiful-ui.txt',
+    note: 'Not an npm package. Engineering Workshop adapts its CodeBlock, LoadingState and FilterTable components.' },
+]
 const HEADER = `Engineering Workshop's interface includes the open-source packages below.
 Each package's license text follows its name. The Engineering Workshop code
 itself is under the MIT License; see LICENSE.`
 const FOOTER = `The PDF reader's fonts, character maps, decoders and color profiles in pdfjs/ carry their own
-license files next to them.`
+license files next to them. The Liberation Sans fonts in pdfjs/standard_fonts/ are separate font files
+under the GNU General Public License version 2 with a font exception (LICENSE_LIBERATION). Their source
+is at https://github.com/liberationfonts/liberation-fonts.`
 
 // The nearest folder at or above a bundled file whose package.json has a name.
 function packageRoot(file: string) {
@@ -50,7 +57,9 @@ function thirdPartyLicenses(): Plugin {
         const note = fromRepo ? ['The package has no license file. This text is the license file in its repository.'] : []
         return [title, `License: ${pkg.license ?? 'not stated'}`, ...(url ? [url] : []), ...note, '', texts.join('\n\n') || 'This package does not include a license file.'].join('\n')
       })
-      const source = [HEADER, ...sections, FOOTER].join(`\n\n${'='.repeat(80)}\n\n`) + '\n'
+      const adapted = ADAPTED.map(({ title, license, url, file, note }) =>
+        [title, `License: ${license}`, url, note, '', readFileSync(join(projectRoot, file), 'utf8').replace(/\r\n?/g, '\n').trimEnd()].join('\n'))
+      const source = [HEADER, ...sections, ...adapted, FOOTER].join(`\n\n${'='.repeat(80)}\n\n`) + '\n'
       this.emitFile({ type: 'asset', fileName: 'THIRD_PARTY_LICENSES.txt', source })
     },
   }
