@@ -13,7 +13,7 @@ ORIENTATION = {'python': {'welcome': 'This path teaches the Python that the othe
                             'Begin with a line whose weight and bias you can inspect.',
                  'goal': 'Explain how a prediction changes, then learn its parameters from '
                          'data.',
-                 'prerequisites': [],
+                 'prerequisites': ['python'],
                  'terms': [['Model', 'A function that turns an input into a prediction.'],
                            ['Parameter',
                             'An adjustable number inside the model, such as weight or bias.'],
@@ -23,7 +23,7 @@ ORIENTATION = {'python': {'welcome': 'This path teaches the Python that the othe
                         'to calculate gradients. Use it to build the training loop from '
                         'Foundations.',
              'goal': 'Train a small model using automatic gradients and an optimizer.',
-             'prerequisites': ['foundations'],
+             'prerequisites': ['python', 'foundations'],
              'terms': [['Tensor', 'An array of numbers with a shape, data type, and device.'],
                        ['Gradient', 'How much a small parameter change affects the loss.'],
                        ['Autograd', 'PyTorch’s automatic gradient calculation.']]},
@@ -31,7 +31,7 @@ ORIENTATION = {'python': {'welcome': 'This path teaches the Python that the othe
                            'building models. This path uses the Foundations training loop. '
                            'PyTorch is optional.',
                 'goal': 'Train a Keras model and explain each training step.',
-                'prerequisites': ['foundations'],
+                'prerequisites': ['python', 'foundations'],
                 'terms': [['Variable', 'A tensor whose value can be updated during training.'],
                           ['GradientTape',
                            'A context that records operations for differentiation.'],
@@ -41,7 +41,7 @@ ORIENTATION = {'python': {'welcome': 'This path teaches the Python that the othe
                        'Everything runs locally without downloads or a model service. Prompt '
                        'and retrieval lessons do not generate answers.',
             'goal': 'Build and inspect the inputs and data used by an AI application.',
-            'prerequisites': ['pytorch'],
+            'prerequisites': ['python', 'pytorch'],
             'terms': [['Token', 'A text piece represented by an integer ID.'],
                       ['Checkpoint', 'Saved model parameters learned during training.'],
                       ['Retrieval', 'Selecting relevant source material for a query.']]},
@@ -50,7 +50,7 @@ ORIENTATION = {'python': {'welcome': 'This path teaches the Python that the othe
                      'GPU compilation, timing, and hardware race behavior require NVIDIA '
                      'hardware.',
           'goal': 'Write kernels with correct indices, bounds checks, and memory transfers.',
-          'prerequisites': ['foundations'],
+          'prerequisites': ['python', 'foundations'],
           'terms': [['Kernel', 'A function run by every thread in a launch.'],
                     ['Block', 'A group of threads that can cooperate.'],
                     ['Global index', 'A thread’s position across the whole launch.']]},
@@ -58,7 +58,7 @@ ORIENTATION = {'python': {'welcome': 'This path teaches the Python that the othe
                         'actions. Here you build and test its rules with recorded data. No '
                         'language model or external tool runs.',
              'goal': 'Control which actions a run can take and check whether it succeeded.',
-             'prerequisites': [],
+             'prerequisites': ['python'],
              'terms': [['State', 'A named phase of a run, such as running or waiting.'],
                        ['Tool call', 'A proposed tool name and its arguments.'],
                        ['Trace', 'A recorded sequence of what happened during a run.']]},
@@ -67,7 +67,7 @@ ORIENTATION = {'python': {'welcome': 'This path teaches the Python that the othe
                         'in-memory data. A deployed service also needs storage, '
                         'authentication, and concurrency controls.',
              'goal': 'Handle invalid requests and retries without losing track of the result.',
-             'prerequisites': [],
+             'prerequisites': ['python'],
              'terms': [['Validation', 'Checking input types and values before using them.'],
                        ['Idempotency',
                         'Repeated requests have the effect of a single accepted request.'],
@@ -87,7 +87,7 @@ ORIENTATION = {'python': {'welcome': 'This path teaches the Python that the othe
                    'rewards teach. These exercises use a small corridor and action-value '
                    'lists. They do not train a game agent.',
         'goal': 'Explain how rewards and ending signals affect an action-value update.',
-        'prerequisites': ['foundations'],
+        'prerequisites': ['python', 'foundations'],
         'terms': [['Observation', 'The information an environment gives the agent.'],
                   ['Reward', 'A numerical feedback signal after an action.'],
                   ['Episode',
@@ -96,7 +96,7 @@ ORIENTATION = {'python': {'welcome': 'This path teaches the Python that the othe
                      'one piece. Start with small inputs whose expected results you can work '
                      'out by hand.',
           'goal': 'Prepare text for retrieval and measure how many relevant results it finds.',
-          'prerequisites': [],
+          'prerequisites': ['python'],
           'terms': [['Revision', 'A source-defined version of a record.'],
                     ['Chunk', 'A bounded piece of a larger document.'],
                     ['Recall',
@@ -108,7 +108,7 @@ ORIENTATION = {'python': {'welcome': 'This path teaches the Python that the othe
                             'written inside free text.',
                  'goal': 'Use failure cases and measurements to decide when to retry or '
                          'release.',
-                 'prerequisites': ['backend'],
+                 'prerequisites': ['python', 'backend'],
                  'terms': [['Retry budget',
                             'A limit on how long or how often an operation may retry.'],
                            ['Desired state',
@@ -122,7 +122,7 @@ ORIENTATION = {'python': {'welcome': 'This path teaches the Python that the othe
                             'functions and do not open windows or devices.',
                  'goal': 'Keep app state and motion predictable across pauses and repeated '
                          'events.',
-                 'prerequisites': [],
+                 'prerequisites': ['python'],
                  'terms': [['Lifecycle',
                             'The states an app moves through, such as active, paused, and '
                             'stopped.'],
