@@ -38,6 +38,10 @@ MAX_SECTIONS = 2000
 MAX_SECTION_BYTES = 8 * 1024 * 1024
 MAX_PDF_PAGES = 10000
 MAX_OUTPUT_BYTES = 64 * 1024 * 1024
+# Images are copied unchanged, so they get their own budget: a well-illustrated book can hold more
+# than 64 MB of pictures. The count bounds the files one book adds to the data folder.
+MAX_IMAGES = 2000
+MAX_IMAGE_BYTES = 150 * 1024 * 1024
 MAX_TITLE = 300
 MAX_FIELD = 2000
 
@@ -220,15 +224,21 @@ class ChapterWriter:
             raise ValueError(self.message)
         (self.folder/f"{document['location']}.json").write_bytes(raw)
 
-def copy_image(archive, name, folder):
-    """Copy an image byte-for-byte without holding it in memory; the file is named by its hash."""
+def copy_image(archive, name, folder, limit):
+    """Copy an image byte-for-byte without holding it in memory; the file is named by its hash.
+
+    Stops with an error once more than `limit` bytes are unpacked.
+    """
     (folder/'assets').mkdir(exist_ok=True)
     partial = folder/'assets'/'.partial'
     h = hashlib.sha256()
     size = 0
     with archive.open(name) as stream, partial.open('wb') as out:
         for block in iter(lambda: stream.read(1024 * 1024), b''):
-            h.update(block); out.write(block); size += len(block)
+            size += len(block)
+            if size > limit:
+                raise ValueError(f'The images in this EPUB are larger than {megabytes(MAX_IMAGE_BYTES)} in total, which is over the import limit.')
+            h.update(block); out.write(block)
     target = 'assets/' + h.hexdigest()[:16] + PurePosixPath(name).suffix.lower()
     partial.replace(folder/target)
     return target, h.hexdigest(), size
@@ -256,16 +266,18 @@ def import_epub(source, folder, book_id):
         if len(pages)>MAX_SECTIONS:
             raise ValueError(f'This EPUB has more than {MAX_SECTIONS:,} sections, which is over the import limit.')
         chapters = {name:i+1 for i,name in enumerate(pages)}
+        images = {}
+        for item in manifest.values():
+            if item.get('media-type','') in IMAGE_TYPES:
+                images.setdefault(archive_path(base,item.get('href')),item.get('media-type'))
+        if len(images)>MAX_IMAGES:
+            raise ValueError(f'This EPUB has more than {MAX_IMAGES:,} images, which is over the import limit.')
         assets = {}
         image_records = []
-        for item in manifest.values():
-            media_type = item.get('media-type','')
-            if media_type not in IMAGE_TYPES:
-                continue
-            name = archive_path(base,item.get('href'))
-            if name in assets:
-                continue
-            target, sha256, size = copy_image(archive, name, folder)
+        budget = MAX_IMAGE_BYTES
+        for name,media_type in images.items():
+            target, sha256, size = copy_image(archive, name, folder, budget)
+            budget -= size
             assets[name] = target
             image_records.append(dict(source=name,path=target,sha256=sha256,bytes=size,mediaType=media_type))
         writer = ChapterWriter(folder, f'This EPUB unpacks to more than {megabytes(MAX_OUTPUT_BYTES)} of text and markup, which is over the import limit.')
