@@ -580,7 +580,7 @@ add(12, 'Slope between two points',
      'Return the change in y divided by the change in x.'],
     'Swapping the two points gives the same slope, because both changes flip their sign.',
     ['Test for equal x values first, then divide the two changes.',
-     'For example, from (1, 2) to (3, 8), y changes by 6 and x by 2, so the slope is 6 / 2 = 3.',
+     'For example, from (1, 2) to (3, 8), y changes by 6 and x by 2, so the slope is 6 / 2 = 3. To stop on bad input, put a test first: if n == 0: with raise ValueError("n must not be 0") under it.',
      'Add if x1 == x2: with raise ValueError("x1 and x2 must differ") under it, then return '
      '(y2 - y1) / (x2 - x1).'],
     '''
