@@ -881,7 +881,7 @@ class GameApiTests(unittest.TestCase):
         db = sqlite3.connect(Path(self.tmp.name) / 'workshop.sqlite3')
         try:
             with db:
-                for table in ('completions', 'project_state', 'reading_state'):
+                for table in ('completions', 'solution_views', 'project_state', 'reading_state'):
                     db.execute('DELETE FROM ' + table)
         finally:
             db.close()
@@ -959,6 +959,9 @@ class GameApiTests(unittest.TestCase):
 
     def test_solution_shown_before_passing_lowers_the_lesson_chest_over_http(self):
         lessons = {l['id']: l for l in LESSONS}
+        # Without the session token the solution is not sent and the view is not recorded.
+        for headers in ({'X-Workshop-Token': None}, {'X-Workshop-Token': 'wrong'}):
+            self.assert_error('/api/solution/foundations-5', None, 403, headers)
         self.request('/api/solution/foundations-4')
         for lid in ('foundations-4', 'foundations-5'):
             result = self.request('/api/run', dict(lessonId=lid, code=lessons[lid]['solution'], mode='check'))
