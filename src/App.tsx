@@ -2,7 +2,7 @@ import {lazy,Suspense,useCallback,useEffect,useRef,useState,type CSSProperties,t
 import {CodeXml,Settings as SettingsIcon,LoaderCircle,X} from 'lucide-react'
 import {api,connectMessage,serverReachable,unreachable} from './api'
 import type {Course,Lesson,State,Runtime,RunResult,LearningStage,EditorPrefs} from './types'
-import type {Portfolio,ProjectState} from './portfolioTypes'
+import type {Portfolio,ProjectState,TaskProgress} from './portfolioTypes'
 import Curriculum from './components/Curriculum'
 import LessonReader from './components/LessonReader'
 import Workspace from './components/Workspace'
@@ -30,7 +30,8 @@ const localKey='ml-workshop-drafts-v1',projectKey='ml-workshop-projects-v1'
 type Draft={code:string;notes:string;updatedAt:number}
 // Browser storage can hold anything, including null or an old shape. Keep only well-formed entries.
 const isDraft=(value:unknown):value is Draft=>{const d=value as Partial<Draft>|null;return typeof d?.code==='string'&&typeof d.notes==='string'&&Number.isSafeInteger(d.updatedAt)}
-const isProjectState=(value:unknown):value is ProjectState=>{const p=value as Partial<ProjectState>|null;return typeof p?.notes==='string'&&Array.isArray(p.reviewed)&&p.reviewed.every(Number.isInteger)&&Number.isSafeInteger(p.updatedAt)}
+const isTaskProgress=(value:unknown)=>{const t=value as TaskProgress|null;return !!t&&typeof t==='object'&&(t.notes===undefined||typeof t.notes==='string')&&(t.verifiedAt===undefined||Number.isSafeInteger(t.verifiedAt))}
+const isProjectState=(value:unknown):value is ProjectState=>{const p=value as Partial<ProjectState>|null;return typeof p?.notes==='string'&&Array.isArray(p.reviewed)&&p.reviewed.every(Number.isInteger)&&Number.isSafeInteger(p.updatedAt)&&(p.tasks===undefined||(!!p.tasks&&typeof p.tasks==='object'&&!Array.isArray(p.tasks)&&Object.values(p.tasks).every(isTaskProgress)))}
 function readCache<T>(key:string,valid:(value:unknown)=>value is T):Record<string,T>{try{const data:unknown=JSON.parse(localStorage.getItem(key)||'{}');return data&&typeof data==='object'&&!Array.isArray(data)?Object.fromEntries(Object.entries(data).filter(([,value])=>valid(value))):{}}catch{return {}}}
 const lessonsPanelKey='ml-workshop-lessons-panel',readerWidthKey='ml-workshop-reader-width',editorKey='ml-workshop-editor-v1'
 // Editor options are kept per browser. Code suggestions and the dark code background are off unless turned on in Settings.
