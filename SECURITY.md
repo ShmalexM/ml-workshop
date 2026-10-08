@@ -26,4 +26,4 @@ For a bug that is not a security problem, use the [bug report form](https://gith
 
 ## Personal data
 
-Project catalogs, local paths and notes are personal data. The application does not scan referenced repositories, and `data/` is ignored by Git. Progress exports include project metadata and should be reviewed before sharing. Node VM contexts do not isolate untrusted code from the host.
+Project catalogs, local paths and notes are personal data. The application does not scan referenced repositories, and `data/` is ignored by Git. Progress exports include project metadata and should be reviewed before sharing. The app keeps the 10 newest exports in `data/backups` and deletes older ones that it made; it does not delete other files in that folder. Node VM contexts do not isolate untrusted code from the host.

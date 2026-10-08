@@ -44,6 +44,8 @@ TOKEN=session_token(DATA).encode()
 SESSION_HELP='Open Engineering Workshop from its shortcut or start command to connect this browser.'
 # Health is polled by the launcher. Book files load by URL from <img> and the PDF viewer, which cannot send the header.
 PUBLIC_API=re.compile(r'/api/health|/api/library/[^/]+/asset/.+')
+BACKUP_NAME=re.compile(r'ml-workshop-\d{8}-\d{6}-\d{6}\.json')
+KEEP_BACKUPS=10
 RUN_LOCK=threading.Lock()
 IMPORT_LOCK=threading.Lock()
 VERSION=json.loads((ROOT/'package.json').read_text(encoding='utf-8'))['version']
@@ -81,6 +83,24 @@ def state():
 def game_progress():
     with connect() as db:completed={r[0]:dict(at=r[1],xp=r[2]) for r in db.execute('SELECT lesson,at,xp FROM completions')}
     return dict(completed=completed,projects=load_portfolio(DATA)['projects'],projectState=project_state(),readingState=reading_state(),guides=study_guides(LIBRARY))
+
+def save_backup():
+    folder=DATA/'backups';folder.mkdir(mode=0o700,exist_ok=True)
+    name='ml-workshop-'+datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S-%f')+'.json'
+    with connect() as db:game_export=game.export(db)
+    payload=dict(app='ml-workshop',version=3,projectState=project_state(),portfolio=load_portfolio(DATA),exportedAt=datetime.now(timezone.utc).isoformat(),readingState=reading_state(),game=game_export,**state())
+    descriptor=os.open(folder/name,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+    with os.fdopen(descriptor,'w',encoding='utf-8') as stream:stream.write(json.dumps(payload,indent=2))
+    prune_backups(folder)
+    return name
+
+def prune_backups(folder,keep=KEEP_BACKUPS):
+    """Keep the newest backups this server wrote. Files with any other name are left alone."""
+    # The UTC timestamp in the name sorts in time order.
+    names=sorted(f.name for f in folder.iterdir() if BACKUP_NAME.fullmatch(f.name) and f.is_file())
+    for name in names[:-keep]:
+        try:(folder/name).unlink()
+        except OSError:pass
 
 def runtime():
     packages={}
@@ -182,6 +202,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header('Content-Disposition',f'attachment; filename="{name}"')
             self.send_header('Content-Length',str(len(body)))
             self.send_header('Cache-Control','no-store')
+            self.send_header('X-Content-Type-Options','nosniff')
             self.end_headers();self.wfile.write(body);return
         if path.startswith('/api/solution/'):
             lesson=BY_ID.get(path.rsplit('/',1)[-1])
@@ -269,11 +290,7 @@ class Handler(BaseHTTPRequestHandler):
                 finally:IMPORT_LOCK.release()
                 return self.send({'ok':True})
             if path=='/api/backup':
-                folder=DATA/'backups';folder.mkdir(exist_ok=True)
-                name='ml-workshop-'+datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S-%f')+'.json'
-                with connect() as db:game_export=game.export(db)
-                payload=dict(app='ml-workshop',version=3,projectState=project_state(),portfolio=load_portfolio(DATA),exportedAt=datetime.now(timezone.utc).isoformat(),readingState=reading_state(),game=game_export,**state())
-                (folder/name).write_text(json.dumps(payload,indent=2))
+                name=save_backup()
                 return self.send(dict(filename=name,url='/api/backups/'+name))
             if path=='/api/current':
                 lesson=body.get('lessonId')

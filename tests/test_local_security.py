@@ -2,6 +2,7 @@
 import json
 import os
 from pathlib import Path
+import re
 import socket
 import subprocess
 import sys
@@ -139,6 +140,29 @@ class SessionTests(unittest.TestCase):
         for path in [self.data / 'session-token', self.data / 'workshop.sqlite3', self.data / 'backups' / backup]:
             with self.subTest(path=path.name):
                 self.assertEqual(mode(path), 0o600)
+
+    def test_backup_download_needs_the_token_and_old_backups_are_pruned(self):
+        folder = self.data / 'backups'
+        folder.mkdir(exist_ok=True)
+        old = [f'ml-workshop-2020010{day}-000000-000000.json' for day in range(1, 10)] + ['ml-workshop-20200110-000000-000000.json', 'ml-workshop-20200111-000000-000000.json', 'ml-workshop-20200112-000000-000000.json']
+        others = ['ml-workshop-my-copy.json', 'notes.json', 'ml-workshop-20200101-000000-000000.json.bak', 'ml-workshop-20200101-000000.json']
+        for name in old + others:
+            (folder / name).write_text('{}')
+        status, _, body = self.server.request('/api/backup', body={})
+        self.assertEqual(status, 200)
+        backup = json.loads(body)
+        self.assertEqual(self.server.request(backup['url'], token='')[0], 403)
+        status, headers, body = self.server.request(backup['url'])
+        self.assertEqual(status, 200)
+        self.assertEqual(headers['X-Content-Type-Options'], 'nosniff')
+        self.assertEqual(headers['Content-Disposition'], f'attachment; filename="{backup["filename"]}"')
+        self.assertEqual(json.loads(body)['app'], 'ml-workshop')
+        made = sorted(p.name for p in folder.iterdir() if re.fullmatch(r'ml-workshop-\d{8}-\d{6}-\d{6}\.json', p.name))
+        self.assertEqual(len(made), 10)
+        self.assertEqual(made[-1], backup['filename'])
+        self.assertNotIn(old[0], made)
+        for name in others:
+            self.assertTrue((folder / name).exists(), name)
 
 
 class RestartTests(unittest.TestCase):

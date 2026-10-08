@@ -73,4 +73,4 @@ Valid path IDs: `python`, `foundations`, `pytorch`, `tensorflow`, `modern`, `cud
 
 Notes and reviewed step indices save locally to SQLite with browser-cache recovery and stale-write protection. Replacing a catalog does not delete old project notes from the database. New catalog entries use separate IDs so old step progress does not transfer to different projects.
 
-Settings → Export progress and notes includes project notes and the active catalog, alongside lesson and reading state. A local override or old notes may contain personal information; review an export before sharing. Source code and book files are not included. For a full restore, back up the entire `data/` folder while the app is stopped.
+Settings → Export progress and notes includes project notes and the active catalog, alongside lesson and reading state. A local override or old notes may contain personal information; review an export before sharing. Source code and book files are not included. The app keeps the 10 newest exports in `data/backups`. For a full restore, back up the entire `data/` folder while the app is stopped.
