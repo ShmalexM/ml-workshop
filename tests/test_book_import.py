@@ -51,6 +51,9 @@ class UploadTests(unittest.TestCase):
             return response.status, json.loads(response.read())
         finally: connection.close()
 
+    def get(self, path):
+        return urllib.request.urlopen(urllib.request.Request(self.url+path, headers={'X-Workshop-Token': self.token}), timeout=10)
+
     def post_json(self, path, payload, headers=None):
         connection = http.client.HTTPConnection('127.0.0.1', self.port, timeout=10)
         try:
@@ -76,10 +79,10 @@ class UploadTests(unittest.TestCase):
         self.assertTrue((self.data/'library'/book_id/'source.epub').is_file())
         self.assertEqual(self.post_json('/api/library/remove', {'bookId': book_id}), (200, {'ok': True}))
         self.assertFalse((self.data/'library'/book_id).exists())
-        library = json.load(urllib.request.urlopen(self.url+'/api/library'))
+        with self.get('/api/library') as response: library = json.load(response)
         self.assertNotIn(book_id, [book['id'] for book in library['books']])
         self.assertEqual(library['readingState'][book_id]['notes'], 'Keep these notes')
-        with self.assertRaises(urllib.error.HTTPError) as error: urllib.request.urlopen(self.url+f'/api/library/{book_id}/chapter/1')
+        with self.assertRaises(urllib.error.HTTPError) as error: self.get(f'/api/library/{book_id}/chapter/1')
         self.assertEqual(error.exception.code, 404)
         # Importing the same file again brings back the saved notes.
         status, result = self.upload(source.read_bytes(), 'remove.epub')
