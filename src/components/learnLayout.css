@@ -51,3 +51,19 @@
 .reward-note{justify-content:flex-start;color:#06663c;text-align:left}
 .reward-note svg{color:#a86b00}
 .reward-note a{font-weight:600;text-decoration:underline;text-underline-offset:3px}
+
+/* "You'll use" at the top of Understand: closed at first, each item links to the lesson that teaches it. */
+.lesson-uses{margin:0 0 22px;border:1px solid var(--line);border-radius:8px;font-size:13px;line-height:1.5}
+.lesson-uses>summary{display:flex;align-items:center;gap:8px;padding:11px 14px;cursor:pointer;list-style:none;color:#33445c}
+.lesson-uses>summary::-webkit-details-marker{display:none}
+.lesson-uses>summary>svg{color:var(--muted);transition:transform .15s}
+.lesson-uses[open]>summary>svg{transform:rotate(90deg)}
+.lesson-uses>summary strong{font-weight:650;white-space:nowrap}
+.lesson-uses>summary span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}
+.lesson-uses ul{margin:0;padding:0 14px 8px;list-style:none}
+.lesson-uses li{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:2px 14px;padding:8px 0;border-top:1px solid #edf1f5}
+.lesson-uses li>span{color:#172239}
+.lesson-uses li a,.lesson-uses li button{display:inline-flex;align-items:center;gap:5px;padding:0;font-size:12px;line-height:1.5;color:#07703f;text-align:left;text-decoration:underline;text-underline-offset:3px}
+.lesson-uses li .done{color:var(--green)}
+.lesson-uses[open]>summary span{display:none}
+@media(max-width:700px){.lesson-uses li{flex-direction:column;align-items:flex-start}}

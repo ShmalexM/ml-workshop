@@ -716,6 +716,7 @@ BY_ID={lesson['id']:lesson for lesson in LESSONS}
 
 from functools import cache
 from glossary import GLOSSARY, lesson_texts, linked_terms
+from lesson_uses import lesson_uses
 
 # The curriculum does not change while the server runs, so it is built once.
 @cache
@@ -723,6 +724,8 @@ def public_curriculum():
     lessons=[{k:v for k,v in lesson.items() if k not in ('solution','checks')} | {
         'checkLabels':[c['label'] for c in lesson['checks']],
         # Glossary terms in the intro and explanation, in order of first appearance.
-        'glossary':linked_terms(lesson_texts(lesson),lesson['course'])} for lesson in LESSONS]
+        'glossary':linked_terms(lesson_texts(lesson),lesson['course']),
+        # The Python or JavaScript constructs the starter and solution use, for "You'll use".
+        'uses':lesson_uses(lesson)} for lesson in LESSONS]
     glossary=[{k:v for k,v in entry.items() if k!='paths'} for entry in GLOSSARY]
     return {'courses':COURSES,'lessons':lessons,'glossary':glossary}
