@@ -19,7 +19,7 @@ from server_fixture import server_token
 class ApiTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.tmp=tempfile.TemporaryDirectory(prefix='ml-api-test-')
+        cls.tmp=tempfile.TemporaryDirectory(prefix='ml-api-test-',ignore_cleanup_errors=True)
         project=dict(id='sample',title='Sample project',summary='Synthetic fixture',tracks=['backend'],steps=['Trace request','Test retry'],deliverable='A diagram')
         task=lambda tid:dict(id=tid,title=tid.title(),minutes=5,source=dict(path='app.py',lines=[1,2]),do='Read.',change='Edit.',verify=dict(commands=['pytest'],expect='1 passed',check=dict(type='contains',value='1 passed')))
         hands_on=dict(id='hands-on',title='Hands-on fixture',summary='Synthetic fixture',tracks=['backend'],repoUrl='https://github.com/example/app',pin=dict(ref='b'*40,label='main'),tasks=[task('first'),task('second')],stretch=task('extra'))
@@ -32,7 +32,11 @@ class ApiTests(unittest.TestCase):
         cls.token=server_token(cls.url,cls.tmp.name,cls.proc)
     @classmethod
     def tearDownClass(cls):
-        cls.proc.terminate();cls.proc.wait();cls.tmp.cleanup()
+        # Windows keeps workshop.sqlite3 locked until the server has exited.
+        cls.proc.terminate()
+        try:cls.proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:cls.proc.kill();cls.proc.wait()
+        cls.tmp.cleanup()
     def request(self,path,body=None,headers=None):
         req=urllib.request.Request(self.url+path,data=json.dumps(body).encode() if body is not None else None,headers={'Content-Type':'application/json','X-Workshop-Token':self.token,**(headers or {})})
         with urllib.request.urlopen(req,timeout=60) as r:return json.load(r)

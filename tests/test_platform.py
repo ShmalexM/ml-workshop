@@ -302,7 +302,7 @@ class LaunchTests(unittest.TestCase):
         # venv. Both exercise the same real launcher with that interpreter.
         bootstrap = (f'import sys; from pathlib import Path; sys.path.insert(0, {str(ROOT / "scripts")!r}); '
                      'import launch; launch.venv_python=lambda:Path(sys.executable); launch.main()')
-        with tempfile.TemporaryDirectory(prefix='workshop-launch-') as directory:
+        with tempfile.TemporaryDirectory(prefix='workshop-launch-', ignore_cleanup_errors=True) as directory:
             data = Path(directory) / 'data with spaces'
             with socket.socket() as sock:
                 sock.bind(('127.0.0.1', 0))

@@ -73,7 +73,7 @@ class LocalServer:
 class SessionTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.tmp = tempfile.TemporaryDirectory(prefix='ml-security-test-')
+        cls.tmp = tempfile.TemporaryDirectory(prefix='ml-security-test-', ignore_cleanup_errors=True)
         cls.data = Path(cls.tmp.name) / 'data'
         # A folder made by an older version with the default umask.
         cls.data.mkdir(mode=0o755)
@@ -210,7 +210,7 @@ print(json.dumps([names, sorted(p.name for p in (server.DATA / 'backups').iterdi
 
 class RestartTests(unittest.TestCase):
     def test_token_survives_restarts_and_changes_only_when_the_file_is_missing(self):
-        with tempfile.TemporaryDirectory(prefix='ml-restart-test-') as directory:
+        with tempfile.TemporaryDirectory(prefix='ml-restart-test-', ignore_cleanup_errors=True) as directory:
             first = LocalServer(directory)
             first.stop()
             second = LocalServer(directory)

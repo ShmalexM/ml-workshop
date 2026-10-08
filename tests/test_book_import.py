@@ -27,7 +27,7 @@ from server_fixture import server_token
 class UploadTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.tmp = tempfile.TemporaryDirectory(prefix='book-upload-test-')
+        cls.tmp = tempfile.TemporaryDirectory(prefix='book-upload-test-', ignore_cleanup_errors=True)
         cls.root = Path(cls.tmp.name)
         cls.data = cls.root/'data'
         with socket.socket() as sock:
@@ -40,7 +40,14 @@ class UploadTests(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        cls.proc.terminate(); cls.proc.wait(); cls.tmp.cleanup()
+        # Windows keeps workshop.sqlite3 locked until the server has exited.
+        cls.proc.terminate()
+        try:
+            cls.proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            cls.proc.kill()
+            cls.proc.wait()
+        cls.tmp.cleanup()
 
     def upload(self, raw, filename='book.epub', book='', headers=None):
         connection = http.client.HTTPConnection('127.0.0.1', self.port, timeout=10)

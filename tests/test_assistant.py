@@ -362,7 +362,7 @@ class AssistantServerTests(unittest.TestCase):
     def setUpClass(cls):
         cls.fake = FakeLLM()
         cls.other = FakeLLM()
-        cls.tmp = tempfile.TemporaryDirectory(prefix='ml-assistant-test-')
+        cls.tmp = tempfile.TemporaryDirectory(prefix='ml-assistant-test-', ignore_cleanup_errors=True)
         cls.server = Workshop(Path(cls.tmp.name) / 'data')
 
     @classmethod
@@ -757,7 +757,7 @@ class AssistantServerTests(unittest.TestCase):
 class RateLimitTests(unittest.TestCase):
     def test_rate_limit(self):
         fake = FakeLLM()
-        with tempfile.TemporaryDirectory(prefix='ml-assistant-limit-') as tmp:
+        with tempfile.TemporaryDirectory(prefix='ml-assistant-limit-', ignore_cleanup_errors=True) as tmp:
             server = Workshop(Path(tmp) / 'data', ML_WORKSHOP_ASSISTANT_LIMIT='2')
             try:
                 status, _ = server.json('/api/assistant/config', dict(enabled=True, provider='custom', baseUrl=fake.url + '/v1', model='fake-model'))
