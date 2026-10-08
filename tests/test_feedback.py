@@ -7,6 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'backend'))
 from courses import BY_ID
 from explanations import explain
+import runner
 from runner import MISMATCH, RETURNED_NONE, execute
 
 # Text that must never reach the learner: app files, Node internals and install locations.
@@ -104,7 +105,7 @@ class CheckFeedbackTests(unittest.TestCase):
         self.assertEqual(empty['expected'], 'raises ValueError')
         self.assertEqual(empty['got'], 'raised ZeroDivisionError: division by zero')
         self.assertIn('empty', empty['explanation'])
-        mismatched = checks['Mismatched lists rejected']
+        mismatched = execute(code, [dict(label='mismatched', expr='raises(ValueError, lambda: mse([1],[1,2]))')])['checks'][0]
         self.assertEqual(mismatched['got'], 'returned 0.0')
         self.assertEqual(mismatched['detail'], 'Expected ValueError, but the call returned 0.0.')
 
@@ -157,13 +158,54 @@ class CheckNamespaceTests(unittest.TestCase):
         import ast
         import builtins
         reserved = {name for name in vars(builtins) if not name.startswith('_')}
-        reserved |= {'raises', 'calls', 'last_printed', 'check_torch_step', 'check_tf_step'}
+        reserved |= {'raises', 'calls', 'launches', 'last_printed', 'check_torch_step', 'check_tf_step'}
         for lesson in BY_ID.values():
             if lesson.get('language') == 'javascript':
                 continue
             defined = {node.name for node in ast.parse(lesson['solution']).body
                        if isinstance(node, (ast.FunctionDef, ast.ClassDef))}
             self.assertFalse(defined & reserved, lesson['id'])
+
+
+class CallHelperTests(unittest.TestCase):
+    """calls() and launches() see a call however the learner's code names the function."""
+
+    def test_calls_finds_saved_names_and_calls_from_c(self):
+        import builtins
+        import email.message
+        import json
+        code = ('from builtins import sum as add_all\nfrom json import dumps as text\n\n'
+                'def total(values):\n    return add_all(values)\n\n'
+                'def rows(values):\n    return list(map(sum, values))\n\n'
+                'def plain(values):\n    return text(values)\n')
+        scope = {}
+        exec(code, scope)
+        original = builtins.sum, json.dumps
+        self.assertTrue(runner.calls('sum', lambda: scope['total']([1, 2])))
+        self.assertTrue(runner.calls('sum', lambda: scope['rows']([[1], [2]])))
+        self.assertTrue(runner.calls('json.dumps', lambda: scope['plain']([1])))
+        self.assertFalse(runner.calls('sum', lambda: scope['plain']([1])))
+        self.assertEqual((builtins.sum, json.dumps), original)
+        # A method found on a base class is put back there, not left on the subclass.
+        message = email.message.EmailMessage()
+        self.assertTrue(runner.calls('email.message.EmailMessage.get', lambda: message.get('To')))
+        self.assertNotIn('get', vars(email.message.EmailMessage))
+
+    def test_launches_counts_kernel_launches_in_the_simulator(self):
+        import importlib.util
+        if importlib.util.find_spec('numba') is None:
+            self.skipTest('Numba is not installed')
+        code = ('import numpy as np\nfrom numba import cuda\n\n@cuda.jit\ndef fill(out):\n'
+                '    i = cuda.grid(1)\n    if i < out.size:\n        out[i] = i\n\n'
+                'def saved(n):\n    out = np.zeros(n)\n    launch = fill[1, 4]\n    launch(out)\n    return out\n\n'
+                'def twice(n):\n    out = np.zeros(n)\n    fill[1, 4](out)\n    fill[1, 4](out)\n    return out\n\n'
+                'def never(n):\n    return np.arange(n, dtype=float)\n')
+        checks = [dict(label='saved', expr='(lambda count, out: count == 1 and list(out) == [0, 1, 2])(*launches(fill, lambda: saved(3)))'),
+                  dict(label='twice', expr='launches(fill, lambda: twice(3))[0] == 2'),
+                  dict(label='never', expr='launches(fill, lambda: never(3))[0] == 0'),
+                  dict(label='plain function', expr='launches(never, lambda: never(3))[0] == 0')]
+        result = execute(code, checks, simulator=True)
+        self.assertTrue(result['passed'], result)
 
 
 class ExplanationTests(unittest.TestCase):

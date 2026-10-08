@@ -176,21 +176,53 @@ def raises(exception, function):
     except exception: return True
     return False
 
+def watched(match, function):
+    """Run function() with a profiler on this thread. Returns (the number of profiler events that match(frame,
+    event, arg) accepted, what function() returned). A profiler sees every call that Python code makes,
+    including calls through a name the learner saved earlier, such as `from builtins import sum as add`."""
+    count = 0
+    def profile(frame, event, arg):
+        nonlocal count
+        if match(frame, event, arg): count += 1
+    previous = sys.getprofile()
+    sys.setprofile(profile)
+    try: result = function()
+    finally: sys.setprofile(previous)
+    return count, result
+
 def calls(name, function):
-    """True when function() calls name: a builtin such as "sum", or a path such as "torch.Tensor.backward"."""
+    """True when function() calls name: a builtin such as "sum", or a path such as "torch.Tensor.backward".
+
+    The profiler finds calls through any name, including one saved before the check ran. The attribute is also
+    replaced while function() runs, so that C code that calls it, such as map(sum, rows), is found too."""
     *path, attribute = name.split('.')
     owner = builtins
     if path:
         owner = importlib.import_module(path[0])
         for part in path[1:]: owner = getattr(owner, part)
     original, seen = getattr(owner, attribute), []
+    code = getattr(original, '__code__', None)
     def spy(*args, **kwargs):
         seen.append(True)
         return original(*args, **kwargs)
+    def match(frame, event, arg):
+        return event == 'c_call' and arg is original or event == 'call' and code is not None and frame.f_code is code
+    own = attribute in vars(owner)
     setattr(owner, attribute, spy)
-    try: function()
-    finally: setattr(owner, attribute, original)
-    return bool(seen)
+    try: count, _ = watched(match, function)
+    finally:
+        if own: setattr(owner, attribute, original)
+        else: delattr(owner, attribute)
+    return bool(seen) or count > 0
+
+def launches(kernel, function):
+    """(launches, result): how many times function() launched kernel, a @cuda.jit kernel run by the Numba CUDA
+    simulator, and what function() returned. A launch counts however the code names the kernel. Anything that is
+    not a simulator kernel, such as a plain function, is never launched."""
+    code = getattr(getattr(type(kernel), '__call__', None), '__code__', None)
+    def match(frame, event, arg):
+        return event == 'call' and code is not None and frame.f_code is code and frame.f_locals.get('self') is kernel
+    return watched(match, function)
 
 def last_printed(output):
     """The last line the exercise printed, or '' if it printed nothing."""
@@ -228,7 +260,7 @@ def check_helpers(output):
     """Names a check can use. They are layered over a copy of the learner's names, so learner
     code that reuses a name such as abs, raises or _workshop_value changes neither side."""
     return {**{k: v for k, v in vars(builtins).items() if not k.startswith('_')},
-            'raises': raises, 'calls': calls, 'last_printed': lambda: last_printed(output),
+            'raises': raises, 'calls': calls, 'launches': launches, 'last_printed': lambda: last_printed(output),
             'check_torch_step': check_torch_step, 'check_tf_step': check_tf_step}
 
 def shown(value):
