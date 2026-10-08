@@ -1,8 +1,37 @@
-import {memo,useEffect,useMemo,useRef,type KeyboardEvent} from 'react'
+import {memo,useEffect,useMemo,useRef,useSyncExternalStore,type KeyboardEvent,type RefObject} from 'react'
 import {Check,Eraser,SendHorizontal,Square,X} from 'lucide-react'
 import Markdown from './Markdown'
 import {buildChips,type AssistantContext} from './context'
 import {clearConversation,closeAssistant,conversation,sendMessage,setChip,setDraft,stopAnswer,useAssistant,type Message} from './store'
+
+// Below 1280px the drawer opens over the page (assistant.css), so it acts as a modal dialog there.
+const overlayQuery='(max-width:1279px)'
+function useOverlay(){
+ return useSyncExternalStore(change=>{const query=matchMedia(overlayQuery);query.addEventListener('change',change);return()=>query.removeEventListener('change',change)},()=>matchMedia(overlayQuery).matches)
+}
+const focusable=(root:HTMLElement)=>Array.from(root.querySelectorAll<HTMLElement>('a[href],button:not([disabled]),textarea:not([disabled]),input:not([disabled]),select:not([disabled]),summary,[tabindex]:not([tabindex="-1"])')).filter(el=>el.getClientRects().length>0)
+
+/** While the drawer covers the page, Tab and Shift+Tab stay in it and Escape closes it from anywhere.
+ * closeAssistant() returns focus to the control that opened the drawer. */
+function useFocusTrap(drawer:RefObject<HTMLElement|null>,on:boolean){
+ useEffect(()=>{
+  const root=drawer.current
+  if(!on||!root)return
+  if(!root.contains(document.activeElement))focusable(root)[0]?.focus()
+  const onKey=(e:globalThis.KeyboardEvent)=>{
+   // A modal dialog on top, such as Settings, handles its own keys.
+   if(document.querySelector('dialog[open]'))return
+   const inside=root.contains(document.activeElement)
+   if(e.key==='Escape'&&!inside){closeAssistant();return}
+   if(e.key!=='Tab')return
+   const items=focusable(root);if(!items.length)return
+   const first=items[0],last=items[items.length-1]
+   if(!inside||(e.shiftKey&&document.activeElement===first)||(!e.shiftKey&&document.activeElement===last)){e.preventDefault();(e.shiftKey?last:first).focus()}
+  }
+  document.addEventListener('keydown',onKey)
+  return()=>document.removeEventListener('keydown',onKey)
+ },[drawer,on])
+}
 
 const size=(text:string)=>{const bytes=new TextEncoder().encode(text).length;return bytes<1024?`${bytes} B`:`${(bytes/1024).toFixed(1)} KB`}
 
@@ -20,9 +49,11 @@ export default function AssistantDrawer({context}:{context:AssistantContext}){
  const chat=s.conversations[scope]||conversation(scope)
  const hints=context.kind==='lesson'?s.hints[context.lesson.id]||0:0
  const chips=useMemo(()=>buildChips(context,hints,chat.chips),[context,hints,chat.chips])
- const input=useRef<HTMLTextAreaElement>(null);const log=useRef<HTMLDivElement>(null)
+ const input=useRef<HTMLTextAreaElement>(null);const log=useRef<HTMLDivElement>(null);const drawer=useRef<HTMLElement>(null)
  const streaming=s.streaming!==null
+ const overlay=useOverlay()
  useEffect(()=>{input.current?.focus()},[s.focus])
+ useFocusTrap(drawer,overlay)
  // Follow a streaming answer unless the learner has scrolled up to read.
  const last=chat.messages[chat.messages.length-1]
  useEffect(()=>{const el=log.current;if(el&&el.scrollHeight-el.scrollTop-el.clientHeight<160)el.scrollTop=el.scrollHeight},[last?.text,chat.messages.length])
@@ -34,7 +65,7 @@ export default function AssistantDrawer({context}:{context:AssistantContext}){
  function onKey(e:KeyboardEvent<HTMLTextAreaElement>){if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();send()}}
  const tutor=context.kind==='lesson'&&!config.allowSolutions
  const destination=config.local?`On this computer · ${config.model||'no model'}`:`Sending to ${config.host} · ${config.model||'no model'}`
- return <aside className="assistant-drawer" id="assistant-drawer" aria-labelledby="assistant-title" onKeyDown={e=>{if(e.key==='Escape'){e.stopPropagation();closeAssistant()}}}>
+ return <aside ref={drawer} className="assistant-drawer" id="assistant-drawer" aria-labelledby="assistant-title" role={overlay?'dialog':undefined} aria-modal={overlay||undefined} onKeyDown={e=>{if(e.key==='Escape'){e.stopPropagation();closeAssistant()}}}>
   <div className="assistant-header"><div><h2 id="assistant-title">Assistant</h2><p>{destination}</p></div><div className="assistant-header-actions"><button type="button" className="assistant-text-button" onClick={()=>clearConversation(scope)} disabled={!chat.messages.length}><Eraser size={15}/>Clear</button><button type="button" className="icon-button" onClick={closeAssistant} aria-label="Close assistant"><X size={18}/></button></div></div>
   <div className="assistant-log" ref={log} role="log" aria-live="polite" aria-relevant="additions text">
    {chat.messages.length===0&&<div className="assistant-empty"><p>{context.kind==='lesson'?'Ask about this lesson, your code or an error.':'Ask a question. Only the name of this page is sent with it.'}</p>{tutor&&<p>Tutor mode: one hint at a time, without the full solution. The solution is behind Show solution in the lesson.</p>}</div>}
