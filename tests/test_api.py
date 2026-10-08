@@ -95,6 +95,14 @@ class ApiTests(unittest.TestCase):
         self.assertIn('Notes are longer than 30,000 characters', json.load(error.exception)['error'])
         self.assertNotIn('python-2', self.request('/api/state')['drafts'])
 
+    def test_deeply_nested_json_gets_400(self):
+        body = b'{"a":' + b'[' * 11000 + b'0' + b']' * 11000 + b'}'
+        for path in ('/api/current', '/api/draft', '/api/backup'):
+            request = urllib.request.Request(self.url + path, data=body, headers={'Content-Type': 'application/json', 'X-Workshop-Token': self.token})
+            with self.subTest(path=path), self.assertRaises(urllib.error.HTTPError) as error:
+                urllib.request.urlopen(request, timeout=60)
+            self.assertEqual(error.exception.code, 400)
+
     def test_failed_check_and_run_do_not_complete(self):
         for mode in ['check','run']:
             result=self.request('/api/run',dict(lessonId='foundations-2',code='print("not an answer")',mode=mode))

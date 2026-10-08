@@ -282,7 +282,8 @@ class Handler(BaseHTTPRequestHandler):
             if length<1 or length>128000:return self.send({'error':'Request exceeds the local exercise size limit.'},413)
             if self.headers.get('Content-Type','').split(';')[0]!='application/json':return self.send({'error':'Expected JSON.'},415)
             raw=self.rfile.read(length);self.body_read=True
-            body=json.loads(raw)
+            try:body=json.loads(raw)
+            except RecursionError:raise ValueError('JSON is nested too deeply.') from None
             if not isinstance(body,dict):raise ValueError('Expected an object')
             path=urlparse(self.path).path
             if path=='/api/project/state':
