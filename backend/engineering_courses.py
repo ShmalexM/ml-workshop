@@ -37,7 +37,9 @@ add('harness',1,'Control the agent loop',
  'Look up the (state, event) pair in transition(state, event).',
  'Return its next state, or raise ValueError for every other pair.'],
 ['Use a dictionary keyed by the tuple (state, event).',
- 'Raise ValueError when the tuple is absent from the table.',
+ 'raise stops the function with an error. For example, if age < 0: raise ValueError("age '
+ 'must not be negative") rejects a negative age. Raise one when the tuple is absent from '
+ 'the table.',
  'Return table[(state, event)] after checking membership.'],
 '''
 def transition(state, event):
@@ -81,7 +83,11 @@ add('harness',2,'Give a tool only its allowed inputs',
  'Require args to be a dictionary with exactly those keys. Raise ValueError for an unknown '
  'tool or invalid arguments.',
  'Return a shallow copy of args from validate_call(name, args, schemas).'],
-['Find the expected keys for name.','Compare sets of argument keys, not the order they arrived.','Return dict(args) so callers cannot mutate the original through the returned mapping.'],
+['Find the expected keys for name. Compare sets of argument keys, not the order they '
+ 'arrived.',
+ 'raise stops the function with an error. For example, if age < 0: raise ValueError("age '
+ 'must not be negative") rejects a negative age.',
+ 'Return dict(args) so callers cannot mutate the original through the returned mapping.'],
 '''
 def validate_call(name, args, schemas):
     # Return a copy of the validated arguments.
@@ -117,8 +123,9 @@ add('harness',3,'Stop before the budget is exhausted',
 ['Reject negative values in steps, max_steps, spent, next_cost, or budget with ValueError.',
  'Check steps < max_steps and spent + next_cost <= budget.',
  'Return a boolean from can_step(steps, max_steps, spent, next_cost, budget).'],
-['Validate all five values first.',
- 'There must be room for one more step and its full cost.',
+['Validate all five values first. There must be room for one more step and its full cost.',
+ 'raise stops the function with an error. For example, if not names: raise '
+ 'ValueError("names is empty") rejects an empty list.',
  'Return steps < max_steps and spent + next_cost <= budget.'],
 '''
 def can_step(steps, max_steps, spent, next_cost, budget):
@@ -196,8 +203,10 @@ add('backend',1,'Validate a request at the boundary',
  'booleans.',
  'Return {"title": title, "priority": priority} from parse_task(payload). Raise ValueError '
  'for invalid input.'],
-['Check the payload and title types before calling strip().',
- 'Read priority with payload.get("priority", 3), then check its exact type and range.',
+['Check the payload and title types before calling strip(). Read priority with '
+ 'payload.get("priority", 3), then check its exact type and range.',
+ 'raise stops the function with an error. For example, if age < 0: raise ValueError("age '
+ 'must not be negative") rejects a negative age.',
  'Return a new dictionary with the stripped title and checked priority.'],
 '''
 def parse_task(payload):
@@ -248,7 +257,9 @@ add('backend',2,'Make retries idempotent',
  'On first use, save deep copies of payload and result, then return a copy of result from '
  'remember(store, key, payload, result).'],
 ['If key already exists, compare store[key]["payload"] with payload.',
- 'For a matching retry, copy store[key]["result"]. For a conflict, raise ValueError.',
+ 'For a matching retry, copy store[key]["result"]. A conflict stops the function with '
+ 'raise. For example, if age < 0: raise ValueError("age must not be negative") rejects a '
+ 'negative age.',
  'Use copy.deepcopy for the new stored record and every returned result.'],
 '''
 import copy
@@ -289,11 +300,11 @@ add('backend',3,'Page through a stable cursor',
  'Otherwise use None.',
  'Return (items, next_cursor) from page_after(rows, after, limit). Raise ValueError for '
  'limit <= 0 and leave rows unchanged.'],
-['Use sorted on the matching rows to leave rows unchanged.',
- 'Take remaining[:limit]. Compare len(remaining) > limit to see whether another page '
- 'exists.',
- 'Set next_cursor to selected[-1]["id"] only when more rows remain, then return selected, '
- 'next_cursor.'],
+['Use sorted on the matching rows to leave rows unchanged. Take remaining[:limit].',
+ 'raise stops the function with an error. For example, if not names: raise '
+ 'ValueError("names is empty") rejects an empty list.',
+ 'Compare len(remaining) > limit to see whether another page exists. Set next_cursor to '
+ 'selected[-1]["id"] only when more rows remain, then return selected, next_cursor.'],
 '''
 def page_after(rows, after, limit):
     # Return (items, next_cursor).
@@ -548,10 +559,12 @@ add('rl',1,'Model an environment step',
  'truncate when steps + 1 >= max_steps.',
  'Return (next_position, reward, terminated, truncated). If already at 4, return (4, 0, '
  'True, False).'],
-['After validation, handle position 4 before moving. Otherwise clamp position + action '
- 'with min and max.',
- 'Set terminated when next_position == 4. The current move is step number steps + 1.',
- 'Set truncated = not terminated and steps + 1 >= max_steps, then return all four values.'],
+['Validate the inputs first. Then handle position 4 before moving. Otherwise clamp '
+ 'position + action with min and max.',
+ 'raise stops the function with an error. For example, if not names: raise '
+ 'ValueError("names is empty") rejects an empty list.',
+ 'Set terminated when next_position == 4. The current move is step number steps + 1, so '
+ 'truncated = not terminated and steps + 1 >= max_steps. Return all four values.'],
 '''
 def env_step(position, action, steps, max_steps):
     # Return the next position, reward, and both ending flags.
@@ -594,7 +607,11 @@ add('rl',2,'Compute discounted returns',
  'Work backward through rewards, accumulating each discounted return.',
  'Return a list in the original time order from returns(rewards, gamma), leaving rewards '
  'unchanged. Empty input returns [].'],
-['Start with total = 0 at the end of the sequence.','Walk rewards in reverse and update total = reward + gamma * total.','Reverse the collected results before returning.'],
+['Check gamma first. Then start with total = 0 at the end of the sequence.',
+ 'raise stops the function with an error. For example, if not names: raise '
+ 'ValueError("names is empty") rejects an empty list.',
+ 'Walk rewards in reverse and update total = reward + gamma * total. Reverse the collected '
+ 'results before returning.'],
 '''
 def returns(rewards, gamma):
     # Return one discounted return per reward.
@@ -630,8 +647,10 @@ add('rl',3,'Balance exploration and exploitation',
  'If draw < epsilon, return explore_index.',
  'Otherwise return the index of the first maximum from choose_action(values, epsilon, '
  'draw, explore_index).'],
-['Validate every range before choosing an action.',
- 'If draw < epsilon, return explore_index. Equality takes the greedy branch.',
+['Validate every range before choosing an action. If draw < epsilon, return explore_index; '
+ 'equality takes the greedy branch.',
+ 'raise stops the function with an error. For example, if age < 0: raise ValueError("age '
+ 'must not be negative") rejects a negative age.',
  'Use values.index(max(values)) to choose the first largest value.'],
 '''
 def choose_action(values, epsilon, draw, explore_index):
@@ -674,10 +693,11 @@ add('rl',4,'Bootstrap only when the task continues',
  'Set the target to reward for a terminated task, or reward + gamma * max(next_values) for '
  'a continuing task, including truncation.',
  'Return old + alpha * (target - old) from q_update.'],
-['Choose the target before applying alpha.',
+['Validate the inputs first. Then choose the target before applying alpha.',
+ 'raise stops the function with an error. For example, if age < 0: raise ValueError("age '
+ 'must not be negative") rejects a negative age.',
  'Check terminated, rather than terminated or truncated, when deciding whether to include '
- 'a future value.',
- 'Return old + alpha * (target - old). With alpha zero, this leaves old unchanged.'],
+ 'a future value. Return old + alpha * (target - old).'],
 '''
 def q_update(old, reward, next_values, alpha, gamma, terminated, truncated):
     # Return the updated action value.
@@ -745,9 +765,11 @@ add('data',2,'Chunk text with bounded overlap',
  'Slice tokens into lists of at most size elements, advancing by size - overlap.',
  'Return the chunks from chunks(tokens, size, overlap). Stop when a chunk reaches the end, '
  'and return [] for empty input.'],
-['Track a start index, beginning at zero.',
- 'Append tokens[start:start + size]. Stop if start + size >= len(tokens).',
- 'Otherwise add size - overlap to start and repeat.'],
+['Validate size and overlap first. Then track a start index, beginning at zero.',
+ 'raise stops the function with an error. For example, if not names: raise '
+ 'ValueError("names is empty") rejects an empty list.',
+ 'Append tokens[start:start + size]. Stop if start + size >= len(tokens); otherwise add '
+ 'size - overlap to start and repeat.'],
 '''
 def chunks(tokens, size, overlap):
     # Return a list of overlapping token lists.
@@ -791,10 +813,12 @@ add('data',3,'Traverse a graph without looping',
  'neighbors.',
  'Return sorted unique node IDs from neighborhood(graph, start, depth), including start. '
  'Raise ValueError for negative depth.'],
-['Keep seen and frontier as separate sets, each initially containing start.',
- 'Collect neighbors of each frontier node, then subtract seen.',
- 'Set frontier = neighbors - seen, update seen with that frontier, and return sorted(seen) '
- 'after the loop.'],
+['Reject a negative depth first. Keep seen and frontier as separate sets, each initially '
+ 'containing start.',
+ 'raise stops the function with an error. For example, if not names: raise '
+ 'ValueError("names is empty") rejects an empty list.',
+ 'Collect neighbors of each frontier node, then subtract seen. Set frontier = neighbors - '
+ 'seen, update seen with that frontier, and return sorted(seen) after the loop.'],
 '''
 def neighborhood(graph, start, depth):
     # Return the sorted node IDs within the depth limit.
@@ -834,9 +858,11 @@ add('data',4,'Measure retrieval coverage',
  'IDs.',
  'Return 0 for no relevant IDs from recall_at_k(ranked, relevant, k). Raise ValueError for '
  'negative k.'],
-['Build set(ranked[:k]).',
- 'Intersect that set with set(relevant).',
- 'Divide the intersection size by len(relevant), returning 0 when relevant is empty.'],
+['Reject a negative k first. Then build set(ranked[:k]).',
+ 'raise stops the function with an error. For example, if not names: raise '
+ 'ValueError("names is empty") rejects an empty list.',
+ 'Intersect that set with set(relevant). Divide the intersection size by len(relevant), '
+ 'returning 0 when relevant is empty.'],
 '''
 def recall_at_k(ranked, relevant, k):
     # Return the fraction of relevant IDs retrieved in the first k positions.
@@ -872,9 +898,11 @@ add('reliability',1,'Bound exponential retries',
  'before their sum exceeds budget.',
  'Raise ValueError if base or cap is zero or negative, or if attempts or budget is '
  'negative. Zero attempts or budget returns [].'],
-['Track a delays list, spent time, and the next delay.',
- 'Break when spent + delay > budget. Otherwise append delay and add it to spent.',
- 'Set delay = min(cap, delay * 2) for the next iteration, then return delays.'],
+['Validate the inputs first. Then track a delays list, spent time, and the next delay.',
+ 'raise stops the function with an error. For example, if not names: raise '
+ 'ValueError("names is empty") rejects an empty list.',
+ 'Break when spent + delay > budget; otherwise append delay and add it to spent. Set delay '
+ '= min(cap, delay * 2) for the next iteration, then return delays.'],
 '''
 def retry_delays(base, cap, attempts, budget):
     # Return the delays that fit both limits.
@@ -1095,9 +1123,10 @@ add('interactive',2,'Use time, not frame count',
  'Multiply velocity by min(delta_time, max_delta) and add it to position.',
  'Clamp the result to [low, high] and return it from advance(position, velocity, '
  'delta_time, max_delta, low, high).'],
-['Set step = min(delta_time, max_delta) after validating the input.',
- 'Compute candidate = position + velocity * step.',
- 'Return min(high, max(low, candidate)).'],
+['Validate the input first, then set step = min(delta_time, max_delta).',
+ 'raise stops the function with an error. For example, if not names: raise '
+ 'ValueError("names is empty") rejects an empty list.',
+ 'Compute candidate = position + velocity * step. Return min(high, max(low, candidate)).'],
 '''
 def advance(position, velocity, delta_time, max_delta, low, high):
     # Return the position after applying time and position limits.
@@ -1128,7 +1157,12 @@ add('interactive',3,'Fit media without changing its shape',
  'Use one scale, min(box_width / width, box_height / height), for both image dimensions.',
  'Return (display_width, display_height, offset_x, offset_y) from fit_media, using half '
  'the unused space as each offset.'],
-['Compute both possible scale factors and take their minimum.','Multiply both original dimensions by that same scale.','Offsets are half the remaining width and height.'],
+['Check that all four sizes are positive. Then compute both possible scale factors and '
+ 'take their minimum.',
+ 'raise stops the function with an error. For example, if not names: raise '
+ 'ValueError("names is empty") rejects an empty list.',
+ 'Multiply both original dimensions by that same scale. Offsets are half the remaining '
+ 'width and height.'],
 '''
 def fit_media(width, height, box_width, box_height):
     # Return the display size and centered offsets.
