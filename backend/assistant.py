@@ -35,7 +35,9 @@ LOOPBACK_NAMES = {'localhost', '127.0.0.1', '::1'}
 METADATA = {ipaddress.ip_address(a) for a in ('100.100.100.200', 'fd00:ec2::254', '192.0.0.192')}
 DEFAULT_WORKSHOP_PORT = 7318
 OWN_ADDRESS = 'That is the address of Engineering Workshop itself. Enter the address of the AI provider.'
-MAX_TOKENS = 800
+MAX_TOKENS = 1200
+# OpenAI counts reasoning tokens in max_completion_tokens, so its reasoning models need more room for an answer.
+OPENAI_MAX_TOKENS = 4000
 # Characters of page context per chip, checked again on the server.
 CHIP_CAPS = {'lesson': 4096, 'example': 3072, 'code': 12288, 'run': 6144, 'hints': 1536, 'notes': 3072, 'page': 200}
 CHIP_ORDER = list(CHIP_CAPS)
@@ -447,9 +449,10 @@ class Assistant:
         allowed = self.limit.take()
         if allowed:
             cancel = threading.Event()
-            self.cancel = cancel
+            stream_id = secrets.token_hex(8)
+            self.cancel = (stream_id, cancel)
             try:
-                self._stream(handler, config, upstream, messages, cancel)
+                self._stream(handler, config, upstream, messages, cancel, stream_id)
             finally:
                 self.cancel = None
                 upstream.abort()
@@ -458,18 +461,23 @@ class Assistant:
         self.stream_lock.release()
         return handler.send({'error': TOO_MANY}, 429)
 
-    def stop(self, handler):
-        cancel = self.cancel
-        if cancel:
-            cancel.set()
-        return handler.send({'ok': True, 'stopped': bool(cancel)})
+    def stop(self, handler, body):
+        """Stop the current answer. With an id, only the answer that has that id, so a late Stop never ends the next answer."""
+        current = self.cancel
+        wanted = body.get('id')
+        if current and wanted not in (None, current[0]):
+            current = None
+        if current:
+            current[1].set()
+        return handler.send({'ok': True, 'stopped': bool(current)})
 
-    def _stream(self, handler, config, upstream, messages, cancel):
+    def _stream(self, handler, config, upstream, messages, cancel, stream_id):
         """Forward the provider's answer as JSON lines while watching the browser connection and Stop."""
         events = queue.Queue()
         protocol = PRESETS[config['provider']]['protocol']
         reader = threading.Thread(target=providers.run_stream, daemon=True, name='assistant-stream',
-                                  args=(upstream, protocol, config['provider'], config['model'], messages, MAX_TOKENS, events))
+                                  args=(upstream, protocol, config['provider'], config['model'], messages,
+                                        OPENAI_MAX_TOKENS if config['provider'] == 'openai' else MAX_TOKENS, events))
         reader.start()
         handler.send_response(200)
         handler.send_header('Content-Type', 'application/x-ndjson; charset=utf-8')
@@ -483,7 +491,7 @@ class Assistant:
             handler.wfile.flush()
 
         try:
-            write({'type': 'meta', 'model': config['model'], 'host': host_label(config['baseUrl']), 'local': is_local(config['baseUrl'])})
+            write({'type': 'meta', 'id': stream_id, 'model': config['model'], 'host': host_label(config['baseUrl']), 'local': is_local(config['baseUrl'])})
             last = time.monotonic()
             while True:
                 if cancel.is_set():
@@ -507,7 +515,9 @@ class Assistant:
                     except queue.Empty:
                         break
                 text = ''.join(v for k, v in batch if k == 'delta')
-                out = [{'type': 'delta', 'text': text}] if text else []
+                out = [{'type': 'thinking'}] if any(k == 'thinking' for k, _ in batch) and not text else []
+                if text:
+                    out.append({'type': 'delta', 'text': text})
                 end = next(((k, v) for k, v in batch if k in ('done', 'error')), None)
                 if end and end[0] == 'error':
                     out.append({'type': 'error', 'message': end[1]})
@@ -549,7 +559,7 @@ class Assistant:
         if path == '/api/assistant/chat':
             return self.chat(handler, body)
         if path == '/api/assistant/stop':
-            return self.stop(handler)
+            return self.stop(handler, body)
         return handler.send({'error': 'Unknown endpoint'}, 404)
 
 

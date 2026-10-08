@@ -70,6 +70,10 @@ class ParserTests(unittest.TestCase):
         # Lines that are not JSON are skipped.
         self.assertEqual(decode('openai', [b'data: {oops\n\ndata: [DONE]\n\n']), [('done', None)])
 
+    def test_reasoning_is_reported_but_not_shown(self):
+        self.assertEqual(decode('openai', [b'data: {"choices":[{"delta":{"reasoning":"Let me see"}}]}\n\n']), [('thinking', None)])
+        self.assertEqual(decode('ollama', [b'{"message":{"content":"","thinking":"Hmm"},"done":false}\n']), [('thinking', None)])
+
     def test_redact(self):
         text = f'key {KEY} and Bearer abc.def-123 and sk-otherkey12345678'
         self.assertNotIn(KEY, providers.redact(text, KEY))
@@ -80,6 +84,7 @@ class ParserTests(unittest.TestCase):
         path, body = providers.chat_request('ollama', 'ollama', 'm', [], 800)
         self.assertEqual(path, '/api/chat')
         self.assertEqual(json.loads(body)['options']['num_ctx'], providers.OLLAMA_CONTEXT)
+        self.assertIs(json.loads(body)['think'], False)
         _, body = providers.chat_request('openai', 'openai', 'm', [], 800)
         self.assertEqual(json.loads(body)['max_completion_tokens'], 800)
         _, body = providers.chat_request('openai', 'openrouter', 'm', [], 800)
@@ -426,6 +431,8 @@ class AssistantServerTests(unittest.TestCase):
         self.configure()
         self.fake.mode = 'endless'
         connection, response = self.server.open_chat(question())
+        first = json.loads(response.readline())
+        self.assertEqual(first['type'], 'meta')
         lines = queue.Queue()
         reader = threading.Thread(target=lambda: [lines.put(json.loads(line)) for line in response], daemon=True)
         reader.start()
@@ -437,8 +444,11 @@ class AssistantServerTests(unittest.TestCase):
         self.assertEqual(self.server.json('/api/state')[0], 200)
         self.assertEqual(self.server.json('/api/draft', {'lessonId': 'foundations-1', 'code': 'x = 1', 'notes': '', 'updatedAt': 1})[0], 200)
         self.assertLess(time.monotonic() - started, 2)
+        # A Stop for another answer does nothing.
+        status, reply = self.server.json('/api/assistant/stop', {'id': 'not-this-one'})
+        self.assertEqual((status, reply['stopped']), (200, False))
         stopped = time.monotonic()
-        status, reply = self.server.json('/api/assistant/stop', {})
+        status, reply = self.server.json('/api/assistant/stop', {'id': first['id']})
         self.assertEqual((status, reply['stopped']), (200, True))
         reader.join(5)
         connection.close()

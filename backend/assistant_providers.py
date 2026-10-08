@@ -149,9 +149,14 @@ def openai_events(data):
         if not isinstance(choice, dict):
             continue
         delta = choice.get('delta') or choice.get('message') or {}
-        content = delta.get('content') if isinstance(delta, dict) else None
+        if not isinstance(delta, dict):
+            break
+        content = delta.get('content')
         if isinstance(content, str) and content:
             events.append(('delta', content))
+        elif delta.get('reasoning') or delta.get('reasoning_content'):
+            # Reasoning text is not shown, only that the model is still working.
+            events.append(('thinking', None))
         break
     return events
 
@@ -162,10 +167,12 @@ def ollama_events(obj):
     if obj.get('error'):
         return [('error', _error_text(obj['error']))]
     events = []
-    message = obj.get('message')
-    content = message.get('content') if isinstance(message, dict) else None
+    message = obj.get('message') if isinstance(obj.get('message'), dict) else {}
+    content = message.get('content')
     if isinstance(content, str) and content:
         events.append(('delta', content))
+    elif message.get('thinking'):
+        events.append(('thinking', None))
     if obj.get('done') is True:
         events.append(('done', None))
     return events
@@ -194,7 +201,8 @@ class StreamDecoder:
 def chat_request(protocol, provider, model, messages, max_tokens, temperature=0.3, stream=True):
     """Return (path suffix, JSON body bytes) for a chat request."""
     if protocol == 'ollama':
-        body = dict(model=model, messages=messages, stream=stream,
+        # think=False asks a reasoning model for the answer only. Ollama versions without the option ignore it.
+        body = dict(model=model, messages=messages, stream=stream, think=False,
                     options=dict(num_ctx=OLLAMA_CONTEXT, temperature=temperature, num_predict=max_tokens))
         return '/api/chat', json.dumps(body).encode()
     body = dict(model=model, messages=messages, stream=stream)
@@ -388,6 +396,7 @@ def run_stream(upstream, protocol, provider, model, messages, max_tokens, events
             events.put(('error', upstream.error_for(response)))
             return
         decoder = StreamDecoder(protocol)
+        thinking = False
         while True:
             if upstream.cancelled.is_set():
                 return
@@ -397,6 +406,11 @@ def run_stream(upstream, protocol, provider, model, messages, max_tokens, events
             chunk = response.read1(8192)
             found = decoder.feed(chunk) if chunk else decoder.close()
             for kind, value in found:
+                if kind == 'thinking':
+                    if not thinking and not size:
+                        thinking = True
+                        events.put(('thinking', None))
+                    continue
                 if kind == 'delta':
                     room = MAX_ANSWER_CHARS - size
                     if len(value) >= room:
