@@ -14,7 +14,7 @@
 .loot-toast-actions a { color: #f2cf7c; font-weight: 650; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; }
 .loot-toast-close { position: absolute; top: 8px; right: 8px; color: #aaa79c; padding: 4px; border-radius: 4px; }
 .loot-toast-close:hover { color: #fff; background: #2a2f45; }
-.nav-badge { display: inline-grid; place-items: center; min-width: 18px; height: 18px; margin-left: 6px; padding: 0 5px; border-radius: 9px; background: #c4462f; color: #fff; font-size: 11px; font-weight: 700; }
+.nav-badge { display: inline-grid; place-items: center; min-width: 18px; height: 18px; margin-left: 6px; padding: 0 5px; border-radius: 9px; background: #c4462f; color: #fff; font-size: 12px; font-weight: 700; }
 @keyframes toast-in { from { transform: translateY(20px); opacity: 0; } }
 @media (max-width: 700px) { .loot-toast { left: 12px; right: 12px; bottom: 12px; max-width: none; } }
 
@@ -36,6 +36,6 @@
   .loot-toast, .chest-art * { animation: none !important; transition: none !important; }
 }
 .game-toggle { display: flex; gap: 10px; align-items: center; font-size: 14px; margin: 10px 0 4px; cursor: pointer; }
-.game-toggle input { width: 18px; height: 18px; accent-color: var(--green, #079455); }
+.game-toggle input { width: 18px; height: 18px; accent-color: var(--green, #057b46); }
 .game-toggle-note { font-size: 12px; color: #5b6b82; margin-bottom: 18px; }
 .game-toggle-error { font-size: 12px; color: #b4323c; margin: 4px 0; }

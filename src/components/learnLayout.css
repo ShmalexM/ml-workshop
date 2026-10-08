@@ -1,0 +1,50 @@
+/* Learn page layout. The lesson list is a drawer, and the columns follow the stage:
+   Understand uses the full width, See an example splits it in half, Try it yourself gives the editor 60%. */
+.learning-layout.stage-example{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.learning-layout.stage-practice{grid-template-columns:minmax(300px,var(--reader-width,40%)) 1px minmax(0,1fr)}
+.learning-layout.stage-understand .lesson-reader,.learning-layout.stage-practice .lesson-reader{border-right:0}
+@media(min-width:701px){.learning-layout.stage-understand .lesson-reader{padding-left:max(28px,calc((100% - 720px) / 2));padding-right:max(28px,calc((100% - 720px) / 2))}}
+
+.panel-divider{position:relative;z-index:2;background:var(--line);cursor:col-resize;touch-action:none}
+.panel-divider::before{content:'';position:absolute;inset:0 -5px}
+.panel-divider:hover,.panel-divider:focus-visible{background:var(--green)}
+.panel-divider:focus-visible{outline:3px solid #2f7d5b;outline-offset:2px}
+
+.reader-top{display:flex;align-items:center;flex-wrap:wrap;gap:10px 18px;margin:1px 0 25px}
+.reader-top .back-link{margin:0}
+.lessons-toggle{display:inline-flex;align-items:center;gap:7px;padding:6px 11px;border:1px solid #d8e1e9;border-radius:6px;background:#fff;color:#33445c;font-size:13px;font-weight:550}
+.lessons-toggle:hover{background:#eef4f1}
+.lessons-toggle[aria-expanded=true]{background:#e1f3eb;border-color:#b9dccb;color:#06663c}
+
+/* Below 1440px the list opens over the lesson. */
+/* Visible at once when opening, so it can take focus; hidden only after the slide when closing. */
+.curriculum{position:fixed;left:0;top:60px;bottom:0;z-index:25;width:300px;max-width:86vw;transform:translateX(-100%);visibility:hidden;transition:transform .2s,visibility 0s .2s;box-shadow:15px 0 50px #102b3312}
+.curriculum.open{transform:none;visibility:visible;transition:transform .2s}
+.drawer-scrim.visible{display:block;position:fixed;inset:60px 0 0;z-index:24;background:#0f20354d}
+@media(min-width:1440px){
+ .curriculum{position:static;width:288px;min-width:288px;transform:none;visibility:visible;transition:none;box-shadow:none}
+ .curriculum:not(.open){display:none}
+}
+@media(max-width:700px){
+ .curriculum{top:96px}
+ .drawer-scrim.visible{inset:96px 0 0}
+ .reader-top{margin-bottom:19px}
+ .panel-divider{display:none}
+}
+
+/* Try it yourself: tasks and hints first, then the tip and a closed recap of the idea. */
+.lesson-content h2.challenge-heading{margin-top:4px;font-size:17px}
+.lesson-content .hint-area{margin-bottom:20px}
+.disclosure small{margin-left:10px;font-size:12px;font-weight:450;color:var(--muted)}
+.recap{margin:20px 0;padding:0 16px;border:1px solid var(--line);border-radius:8px}
+.recap>summary{padding:13px 0;font-size:13px;font-weight:600;color:#33445c;cursor:pointer}
+.recap .formula{margin:4px 0 0}
+.recap .guided-explanation{margin:14px 0 16px}
+@media(min-width:1450px){.lesson-content h2.challenge-heading{font-size:19px}.recap>summary{font-size:14px}}
+
+/* Footer notes: why Next lesson is locked, or what passing the checks earned. */
+.lesson-navigation{flex-wrap:wrap;row-gap:8px}
+.lesson-navigation-note{flex-basis:100%;display:flex;align-items:center;justify-content:flex-end;gap:8px;margin:0;font-size:12px;line-height:1.5;color:var(--muted);text-align:right}
+.reward-note{justify-content:flex-start;color:#06663c;text-align:left}
+.reward-note svg{color:#a86b00}
+.reward-note a{font-weight:600;text-decoration:underline;text-underline-offset:3px}

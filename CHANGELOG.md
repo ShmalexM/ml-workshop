@@ -13,6 +13,23 @@ This file lists the notable changes in each release. The format follows [Keep a 
 
 - ML foundations and the other Python paths list Python from zero as a suggested first path, and the ML & GPU engineer order starts with it.
 - In the Hero game, Python from zero lessons earn the smallest chests: the first seven earn a Worn Footlocker.
+- The lesson list is a drawer, opened with **Lessons** next to the back link. From 1440px it sits beside the lesson and remembers when you close it; on smaller screens it opens over the lesson.
+- The right panel follows the lesson stage: none in Understand, the worked example in See an example, and the editor in Try it yourself. The line between the lesson text and the editor can be dragged.
+- Try it yourself starts with the tasks and hints. The formula and explanation from Understand are in **Recap of the idea**, closed at first.
+- **Show solution** is no longer at the top of every lesson. It is the last step after the hints and stays at the end of the exercise.
+- The code editor, worked examples and solutions are light by default. **Settings → Editor** has a dark background option.
+- Code suggestions in the editor are off by default, so Enter always starts a new line. Turn them on in **Settings → Editor**.
+- **All lessons** is a tab in **Progress**.
+- Settings starts with the Hero game, backup and editor options. Versions and the CUDA note are in **About this install**.
+- The header says "Code runs on this computer" instead of "Local runtime".
+- The chest earned for a lesson is a line under the lesson buttons instead of a pop-up over **Next lesson**.
+
+### Fixed
+
+- Text and button colors meet WCAG AA contrast, the focus ring is darker, and text is at least 12px.
+- A locked **Next lesson** says why in visible text.
+- The editor shows "Esc, then Tab, leaves the editor". Key hints are hidden on touch screens.
+- Keyboard use: a skip link, `aria-current` on the active page, page titles, focus that stays in place after stage changes and returns after dialogs close, and Escape to close the lesson list.
 
 ## [1.1.2] - 2026-10-06
 
