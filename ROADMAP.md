@@ -4,7 +4,7 @@ These are planned areas of work, with no dates. Suggest improvements in [GitHub 
 
 ## Available now
 
-- 58 coding lessons in 12 paths on ML, GPUs, agents, backend, web, RL, data, reliability and interactive systems.
+- 71 coding lessons in 13 paths: Python from zero for people who have never coded, then ML, GPUs, agents, backend, web, RL, data, reliability and interactive systems.
 - Python and JavaScript exercises that run locally, with checks, hints, solutions, notes and XP.
 - Every lesson has an explanation, a runnable example, a prediction question and a solution you can open at any time.
 - Tests that make sure plausible wrong answers fail the lesson checks.

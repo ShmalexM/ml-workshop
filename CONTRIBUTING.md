@@ -109,7 +109,7 @@ To edit the frontend, start the app and run `npm run dev`. It watches and rebuil
 
 ## Add a lesson
 
-Lessons live in `backend/courses.py`, `backend/extra_lessons.py` and `backend/engineering_courses.py`. The public schema is described by `src/types.ts`; start from a nearby lesson.
+Lessons live in `backend/python_course.py`, `backend/courses.py`, `backend/extra_lessons.py` and `backend/engineering_courses.py`. The public schema is described by `src/types.ts`; start from a nearby lesson.
 
 1. Give the lesson a stable, unique ID. Progress is keyed by ID, so preserve existing IDs.
 2. Explain one concept with a worked case, three diagram steps, three tasks, and three hints that go from a nudge to nearly the answer. Define each term where it is first used. Link to primary documentation.
