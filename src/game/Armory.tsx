@@ -1,12 +1,12 @@
 import {useEffect,useMemo,useRef,useState} from 'react'
-import {Gift,Swords,Trash2} from 'lucide-react'
+import {Crosshair,Gift,Network,Swords,Trash2} from 'lucide-react'
 import HeroViewer from './HeroViewer'
 import ItemIcon,{lookOf} from './ItemIcon'
 import ItemTooltip,{FloatingTip} from './ItemTooltip'
 import ChestArt from './ChestArt'
 import {appearanceOf} from './three/hero'
 import {RARITY_INDEX,SLOT_NAME} from './rarity'
-import {PRIMARY_NAME,STAT_HELP,bestUpgrades,classOf,displaced,equipped,gainText,heroStats,isUpgrade,upgradeGain} from './stats'
+import {PRIMARY_NAME,STAT_HELP,bestUpgrades,classOf,displaced,equipped,gainText,heroStats,isUpgrade,passiveMods,upgradeGain} from './stats'
 import {gameApi} from './gameApi'
 import type {Chest,GameState,Item,Slot} from './types'
 
@@ -16,9 +16,9 @@ const pct=(n:number)=>`${(n*100).toFixed(1)}%`
 // The server takes up to 200 items per discard.
 const DISCARD_BATCH=200
 
-export default function Armory({game,onGame,onOpenChest,onFight,flash}:{game:GameState;onGame:(g:GameState,flash?:Item)=>void;onOpenChest:(c:Chest)=>void;onFight:()=>void;flash:{color:string;n:number}|null}){
+export default function Armory({game,onGame,onOpenChest,onFight,onTree,onPractice,flash}:{game:GameState;onGame:(g:GameState,flash?:Item)=>void;onOpenChest:(c:Chest)=>void;onFight:()=>void;onTree:()=>void;onPractice:()=>void;flash:{color:string;n:number}|null}){
  const hero=game.hero!;const cls=classOf(game)!;const race=game.catalog.races.find(r=>r.id===hero.race)
- const gear=useMemo(()=>equipped(game),[game]);const stats=useMemo(()=>heroStats(gear,hero.level),[gear,hero.level])
+ const gear=useMemo(()=>equipped(game),[game]);const mods=useMemo(()=>passiveMods(game),[game]);const stats=useMemo(()=>heroStats(gear,hero.level,mods),[gear,hero.level,mods])
  const look=useMemo(()=>appearanceOf(hero.race,hero.class,cls.role,gear),[hero.race,hero.class,cls.role,gear])
  const [tab,setTab]=useState<Tab>(game.chests.unopened.length?'chests':'bags')
  const [selected,setSelected]=useState<Item|null>(null);const [hover,setHover]=useState<{item:Item;x:number;y:number}|null>(null)
@@ -31,11 +31,13 @@ export default function Armory({game,onGame,onOpenChest,onFight,flash}:{game:Gam
  const select=(item:Item,from:HTMLElement)=>{opener.current=from;setReplacing(null);setSelected(item)}
  const closeDetail=()=>{setSelected(null);setReplacing(null);if(opener.current?.isConnected)opener.current.focus()}
  const bags=useMemo(()=>game.items.filter(i=>!i.equipped),[game.items])
- const gains=useMemo(()=>new Map(bags.map(item=>[item.id,upgradeGain(item,gear,hero.level)])),[bags,gear,hero.level])
- const plan=useMemo(()=>bestUpgrades(bags,gear,hero.level),[bags,gear,hero.level])
- const planGain=useMemo(()=>{const a=heroStats(gear,hero.level),b=heroStats(plan.worn,hero.level);return {power:b.power-a.power,health:b.maxHp-a.maxHp,armor:0,score:1,lostEffects:[]}},[gear,plan,hero.level])
+ const gains=useMemo(()=>new Map(bags.map(item=>[item.id,upgradeGain(item,gear,hero.level,mods)])),[bags,gear,hero.level,mods])
+ const plan=useMemo(()=>bestUpgrades(bags,gear,hero.level,mods),[bags,gear,hero.level,mods])
+ const planGain=useMemo(()=>{const a=heroStats(gear,hero.level,mods),b=heroStats(plan.worn,hero.level,mods);return {power:b.power-a.power,health:b.maxHp-a.maxHp,armor:0,score:1,lostEffects:[]}},[gear,plan,hero.level,mods])
  const junk=useMemo(()=>bags.filter(item=>!item.effect&&!isUpgrade(gains.get(item.id)!)),[bags,gains])
  const unopened=game.chests.unopened
+ const points=game.passives?.points.available||0
+ const treePicks=useMemo(()=>{const byId=new Map(game.catalog.tree.nodes.map(n=>[n.id,n]));return (game.passives?.allocated||[]).map(id=>byId.get(id)).filter(n=>n&&(n.kind==='notable'||n.kind==='keystone')).map(n=>n!.name)},[game])
  const sorted=[...bags].sort((a,b)=>sort==='ilvl'?b.ilvl-a.ilvl:sort==='rarity'?RARITY_INDEX[b.rarity]-RARITY_INDEX[a.rarity]||b.ilvl-a.ilvl:b.id-a.id)
  const c=game.campaign;const siege=c.bossHp?c.bossDamage/c.bossHp:0
  async function act(fn:()=>Promise<{game:GameState}>,flashItem?:Item){
@@ -44,7 +46,7 @@ export default function Armory({game,onGame,onOpenChest,onFight,flash}:{game:Gam
  }
  /** Equip at once, unless it would take off a Legendary effect: then ask first. */
  function equip(item:Item,from?:HTMLElement){
-  if(upgradeGain(item,gear,hero.level).lostEffects.length){if(from)opener.current=from;setSelected(item);setReplacing(item);return}
+  if(upgradeGain(item,gear,hero.level,mods).lostEffects.length){if(from)opener.current=from;setSelected(item);setReplacing(item);return}
   void act(()=>gameApi.equip(item.id),item)
  }
  async function discardJunk(){
@@ -63,6 +65,8 @@ export default function Armory({game,onGame,onOpenChest,onFight,flash}:{game:Gam
    <div className="hero-actions">
     {unopened.length>0&&<button className="g-button fight-button" onClick={()=>onOpenChest(unopened[0])}><Gift size={17}/>Open chests ({unopened.length})</button>}
     <button className={`g-button fight-button${unopened.length?' ghost':''}`} onClick={()=>unopened.length?setFightAsk(true):onFight()} disabled={game.battles.available<1} title={game.battles.available<1?'Finish a lesson, project walkthrough or reading to earn a battle.':undefined}><Swords size={17}/>Fight{game.battles.available>0?` (${game.battles.available})`:''}</button>
+    <button className={`g-button fight-button${points>0?'':' ghost'}`} onClick={onTree} title={points>0?`${points} passive ${points===1?'point':'points'} to spend`:'Passive skill tree'}><Network size={17}/>Skill tree{points>0?` (${points})`:''}</button>
+    <button className="g-button ghost fight-button" onClick={onPractice} title="Test your build against a training dummy. Free, and saves nothing."><Crosshair size={17}/>Practice</button>
    </div>
   </header>
   {fightAsk&&unopened.length>0&&<div className="g-confirm" role="alertdialog" aria-label="Open chests before fighting">
@@ -120,13 +124,15 @@ export default function Armory({game,onGame,onOpenChest,onFight,flash}:{game:Gam
     {tab==='stats'&&<dl className="stat-sheet">
      {([['Item level',stats.itemLevel,'itemLevel'],['Health',stats.maxHp.toLocaleString(),'health'],['Power',stats.power,'power'],[PRIMARY_NAME[cls.primary],stats.totals.primary,'primary'],['Stamina',stats.totals.stamina,'stamina'],['Critical strike',pct(stats.critChance),'crit'],['Haste',pct(stats.haste),'haste'],['Mastery',pct(stats.mastery),'mastery'],['Versatility',pct(stats.versatility),'versatility'],['Armor',`${stats.totals.armor} (${pct(stats.damageReduction)} less damage)`,'armor']] as [string,string|number,string][]).map(([k,v,help])=><div key={k}><dt>{k}<small>{STAT_HELP[help]}</small></dt><dd>{v}</dd></div>)}
      {Object.values(gear).filter(i=>i?.effect).map(i=><div key={i!.id} className="stat-effect"><dt className="rt-legendary">{i!.effect!.name}</dt><dd>{i!.effect!.text}</dd></div>)}
+     {game.passives&&<div className="stat-effect"><dt>Skill tree<small>{game.passives.points.spent} of {game.passives.points.earned} passive points spent. The numbers above include them.</small></dt>
+      <dd>{treePicks.length?treePicks.join(', '):'No notables or keystones yet.'} <button className="g-button ghost small" onClick={onTree}>Open skill tree</button></dd></div>}
     </dl>}
    </section>
   </div>
   {selected&&<div className="item-detail g-panel" role="region" aria-label="Selected item">
-   <ItemTooltip item={selected} compare={selected.equipped?null:gear[selected.slot]} gain={selected.equipped?null:upgradeGain(selected,gear,hero.level)} source={sourceText(selected,game)}/>
+   <ItemTooltip item={selected} compare={selected.equipped?null:gear[selected.slot]} gain={selected.equipped?null:upgradeGain(selected,gear,hero.level,mods)} source={sourceText(selected,game)}/>
    {replacing?.id===selected.id&&<div className="g-confirm inline" role="alertdialog" aria-label="Replace a Legendary effect">
-    <p>Equipping this takes off {upgradeGain(selected,gear,hero.level).lostEffects.map(i=>`${i.name} and its ${i.effect!.name} effect`).join(', ')}.</p>
+    <p>Equipping this takes off {upgradeGain(selected,gear,hero.level,mods).lostEffects.map(i=>`${i.name} and its ${i.effect!.name} effect`).join(', ')}.</p>
     <div><button className="g-button small" disabled={busy} onClick={()=>act(()=>gameApi.equip(selected.id),selected)}>Replace</button><button className="g-button ghost small" onClick={()=>setReplacing(null)}>Keep it</button></div>
    </div>}
    <div className="item-actions">

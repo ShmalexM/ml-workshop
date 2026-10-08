@@ -5,7 +5,7 @@ import ItemIcon,{lookOf} from './ItemIcon'
 import ItemTooltip,{FloatingTip} from './ItemTooltip'
 import {RARITY_COLOR,RARITY_INDEX,RARITY_NAME,SLOT_NAME,BASE_NAME,TIER_LABEL} from './rarity'
 import {reducedMotion} from './three/scene'
-import {equipped,gainText,isUpgrade,upgradeGain} from './stats'
+import {equipped,gainText,isUpgrade,passiveMods,upgradeGain} from './stats'
 import {gameApi} from './gameApi'
 import type {Chest,GameState,Item} from './types'
 
@@ -30,12 +30,12 @@ export default function ChestOpening({chest,game,onGame,onClose,onNext,nextCount
  }
  async function equip(item:Item,confirmed=false){
   // Taking off a Legendary effect needs a second click.
-  if(!confirmed&&upgradeGain(item,gear,level).lostEffects.length){setReplacing(item.id);return}
+  if(!confirmed&&upgradeGain(item,gear,level,mods).lostEffects.length){setReplacing(item.id);return}
   setReplacing(null)
   try{const r=await gameApi.equip(item.id);onGame(r.game,item)}catch(e){setError((e as Error).message)}
  }
  // Read from the current equipment, so an item replaced by a later Equip shows its button again.
- const gear=equipped(game);const level=game.hero?.level||1;const worn=new Set(Object.values(game.equipment));const legendary=best?.rarity==='legendary'&&shown>=items.length
+ const gear=equipped(game);const level=game.hero?.level||1;const mods=passiveMods(game);const worn=new Set(Object.values(game.equipment));const legendary=best?.rarity==='legendary'&&shown>=items.length
  const tierName=chest.tierName||TIER_LABEL[chest.tier]
  return <dialog ref={dialog} className={`chest-dialog game${legendary?' legendary-burst':''}`} aria-labelledby="chest-title" onCancel={e=>{if(phase==='opening')e.preventDefault();else onClose()}}>
   <button className="chest-close" aria-label="Close" onClick={onClose} disabled={phase==='opening'}><X size={18}/></button>
@@ -50,7 +50,7 @@ export default function ChestOpening({chest,game,onGame,onClose,onNext,nextCount
    <small>{chest.tier>=4?'Guaranteed Rare or better.':`Tier ${chest.tier} of 5.`}</small>
   </div>}
   {phase==='revealed'&&<ul className="loot-list" aria-live="polite">
-   {items.slice(0,shown).map(item=>{const gain=upgradeGain(item,gear,level);const done=worn.has(item.id)
+   {items.slice(0,shown).map(item=>{const gain=upgradeGain(item,gear,level,mods);const done=worn.has(item.id)
     const show=(e:{currentTarget:HTMLElement})=>setHover({item,rect:e.currentTarget.getBoundingClientRect()})
     return <li key={item.id} className={`loot-card lc-${item.rarity}`} onMouseEnter={show} onMouseLeave={()=>setHover(h=>h?.item===item?null:h)}>
      <ItemIcon look={lookOf(item)} size={64}/>
@@ -59,7 +59,7 @@ export default function ChestOpening({chest,game,onGame,onClose,onNext,nextCount
      <div className="loot-act">{isUpgrade(gain)&&!done&&<span className="upgrade">▲ {gainText(gain)}</span>}{done?<span className="equipped-note">Equipped</span>:<button className="g-button small" onFocus={show} onBlur={()=>setHover(null)} onClick={()=>equip(item)}>Equip</button>}</div>
     </li>})}
   </ul>}
-  {hover&&phase==='revealed'&&<FloatingTip x={hover.rect.right} y={hover.rect.top} avoid={hover.rect}><ItemTooltip item={hover.item} compare={gear[hover.item.slot]} gain={worn.has(hover.item.id)?null:upgradeGain(hover.item,gear,level)}/></FloatingTip>}
+  {hover&&phase==='revealed'&&<FloatingTip x={hover.rect.right} y={hover.rect.top} avoid={hover.rect}><ItemTooltip item={hover.item} compare={gear[hover.item.slot]} gain={worn.has(hover.item.id)?null:upgradeGain(hover.item,gear,level,mods)}/></FloatingTip>}
   {error&&<div className="g-error" role="alert"><span>{error}</span></div>}
   {phase==='revealed'&&shown>=items.length&&<div className="chest-actions">
    {nextCount>0&&<button className="g-button" onClick={onNext}>Open next chest ({nextCount} left)</button>}
