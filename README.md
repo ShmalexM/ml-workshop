@@ -62,7 +62,7 @@ Each lesson has three stages: **Understand**, **See an example** and **Try it yo
 
 All lessons are open from the start. On first launch, the **Paths** page asks whether you have written Python before; **No** opens Python from zero. The page suggests an order for four roles, and **Progress → All lessons** lists every lesson with filters by path and status. In a lesson, the **Lessons** button opens the lesson list. See the [ML learning guide](docs/learning-plan.md).
 
-**Projects** lists 12 public repositories, from Start small to Capstone. Each has a preparation lesson, a link to a starting file and three walkthrough steps. See [Learn from public projects](docs/project-learning.md).
+**Projects** lists 12 public repositories, from Start small to Capstone, each pinned to one commit. A project gives setup commands for macOS/Linux and Windows, a command to run it with the output to expect, and 3 to 5 tasks. Each task links to the lines to read, says what to change and gives a command to check the result. You can paste the output to check it in the browser; the text is not saved. See [Learn from public projects](docs/project-learning.md).
 
 **Books** is an offline PDF and EPUB reader. Drop your copy onto a book's card or use **Choose file**; **Add another book** accepts other titles and editions. Imports show progress and open without a reload, with search, bookmarks, notes and a saved reading position. Compatible editions of Modal's *GPU Glossary* and Philip Kiely's *Inference Engineering* have 15 reading guides linking their sections to lessons. The book cards link to the publishers; book files are not included in this repository. See [Local book library](docs/local-library.md).
 
