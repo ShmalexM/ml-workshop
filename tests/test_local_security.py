@@ -106,6 +106,13 @@ class SessionTests(unittest.TestCase):
                 self.assertIn(self.server.request(path)[0], (200, 404))
         status, _, _ = self.server.request('/api/run', token='', body=dict(lessonId='foundations-1', code='print(1)', mode='run'))
         self.assertEqual(status, 403)
+        # Project notes and task progress are learner data too.
+        project = dict(projectId='public-micrograd-ops', notes='note-7f3a', reviewed=[0], updatedAt=1,
+                       tasks={'accumulate': dict(notes='note-7f3a')})
+        for token in ('', 'wrong'):
+            with self.subTest(path='/api/project/state', token=token):
+                self.assertEqual(self.server.request('/api/project/state', token=token, body=project)[0], 403)
+        self.assertNotIn(b'note-7f3a', self.server.request('/api/portfolio')[2])
 
     def test_health_and_book_files_stay_public(self):
         self.assertEqual(self.server.request('/api/health', token='')[0], 200)

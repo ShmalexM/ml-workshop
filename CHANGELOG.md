@@ -23,6 +23,7 @@ This file lists the notable changes in each release. The format follows [Keep a 
 - Settings starts with the Hero game, backup and editor options. Versions and the CUDA note are in **About this install**.
 - The header says "Code runs on this computer" instead of "Local runtime".
 - The chest earned for a lesson is a line under the lesson buttons instead of a pop-up over **Next lesson**.
+- **Projects** has 12 hands-on projects, each pinned to one commit. A project gives setup and run commands, 3 to 5 tasks that link to the lines to change, and a command to check each task. Tasks can be ticked and have their own notes. Pasted output is checked in the browser and not saved. A project's chest tier follows its level, and is one tier higher when every check passed. Notes and ticks on the earlier walkthroughs are kept under **Retired projects**.
 
 ### Fixed
 
