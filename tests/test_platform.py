@@ -202,7 +202,8 @@ class LaunchTests(unittest.TestCase):
                     with patch.object(sys, 'argv', ['launch.py']):launch.main()
                     # The browser gets the token in the fragment and the user's own umask.
                     browser.assert_called_once_with(f'http://127.0.0.1:17319/#session={token}')
-                    self.assertEqual(os.umask(0o022), 0o022)
+                    if os.name != 'nt':  # Windows keeps no umask bits beyond write protection.
+                        self.assertEqual(os.umask(0o022), 0o022)
                 finally:
                     os.umask(umask)
                 spawn.assert_not_called()

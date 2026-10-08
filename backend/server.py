@@ -122,7 +122,7 @@ class Handler(BaseHTTPRequestHandler):
         super().send_response(code,message)
     def guarded(self,handle):
         """Answer bad input with 400 and unexpected errors with 500, instead of dropping the connection."""
-        self.responded=False
+        self.responded=False;self.body_read=False
         try:handle()
         except (TimeoutError,ConnectionError):self.close_connection=True
         except Exception as exc:
@@ -134,7 +134,22 @@ class Handler(BaseHTTPRequestHandler):
     def token_ok(self):
         # Header values arrive as latin-1 text. Compare bytes, so any value is a mismatch and never an error.
         return hmac.compare_digest(self.headers.get('X-Workshop-Token','').encode('utf-8','surrogateescape'),TOKEN)
+    def discard_body(self):
+        # A reply sent before the request body is read can reach a client that is still
+        # sending; closing then resets the connection. Read a small leftover body first.
+        self.body_read=True
+        try:length=int(self.headers.get('Content-Length','0'))
+        except ValueError:length=0
+        if 0<length<=4_000_000:
+            try:
+                while length>0:
+                    block=self.rfile.read(min(65536,length))
+                    if not block:break
+                    length-=len(block)
+            except OSError:self.close_connection=True
+        elif length:self.close_connection=True
     def send(self,data,status=200):
+        if self.command=='POST' and not getattr(self,'body_read',True):self.discard_body()
         body=json.dumps(data).encode()
         self.send_response(status)
         self.send_header('Content-Type','application/json')
@@ -258,7 +273,8 @@ class Handler(BaseHTTPRequestHandler):
             length=int(self.headers.get('Content-Length','0'))
             if length<1 or length>128000:return self.send({'error':'Request exceeds the local exercise size limit.'},413)
             if self.headers.get('Content-Type','').split(';')[0]!='application/json':return self.send({'error':'Expected JSON.'},415)
-            body=json.loads(self.rfile.read(length))
+            raw=self.rfile.read(length);self.body_read=True
+            body=json.loads(raw)
             if not isinstance(body,dict):raise ValueError('Expected an object')
             path=urlparse(self.path).path
             if path=='/api/project/state':
@@ -359,7 +375,7 @@ class Handler(BaseHTTPRequestHandler):
                 source=Path(temporary)/('upload'+extension)
                 deadline=time.monotonic()+60
                 with source.open('wb') as stream:
-                    remaining=length
+                    remaining=length;self.body_read=True
                     while remaining:
                         timeout=deadline-time.monotonic()
                         if timeout<=0:raise TimeoutError()
