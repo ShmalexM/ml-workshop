@@ -34,6 +34,14 @@ gh attestation verify engineering-workshop.tar.gz --repo ShmalexM/ml-workshop
 
 Use `engineering-workshop.zip` for the Windows archive. Releases published before the workflow added attestations have none, so the command fails for them.
 
+## Optional AI assistant
+
+The assistant is off by default. When it is on, the browser still connects only to the local server. The server sends your question, recent messages and the context chips you leave on to the provider you saved, and streams the answer back. The assistant has no tools: it cannot run code or change files or progress. Lesson text and your code go to the model as data, so text in them can change an answer but cannot do anything else.
+
+- **Provider address.** `https://` to any host. Plain `http://` only to `127.0.0.1`, `localhost` or `::1`, for Ollama and LM Studio. The server refuses a user name or password in the address, link-local and cloud metadata addresses, multicast and unspecified addresses, and the workshop's own port. It checks the address each time it connects, connects only to the address it checked, and does not follow redirects.
+- **Access and limits.** Every assistant endpoint needs the session token. One answer streams at a time, with at most 30 messages in 10 minutes. Stop, or closing the tab, ends the request to the provider.
+- **API key.** The key is saved in `data/assistant.json` with the same `0600` permissions as the other data files. No endpoint returns it; Settings shows its last 4 characters. It is not in progress exports or the server log, and provider error messages are redacted before they are shown. A key is sent only to the address it was saved for: changing the address removes it. Uninstall deletes the file, and `--purge` deletes the whole data folder. Use a separate key with a spending limit.
+
 ## Report a vulnerability
 
 Report vulnerabilities privately with the repository's [private reporting form](https://github.com/ShmalexM/ml-workshop/security/advisories/new). It is also on the [Security advisories](https://github.com/ShmalexM/ml-workshop/security/advisories) page under **Report a vulnerability**. Include the steps to reproduce, your operating system, and whether you used the install command or a clone. Do not include personal notes, progress databases, credentials, or sensitive source code in public issues. There is no guaranteed response time.

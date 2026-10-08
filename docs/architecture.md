@@ -54,6 +54,14 @@ The lesson UI begins in Understand (lesson text only), moves to See an example (
 `POST /api/example` uses the server-owned example code, the same local runner and the shared execution lock. It ignores submitted code/mode, passes no completion checks and never writes drafts, completions or activity. Python/JavaScript examples run with the same limits and trust model as exercises. Automated tests execute all examples and compare their actual stdout with the documented result.
 
 
+## Optional AI assistant
+
+`backend/assistant.py` holds the assistant's settings, the URL policy, the prompts, the limits and the `/api/assistant/*` routes; `backend/assistant_providers.py` builds requests for Ollama's `/api/chat` and OpenAI-compatible `/chat/completions` and parses their NDJSON and SSE streams. Settings and the key live in `data/assistant.json` (0600), not in SQLite, so backups never see them. `GET /api/assistant/config` returns `hasKey` and the last 4 characters, never the key.
+
+`POST /api/assistant/chat` streams JSON lines (`meta`, `delta`, `thinking`, `ping`, `done`, `error`). A reader thread reads the provider with `http.client` and puts deltas on a queue; the request thread writes them to the browser and checks every 0.2 s whether the browser closed the connection or pressed Stop, then closes the provider socket. The route takes no lock that other requests use, so drafts, runs and reads continue during an answer. Upstream timeouts: connect 10 s, first byte 90 s, 60 s between chunks, 3 minutes in total; answers are cut at 64 KB.
+
+The front end is in `src/assistant/`. The chat state lives outside React (`store.ts`), so an answer keeps streaming when the drawer closes. The drawer is lazy-loaded. `context.ts` builds the lesson chips with fixed size limits, which the server checks again. `Markdown.tsx` renders a small Markdown subset as React elements, so raw HTML stays text. `BattleScreen` turns the drawer off while it is mounted.
+
 ## Native Mac window
 
 `native/WorkshopApp.swift` is a small AppKit/WKWebView shell, compiled by `scripts/install-launcher.py` without third-party desktop dependencies. Its regular application bundle has a stable `dev.ml-workshop.desktop` identity and the existing Workshop icon. The generated bundle holds the checkout path in an ignored machine-specific Info.plist and is signed ad hoc for local use.

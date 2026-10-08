@@ -80,6 +80,23 @@ The game uses three.js and needs WebGL. Its data is in the same local database a
 
 The race and class names are a nod to World of Warcraft. This project is not affiliated with or endorsed by Blizzard Entertainment. The app makes all of its own art.
 
+## Optional AI assistant
+
+The app has an optional assistant for questions about a lesson, your code or an error. It is off by default. The app sends nothing to an AI provider until you turn the assistant on and save a provider.
+
+You bring the model:
+
+- **On this computer:** Ollama or LM Studio. Your questions do not leave the computer.
+- **Hosted:** OpenRouter, OpenAI or another OpenAI-compatible service, with your own API key. That provider's prices and terms apply.
+
+To set it up, open **Settings → AI assistant**, turn it on, choose a provider and a model, and press **Test connection**. Then press **Ask** in the header, or ⌘J (Ctrl+J on Linux and Windows). In a lesson, **Explain this error** next to an error or a failed check opens the assistant with a question ready to send.
+
+Chips above the question box show what goes with your question: the lesson and stage, the worked example without its answer, your code, the last run and the hints you opened. Notes are off by default. Turn any chip off before you send. On other pages, only the page name is sent.
+
+By default the assistant works as a tutor. It gives one hint at a time and does not write the solution; **Show solution** in the lesson still has it. **Allow full solutions** in Settings changes this. The assistant cannot change your progress: the checks still decide when a lesson is done.
+
+The API key is saved in `data/assistant.json`, which only your user account can read. The app shows only its last 4 characters, leaves it out of progress exports, and deletes the file when you uninstall. Conversations stay in the open tab until you reload it.
+
 ## Privacy and safety
 
 - The app runs on your computer. You do not need an account, and the app has no analytics or telemetry.
@@ -99,7 +116,7 @@ No. The CUDA lessons run your kernels in Numba's CPU simulator instead of on a G
 
 ### Does it send my code or data anywhere?
 
-No. The app has no account, analytics or telemetry. Your code runs on your computer, and your progress stays in the `data` folder. You need the internet only to install or update the app and to open reference links. See [Privacy and safety](#privacy-and-safety).
+No, unless you turn on the [optional AI assistant](#optional-ai-assistant). The app has no account, analytics or telemetry. Your code runs on your computer, and your progress stays in the `data` folder. You need the internet only to install or update the app and to open reference links. With the assistant on, your questions and the page context you allow go to the provider you chose; with Ollama or LM Studio, that provider runs on your computer. See [Privacy and safety](#privacy-and-safety).
 
 ### Is it free?
 
@@ -109,7 +126,7 @@ Yes. The app and all lessons are free and open source under the [MIT license](LI
 
 To update, run the install command again. Your progress is kept.
 
-To uninstall, run the command for your system. This removes the app, and your progress stays in the `data` folder.
+To uninstall, run the command for your system. This removes the app, and your progress stays in the `data` folder. Uninstall also deletes the AI assistant's settings and API key.
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/ShmalexM/ml-workshop/main/install.sh | sh -s -- --uninstall
