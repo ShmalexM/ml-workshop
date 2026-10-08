@@ -204,7 +204,7 @@ term('array', 'Array',
      'Values stored in order and read by position. A JavaScript array works like a Python '
      'list; a NumPy array holds numbers in a grid with a shape.', ['array', 'arrays'],
      lesson='web-0')
-term('object', 'Object', 'Named fields in curly brackets, such as {name: "ana", score: 7}. result.name reads one field.',
+term('object', 'Object', 'Named fields in curly brackets, such as {name: "ana", score: 7}. A dot reads one field, as in result.name.',
      ['object', 'objects'], ['web'], sense='JavaScript', lesson='web-0')
 term('arrow-function', 'Arrow function', 'A short JavaScript function: x => x * 2 takes x and returns x * 2.',
      ['arrow function', 'arrow functions'], lesson='web-0')
