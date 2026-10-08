@@ -7,6 +7,7 @@ import unittest
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'backend'))
 from courses import LESSONS
 from runner import execute
+from parallel_runs import PrefetchedRuns
 
 OFFLINE_PREFIX = """import socket
 def _network_disabled(*args, **kwargs):
@@ -44,6 +45,20 @@ def require_lesson_modules(test, lesson):
             test.fail(message)
         test.skipTest(message)
 
+def solution_and_starter_calls():
+    """The execute() calls of test_every_solution_and_starter, so they can run side by side."""
+    calls = []
+    for lesson in LESSONS:
+        if missing_lesson_modules(lesson):
+            continue
+        prefix = JS_OFFLINE_PREFIX if lesson.get('language') == 'javascript' else OFFLINE_PREFIX
+        options = dict(simulator=lesson['course'] == 'cuda', language=lesson.get('language', 'python'))
+        calls += [((prefix + lesson['solution'], lesson['checks']), options),
+                  ((prefix + lesson['starter'], lesson['checks']), options)]
+    return calls
+
+SOLUTION_RUNS = PrefetchedRuns(solution_and_starter_calls)
+
 class CurriculumTests(unittest.TestCase):
     def test_every_solution_and_starter(self):
         self.assertEqual(len(LESSONS),72)
@@ -54,9 +69,9 @@ class CurriculumTests(unittest.TestCase):
                 # Use the same 50-second budget as the app. A cold TensorFlow
                 # import on a fresh macOS installation can exceed 20 seconds.
                 prefix=JS_OFFLINE_PREFIX if lesson.get('language')=='javascript' else OFFLINE_PREFIX
-                result=execute(prefix+lesson['solution'],lesson['checks'],simulator=lesson['course']=='cuda',language=lesson.get('language','python'))
+                result=SOLUTION_RUNS.execute(prefix+lesson['solution'],lesson['checks'],simulator=lesson['course']=='cuda',language=lesson.get('language','python'))
                 self.assertTrue(result['passed'],f"{lesson['id']} solution: {result}")
-                starter=execute(prefix+lesson['starter'],lesson['checks'],simulator=lesson['course']=='cuda',language=lesson.get('language','python'))
+                starter=SOLUTION_RUNS.execute(prefix+lesson['starter'],lesson['checks'],simulator=lesson['course']=='cuda',language=lesson.get('language','python'))
                 self.assertIsNone(starter['error'], f"{lesson['id']} starter: {starter}")
                 self.assertFalse(starter['passed'],f"{lesson['id']} starter should not pass")
                 print(f"{lesson['id']}: solution passed; starter did not pass",flush=True)

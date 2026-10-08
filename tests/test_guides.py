@@ -5,7 +5,36 @@ import unittest
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'backend'))
 from courses import COURSES,LESSONS
 from runner import execute
-from test_curriculum import OFFLINE_PREFIX,JS_OFFLINE_PREFIX,require_lesson_modules
+from test_curriculum import OFFLINE_PREFIX,JS_OFFLINE_PREFIX,require_lesson_modules,missing_lesson_modules
+from parallel_runs import PrefetchedRuns
+
+def example_calls():
+    """The execute() calls of test_every_example_prints_the_teaching_result."""
+    calls = []
+    for lesson in LESSONS:
+        if missing_lesson_modules(lesson):
+            continue
+        lang = lesson.get('language', 'python')
+        prefix = JS_OFFLINE_PREFIX if lang == 'javascript' else OFFLINE_PREFIX
+        calls.append(((prefix + lesson['example']['code'], []), dict(language=lang, simulator=lesson['course'] == 'cuda')))
+    return calls
+
+def prediction_calls():
+    """The execute() calls of test_prediction_answers_match_execution."""
+    calls = []
+    for lesson in LESSONS:
+        if lesson['id'] not in PREDICTIONS or missing_lesson_modules(lesson):
+            continue
+        code = lesson['example']['code']
+        for old, new in PREDICTIONS[lesson['id']][0]:
+            code = code.replace(old, new)
+        language = lesson.get('language', 'python')
+        prefix = JS_OFFLINE_PREFIX if language == 'javascript' else OFFLINE_PREFIX
+        calls.append(((prefix + code, []), dict(language=language, simulator=lesson['course'] == 'cuda')))
+    return calls
+
+EXAMPLE_RUNS = PrefetchedRuns(example_calls)
+PREDICTION_RUNS = PrefetchedRuns(prediction_calls)
 
 # Input changes asked about by the prediction questions.
 PREDICTIONS = {'python-1': ([('cups = 2', 'cups = 5')], '17', '17'),
@@ -117,7 +146,7 @@ class GuideTests(unittest.TestCase):
                 require_lesson_modules(self, lesson)
                 example=lesson['example'];lang=lesson.get('language','python')
                 prefix=JS_OFFLINE_PREFIX if lang=='javascript' else OFFLINE_PREFIX
-                result=execute(prefix+example['code'],[],language=lang,simulator=lesson['course']=='cuda')
+                result=EXAMPLE_RUNS.execute(prefix+example['code'],[],language=lang,simulator=lesson['course']=='cuda')
                 self.assertIsNone(result['error'],result)
                 self.assertEqual(result['stdout'].strip(),example['output'],result)
                 self.assertFalse(result['passed'])
@@ -136,7 +165,7 @@ class GuideTests(unittest.TestCase):
                 require_lesson_modules(self, lesson)
                 language = lesson.get('language', 'python')
                 prefix = JS_OFFLINE_PREFIX if language == 'javascript' else OFFLINE_PREFIX
-                result = execute(prefix + code, [], language=language,
+                result = PREDICTION_RUNS.execute(prefix + code, [], language=language,
                                  simulator=lesson['course'] == 'cuda')
                 self.assertIsNone(result['error'], result)
                 # Keep leading blank lines: the blank-title question relies on one.

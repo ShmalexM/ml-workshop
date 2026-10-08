@@ -12,7 +12,8 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 from courses import BY_ID
 from runner import execute
-from test_curriculum import OFFLINE_PREFIX, JS_OFFLINE_PREFIX, require_lesson_modules
+from test_curriculum import OFFLINE_PREFIX, JS_OFFLINE_PREFIX, require_lesson_modules, missing_lesson_modules
+from parallel_runs import PrefetchedRuns
 
 
 def reference(lesson_id):
@@ -706,6 +707,23 @@ abs = 123
 }
 
 
+def wrong_answer_calls():
+    """The execute() calls of test_plausible_wrong_answers_fail_a_check, so they can run side by side."""
+    calls = []
+    for lesson_id, cases in WRONG_ANSWERS.items():
+        lesson = BY_ID[lesson_id]
+        if missing_lesson_modules(lesson):
+            continue
+        language = lesson.get("language", "python")
+        prefix = JS_OFFLINE_PREFIX if language == "javascript" else OFFLINE_PREFIX
+        calls += [((prefix + source, lesson["checks"]), dict(simulator=lesson["course"] == "cuda", language=language))
+                  for _, source in cases]
+    return calls
+
+
+WRONG_ANSWER_RUNS = PrefetchedRuns(wrong_answer_calls)
+
+
 class WrongAnswerTests(unittest.TestCase):
     def test_plausible_wrong_answers_fail_a_check(self):
         for lesson_id, cases in WRONG_ANSWERS.items():
@@ -715,8 +733,8 @@ class WrongAnswerTests(unittest.TestCase):
             for name, source in cases:
                 with self.subTest(lesson=lesson_id, mistake=name):
                     require_lesson_modules(self, lesson)
-                    result = execute(prefix + source, lesson["checks"],
-                                     simulator=lesson["course"] == "cuda", language=language)
+                    result = WRONG_ANSWER_RUNS.execute(prefix + source, lesson["checks"],
+                                                       simulator=lesson["course"] == "cuda", language=language)
                     self.assertIsNone(result["error"], result)
                     self.assertFalse(result["passed"], result)
                     self.assertTrue(any(not c["passed"] for c in result["checks"]), result)
