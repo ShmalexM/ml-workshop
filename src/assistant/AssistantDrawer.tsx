@@ -1,4 +1,4 @@
-import {useEffect,useMemo,useRef,type KeyboardEvent} from 'react'
+import {memo,useEffect,useMemo,useRef,type KeyboardEvent} from 'react'
 import {Check,Eraser,SendHorizontal,Square,X} from 'lucide-react'
 import Markdown from './Markdown'
 import {buildChips,type AssistantContext} from './context'
@@ -6,12 +6,13 @@ import {clearConversation,closeAssistant,conversation,sendMessage,setChip,setDra
 
 const size=(text:string)=>{const bytes=new TextEncoder().encode(text).length;return bytes<1024?`${bytes} B`:`${(bytes/1024).toFixed(1)} KB`}
 
-function Reply({message}:{message:Message}){
+// The store keeps a message object until that message changes, so only the streaming reply renders again.
+const Reply=memo(function Reply({message}:{message:Message}){
  return <>{message.text?<Markdown text={message.text}/>:message.streaming?<p className="assistant-waiting">{message.thinking?'The model is thinking…':'Waiting for the model…'}</p>:null}
   {message.error&&<p className="assistant-error" role="alert">{message.error}</p>}
   {message.stopped&&<p className="assistant-note">Stopped.</p>}
   {message.truncated&&<p className="assistant-note">The answer reached the 64 KB limit and was cut.</p>}</>
-}
+})
 
 export default function AssistantDrawer({context}:{context:AssistantContext}){
  const s=useAssistant();const config=s.config!

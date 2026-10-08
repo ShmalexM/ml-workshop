@@ -209,6 +209,24 @@ class ProviderLimitTests(unittest.TestCase):
         self.assertTrue(events.empty(), 'A stopped answer reports nothing')
 
 
+class MarkdownParserTests(unittest.TestCase):
+    """The drawer's Markdown parser, checked in Node by tests/markdown_check.mjs."""
+
+    def test_parser_in_node(self):
+        from runner import node_binary
+        node = node_binary()
+        if not node:
+            self.skipTest('Node.js is not installed')
+        # Node 23.6 and later load TypeScript without a flag; 22.6 to 23.5 need it.
+        probe = subprocess.run([node, '-p', 'Boolean(process.features.typescript)'], capture_output=True, text=True, timeout=30)
+        flags = [] if probe.stdout.strip() == 'true' else ['--experimental-strip-types', '--disable-warning=ExperimentalWarning']
+        result = subprocess.run([node, *flags, str(ROOT / 'tests/markdown_check.mjs')], capture_output=True, text=True, timeout=120)
+        if result.returncode and 'bad option' in result.stderr:
+            self.skipTest('This Node.js cannot load TypeScript files')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('checks passed', result.stdout)
+
+
 def resolver(table):
     def resolve(host, port):
         if host in table:
