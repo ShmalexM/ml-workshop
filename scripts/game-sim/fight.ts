@@ -2,15 +2,18 @@
 import {canvas,clock,overlay,runDue,simulatedTimeout} from './stubs'
 import * as readline from 'node:readline'
 import {BattleEngine} from '../../src/game/battle/engine'
-import {heroStats} from '../../src/game/stats'
+import {heroStats,sumMods} from '../../src/game/stats'
 import {appearanceOf} from '../../src/game/three/hero'
 
 const ROLE:Record<string,'melee'|'ranged'|'caster'>={warrior:'melee',paladin:'melee',deathknight:'melee',hunter:'ranged',shaman:'caster',rogue:'melee',monk:'melee',druid:'caster',demonhunter:'melee',priest:'caster',mage:'caster',warlock:'caster'}
 
-type Request={race?:string;cls:string;level:number;gear:Record<string,any>;stage:number;bossHp:number;bossRemaining:number;seed:number;auto?:boolean;dodge?:boolean;dt?:number;setup?:Record<string,unknown>;trace?:boolean}
+/** `passives` are the allocated tree nodes (only their `mods` are read), summed the way the armory sums them.
+ * `scale` multiplies Power and Health, which calibrates what a build is worth in stage-target terms. */
+type Request={race?:string;cls:string;level:number;gear:Record<string,any>;stage:number;bossHp:number;bossRemaining:number;seed:number;auto?:boolean;dodge?:boolean;dt?:number;setup?:Record<string,unknown>;trace?:boolean;passives?:{mods:Record<string,number>}[];scale?:number}
 
 export function fight(r:Request){
- const race=r.race||'human';const stats=heroStats(r.gear as any,r.level)
+ const race=r.race||'human';const stats=heroStats(r.gear as any,r.level,sumMods(r.passives||[]))
+ if(r.scale){stats.power=Math.round(stats.power*r.scale);stats.maxHp=Math.round(stats.maxHp*r.scale)}
  clock.now=0;clock.queue=[]
  const g=globalThis as any;const realTimeout=g.setTimeout;g.setTimeout=simulatedTimeout
  let end:any=null

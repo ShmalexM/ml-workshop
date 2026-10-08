@@ -3,12 +3,15 @@
 Every fight runs the real battle engine (scripts/game-sim/fight.ts) in Node with simulated time.
 The curriculum report drives the real backend/game.py on an in-memory database: it finishes
 every lesson and project in order, opens each chest, equips upgrades and spends every battle.
+The builds report allocates passive tree builds (backend/game_tree.py) and compares each one
+with the same hero and gear without passives.
 """
 import argparse
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 import json
+import math
 import os
 from pathlib import Path
 import queue
@@ -21,6 +24,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'backend'))
 import game  # noqa: E402
+import game_tree as tree  # noqa: E402
 from courses import COURSES, LESSONS  # noqa: E402
 from portfolio import load_portfolio  # noqa: E402
 
@@ -119,12 +123,12 @@ def battle_setup(battle):
     return {k: battle[k] for k in ('enemyHealth', 'enemyDamage') if k in battle}
 
 
-def stage_request(cls, gear, level, stage, seed, auto=True, dodge=False, uncapped=True):
+def stage_request(cls, gear, level, stage, seed, auto=True, dodge=False, uncapped=True, passives=()):
     hp = game.boss_hp(stage)
     setup = battle_setup(game.campaign(dict(stage=stage, bossDamage=0)))
     return dict(cls=cls, gear=gear, level=level, stage=stage, bossHp=hp,
                 bossRemaining=UNCAPPED if uncapped else hp, seed=seed, auto=auto, dodge=dodge,
-                setup=setup)
+                setup=setup, passives=[dict(mods=tree.NODES[nid]['mods']) for nid in passives])
 
 
 def mean(values):
@@ -252,6 +256,204 @@ def print_auto(rows):
     return worse
 
 
+# ---------- passive tree builds ----------
+# Small node preferences when a build spends points that its targets leave over.
+FILL = dict(
+    damage=dict(might=3, technique=2.6, sharp=2.4, swift=2, reach=1.4, flow=1.4, kindling=1, vigor=1, grit=.9, renewal=.4),
+    tank=dict(vigor=3, grit=3, renewal=1.5, might=1.2, technique=1, sharp=.8, swift=.8, flow=.8, reach=.6, kindling=.4),
+)
+BURNS = {'druid', 'priest', 'mage', 'warlock'}
+KEYSTONE_IDS = [k[0] for k in tree.KEYSTONES]
+# A build's worth is the Power and Health multiplier at which the same hero without passives deals
+# the same boss damage per fight. Boss damage itself grows much faster than that, because a hero who
+# lives longer also kills the waves sooner. Checks: the whole tree (71 points) is worth roughly
+# +25-40% (median build), and at the points a hero has on reaching each stage no build is clearly
+# worth more than +35% (its estimate minus two standard errors), so none puts a hero much beyond the
+# stage's Power and Health target. Single fights vary a lot, so use 16 or more seeds per build.
+SCALES = (.8, .9, 1, 1.1, 1.2, 1.3, 1.45, 1.6, 1.8, 2, 2.3)
+FULL_GAIN = (1.25, 1.40)
+STAGE_GAIN_MAX = 1.35
+TOLERANCE = .02
+
+
+def sector_of(cls):
+    return next(s['id'] for s in tree.SECTORS if cls in s['classes'])
+
+
+def distance(cls, target):
+    return len(tree.path_to(cls, {tree.START_BY_CLASS[cls]}, target))
+
+
+def notables(cls, sector):
+    return sorted((n['id'] for n in tree.NODES.values() if n['kind'] == 'notable' and n['sector'] == sector),
+                  key=lambda nid: (distance(cls, nid), nid))
+
+
+def plan_build(cls, points, targets=(), fill='damage'):
+    """Path to each target in turn while points last, then take the best small nodes next to the build."""
+    start = tree.START_BY_CLASS[cls]
+    chosen = {start}
+    for target in targets:
+        path = tree.path_to(cls, chosen, target)
+        if path is not None and len(path) <= points - (len(chosen) - 1):
+            chosen.update(path)
+    weights = dict(FILL[fill])
+    if cls in BURNS:
+        weights['kindling'] = 2.2
+    blocked = tree.STARTS - {start}
+
+    def score(nid):
+        node = tree.NODES[nid]
+        return {'small': weights.get(node.get('small'), 0), 'notable': 4, 'keystone': -100}.get(node['kind'], -100)
+    while len(chosen) - 1 < points:
+        frontier = {n for a in chosen for n in tree.ADJACENCY[a] if n not in chosen and n not in blocked}
+        best = max(frontier, key=lambda nid: (score(nid), nid))
+        if score(best) < 0:
+            break
+        chosen.add(best)
+    return sorted(chosen)
+
+
+def builds_for(cls):
+    """Archetypes: own sector, a defensive spread, each keystone first, and two hybrids across a bridge."""
+    sector = sector_of(cls)
+    order = [s['id'] for s in tree.SECTORS]
+    i = order.index(sector)
+    own = notables(cls, sector)
+    out = [('own', own, 'damage'), ('tank', own, 'tank')]
+    out += [(kid, [kid] + own, 'damage') for kid in KEYSTONE_IDS]
+    for label, other in (('hybrid-ccw', order[i - 1]), ('hybrid-cw', order[(i + 1) % 4])):
+        out.append((label, own[:1] + notables(cls, other)[:3] + own[1:], 'damage'))
+    return out
+
+
+def planned_points(level):
+    """Points on reaching `level` when lessons are finished in curriculum order."""
+    xp, done = 0, set()
+    for kind, obj in tasks():
+        if kind != 'lesson':
+            continue
+        if min(60, 1 + xp // 100) >= level:
+            break
+        done.add(obj['id'])
+        xp += obj['xp']
+    paths = sum(1 for c in COURSES if all(l['id'] in done for l in LESSONS if l['course'] == c['id']))
+    return level - 1 + paths
+
+
+def build_points():
+    """(label, stage, rarity, item level, hero level, points): every campaign stage, then the full tree."""
+    rows = [(f'stage {i}', i, r, il, lv, planned_points(lv)) for i, (r, il, lv) in enumerate(STAGE_GEAR, 1)]
+    return rows + [('full', 10, 'epic', 72, 60, 71)]
+
+
+def fit_curve(curve, center=0., width=.3):
+    """Weighted least squares fit of log boss damage as a quadratic in log scale near `center`.
+    Fitting several scales at once smooths single fights; the weights keep the fit local, because
+    the curve bends where heroes start to survive the whole fight."""
+    rows = [(math.log(k), math.log(max(1, dmg)), math.exp(-((math.log(k) - center) / width) ** 2))
+            for k, dmg in curve]
+    m = [[sum(w * x ** (i + j) for x, _, w in rows) for j in range(3)] +
+         [sum(w * y * x ** i for x, y, w in rows)] for i in range(3)]
+    for i in range(3):
+        pivot = max(range(i, 3), key=lambda r: abs(m[r][i]))
+        m[i], m[pivot] = m[pivot], m[i]
+        for r in range(3):
+            if r != i:
+                f = m[r][i] / m[i][i]
+                m[r] = [a - f * b for a, b in zip(m[r], m[i])]
+    return tuple(m[i][3] / m[i][i] for i in range(3))
+
+
+def equivalent(curve, damage):
+    """The scale at which the hero without passives deals `damage`, and the curve's log-log slope there.
+    Refits around the estimate twice, starting from the plain fit."""
+    target = math.log(max(1, damage))
+    x, fit = 0., fit_curve(curve, 0., 10.)
+    for width in (10., .3, .3):
+        fit = fit_curve(curve, x, width)
+        a, b, c = fit
+        lo, hi = math.log(.5), math.log(4)
+        for _ in range(60):
+            mid = (lo + hi) / 2
+            lo, hi = (mid, hi) if a + b * mid + c * mid * mid < target else (lo, mid)
+        x = (lo + hi) / 2
+    return math.exp(x), max(.5, fit[1] + 2 * fit[2] * x)
+
+
+def build_table(pool, seeds, points=None, classes=None):
+    """Each archetype build's worth, against the same hero and gear without passives at several scales."""
+    results = []
+    for label, stage, rarity, ilvl, level, pts in points or build_points():
+        jobs = []
+        for cls in classes or CLASSES:
+            gear = profile_gear(cls, rarity, ilvl)
+            for k in SCALES:
+                for s in range(seeds):
+                    req = stage_request(cls, gear, level, stage, 3000 + s)
+                    jobs.append((cls, ('scale', k), [], {**req, 'scale': k}))
+            for name, targets, fill in builds_for(cls):
+                chosen = plan_build(cls, pts, targets, fill)
+                for s in range(seeds):
+                    jobs.append((cls, name, chosen, stage_request(cls, gear, level, stage, 3000 + s, passives=chosen)))
+        out = pool_map(pool, lambda job: pool.fight(job[3]), jobs)
+        damage, nodes = {}, {}
+        for (cls, name, chosen, _), res in zip(jobs, out):
+            damage.setdefault((cls, name), []).append(res['bossDamage'])
+            nodes[(cls, name)] = chosen
+        for cls in classes or CLASSES:
+            curve = [(k, mean(damage[(cls, ('scale', k))])) for k in SCALES]
+            base = mean(damage[(cls, ('scale', 1))])
+            for name, *_ in builds_for(cls):
+                fights = damage[(cls, name)]
+                dmg = mean(fights)
+                gain, slope = equivalent(curve, dmg)
+                # Two standard errors of the mean boss damage, carried through the curve.
+                spread = 2 * S.stdev(fights) / max(1, dmg) / math.sqrt(len(fights)) / slope
+                results.append(dict(point=label, stage=stage, points=pts, cls=cls, build=name,
+                                    gain=gain, low=gain * math.exp(-spread), high=gain * math.exp(spread),
+                                    damage=dmg / max(1, base),
+                                    keystones=[n for n in nodes[(cls, name)] if n in KEYSTONE_IDS],
+                                    spent=len(nodes[(cls, name)]) - 1))
+    return results
+
+
+def print_builds(rows):
+    print('\nPassive tree builds, worth as a Power and Health multiplier on the same hero without passives')
+    print('(the multiplier at which that hero deals the same boss damage per fight; raw boss damage ratio in brackets)')
+    print(f"{'at':9s} {'points':>6s} {'median':>7s} {'lowest':>7s} {'highest':>8s} {'boss dmg':>9s}  highest build (2 standard errors)")
+    for point in dict.fromkeys(r['point'] for r in rows):
+        rs = [r for r in rows if r['point'] == point]
+        top = max(rs, key=lambda r: r['gain'])
+        print(f"{point:9s} {rs[0]['points']:6d} {S.median(r['gain'] for r in rs):7.2f} {min(r['gain'] for r in rs):7.2f} "
+              f"{top['gain']:8.2f} {'(' + format(S.median(r['damage'] for r in rs), '.1f') + 'x)':>9s}  "
+              f"{top['cls']} {top['build']} ({top['low']:.2f}-{top['high']:.2f})")
+    full = [r for r in rows if r['point'] == 'full']
+    if full:
+        names = list(dict.fromkeys(r['build'] for r in full))
+        print('\nFull tree (71 points, epic ilvl 72, level 60, stage 10): gain per class and build')
+        print(f"{'class':13s} " + ' '.join(f'{n[:9]:>9s}' for n in names))
+        for cls in dict.fromkeys(r['cls'] for r in full):
+            by = {r['build']: r['gain'] for r in full if r['cls'] == cls}
+            print(f'{cls:13s} ' + ' '.join(f'{by[n]:9.2f}' for n in names))
+        print(f"{'median':13s} " + ' '.join(f"{S.median(r['gain'] for r in full if r['build'] == n):9.2f}" for n in names))
+
+
+def tree_failures(rows):
+    failures = []
+    full = [r['gain'] for r in rows if r['point'] == 'full']
+    if full:
+        median = S.median(full)
+        if not FULL_GAIN[0] - TOLERANCE <= median <= FULL_GAIN[1] + TOLERANCE:
+            failures.append(f'the full tree is worth {median - 1:+.0%} for the median build, outside '
+                            f'{FULL_GAIN[0] - 1:+.0%} to {FULL_GAIN[1] - 1:+.0%}')
+    for r in rows:
+        if r['point'] != 'full' and r['low'] > STAGE_GAIN_MAX:
+            failures.append(f"{r['cls']} {r['build']} at {r['point']} ({r['points']} points) is worth "
+                            f"{r['gain'] - 1:+.0%} ({r['low'] - 1:+.0%} to {r['high'] - 1:+.0%})")
+    return failures
+
+
 # ---------- curriculum ----------
 # A folder without portfolio.json, so the public catalog is used.
 PROJECTS = load_portfolio(Path(__file__).parent)['projects']
@@ -278,7 +480,7 @@ def equip_upgrades(db, progress, rng, level):
             gear = swap(gear, item)
 
 
-def curriculum_run(pool, cls, seed, keep_gear=False):
+def curriculum_run(pool, cls, seed, keep_gear=False, build=None):
     rng = random.Random(seed)
     db = sqlite3.connect(':memory:', isolation_level=None)
     game.ensure_schema(db)
@@ -306,9 +508,10 @@ def curriculum_run(pool, cls, seed, keep_gear=False):
                 by_id = {item['id']: item for item in st['items']}
                 gear = {slot: by_id[iid] for slot, iid in st['equipment'].items()}
                 lvl = st['hero']['level']
+                passives = [dict(mods=tree.NODES[nid]['mods']) for nid in st['passives']['allocated']]
                 res = fight(dict(cls=cls, gear=gear, level=lvl, stage=battle['stage'], bossHp=battle['bossHp'],
                                  bossRemaining=battle['bossRemaining'], seed=(seed * 1000 + len(log)) * 7919 + battle['stage'],
-                                 setup=battle_setup(battle)))
+                                 setup=battle_setup(battle), passives=passives))
                 done = game.handle(db, 'battle/finish', dict(
                     battleId=battle['id'], outcome=res['outcome'], bossDamage=int(res['bossDamage']),
                     kills=min(2000, res['kills']), seconds=min(3600, res['seconds'])), progress, rng)
@@ -331,13 +534,17 @@ def curriculum_run(pool, cls, seed, keep_gear=False):
                     reviewed=list(range(len(obj['steps']))), notes='What the project does and how it is built.',
                     updatedAt=int(at.timestamp() * 1000))
             open_all()
+            if build:
+                points = game.state(db, progress)['passives']['points']['earned']
+                targets = next((t, f) for name, t, f in builds_for(cls) if name == build)
+                game.handle(db, 'passives', dict(allocated=plan_build(cls, points, *targets)), progress, rng)
             fight_all(i)
     return log
 
 
-def curriculum(pool, runs, classes=None):
+def curriculum(pool, runs, classes=None, build=None):
     jobs = [((classes or CLASSES)[i % len(classes or CLASSES)], 7 + i) for i in range(runs)]
-    return pool_map(pool, lambda job: (job[0], curriculum_run(pool, *job)), jobs)
+    return pool_map(pool, lambda job: (job[0], curriculum_run(pool, *job, build=build)), jobs)
 
 
 def print_curriculum(results):
@@ -397,19 +604,24 @@ def check(pool):
         idle = [pool.fight(stage_request(cls, profile_gear(cls, 'starter', 5), 1, 1, 300 + s, auto=False)) for s in range(4)]
         if mean(r['bossDamage'] for r in a) < mean(r['bossDamage'] for r in idle) * .97:
             failures.append(f'{cls}: Auto deals less boss damage than standing still')
+    # Passive tree: two stages and the full tree, one class per sector.
+    points = [p for p in build_points() if p[0] in ('stage 7', 'stage 10', 'full')]
+    failures += tree_failures(build_table(pool, 16, points, ['warrior', 'monk', 'druid', 'priest']))
     print('\n'.join(failures) or 'ok')
     return 1 if failures else 0
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('report', nargs='?', default='all', choices=['all', 'classes', 'stages', 'geared', 'auto', 'curriculum', 'check'])
+    parser.add_argument('report', nargs='?', default='all', choices=['all', 'classes', 'stages', 'geared', 'auto', 'curriculum', 'builds', 'check'])
     parser.add_argument('--bundle', required=True)
     parser.add_argument('--seeds', type=int, default=8)
     parser.add_argument('--runs', type=int, default=24)
     parser.add_argument('--workers', type=int, default=min(10, os.cpu_count() or 4))
     parser.add_argument('--classes', default='')
     parser.add_argument('--json', default='')
+    parser.add_argument('--build', default='', help='curriculum: allocate this archetype as points come in, e.g. own')
+    parser.add_argument('--at', default='', help='builds: only these points, e.g. "stage 10,full"')
     args = parser.parse_args()
     pool = Workers(args.bundle, args.workers)
     out = {}
@@ -430,8 +642,15 @@ def main():
         if args.report in ('all', 'auto'):
             out['auto'] = auto_table(pool, max(4, args.seeds // 2))
             print_auto(out['auto'])
+        if args.report in ('all', 'builds'):
+            at = [a.strip() for a in args.at.split(',') if a.strip()]
+            out['builds'] = build_table(pool, max(16, args.seeds), [p for p in build_points() if not at or p[0] in at],
+                                        [c for c in args.classes.split(',') if c] or None)
+            print_builds(out['builds'])
+            failures = tree_failures(out['builds'])
+            print('\n'.join(failures) or 'Tree checks: ok')
         if args.report in ('all', 'curriculum'):
-            results = curriculum(pool, args.runs, [c for c in args.classes.split(',') if c] or None)
+            results = curriculum(pool, args.runs, [c for c in args.classes.split(',') if c] or None, args.build or None)
             out['curriculum'] = [dict(cls=c, log=log) for c, log in results]
             print_curriculum(results)
     finally:
