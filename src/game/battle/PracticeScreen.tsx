@@ -7,6 +7,7 @@ import {KITS} from './kits'
 import {BattleEngine,type BattleEnd,type Hud} from './engine'
 import {HeroHud,KitList,fmt} from './Hud'
 import type {GameState} from '../types'
+import {useBattleGuard} from '../../assistant/store'
 
 type Phase='ready'|'fighting'|'down'
 type Banner={text:string;n:number}
@@ -14,6 +15,7 @@ type Banner={text:string;n:number}
 /** Practice arena: a training dummy and optional waves. It costs no battle, earns nothing and saves nothing,
  * so a build can be tried before a real fight. `passives` may be an unsaved tree draft. */
 export default function PracticeScreen({game,passives,draft,onExit,onTree}:{game:GameState;passives:string[];draft:boolean;onExit:()=>void;onTree:()=>void}){
+ useBattleGuard() // no assistant drawer or shortcut in the arena, as in a real fight
  const hero=game.hero!;const cls=classOf(game)!;const kit=KITS[cls.id]||KITS.warrior
  const gear=useMemo(()=>equipped(game),[game]);const mods=useMemo(()=>passiveMods(game,passives),[game,passives])
  const stats=useMemo(()=>heroStats(gear,hero.level,mods),[gear,hero.level,mods])

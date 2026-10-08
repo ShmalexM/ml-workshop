@@ -41,7 +41,7 @@ export function closeAssistant(){
 /** Ctrl/Cmd+J: open, move focus into the open drawer, or close it when focus is already there. */
 export function toggleAssistant(inside:boolean){if(!state.open)openAssistant();else if(inside)closeAssistant();else set({focus:state.focus+1})}
 
-/** BattleScreen calls this while it is mounted: the drawer and its shortcut are off during a fight. */
+/** BattleScreen and PracticeScreen call this while mounted: the drawer and its shortcut are off during a fight or practice. */
 export function useBattleGuard(){useEffect(()=>{stopAnswer();set({battle:true,open:false});return()=>set({battle:false})},[])}
 /** LessonReader reports how many hints are open, for the hints chip. */
 export function reportHints(lessonId:string,count:number){if(state.hints[lessonId]!==count)set({hints:{...state.hints,[lessonId]:count}})}
