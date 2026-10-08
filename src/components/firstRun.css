@@ -4,3 +4,7 @@
 .first-run p{font-size:13px;color:var(--muted);margin-top:4px;max-width:520px}
 .first-run-actions{display:flex;flex-wrap:wrap;gap:10px}
 @media(max-width:700px){.first-run{padding:15px 16px}.first-run-actions,.first-run-actions button{width:100%}}
+
+/* The line under the Paths hero that points to Python from zero. */
+.hub-hero .hub-prereq{margin-top:10px;font-size:13px}
+.hub-prereq button{padding:0;color:#07703f;font-weight:600;text-decoration:underline;text-underline-offset:3px}
