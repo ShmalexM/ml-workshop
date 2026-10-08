@@ -4,6 +4,7 @@ import {RenderPass} from 'three/addons/postprocessing/RenderPass.js'
 import {UnrealBloomPass} from 'three/addons/postprocessing/UnrealBloomPass.js'
 import {OutputPass} from 'three/addons/postprocessing/OutputPass.js'
 import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js'
+import {releaseListenersOnDispose} from './shared'
 
 export function createRenderer(canvas:HTMLCanvasElement,opts:{alpha?:boolean;shadows?:boolean;preserve?:boolean}={}){
  const renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:opts.alpha??false,preserveDrawingBuffer:opts.preserve??false,powerPreference:'high-performance'})
@@ -11,7 +12,7 @@ export function createRenderer(canvas:HTMLCanvasElement,opts:{alpha?:boolean;sha
  renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=.95
  renderer.outputColorSpace=THREE.SRGBColorSpace
  if(opts.shadows){renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFShadowMap}
- return renderer
+ return releaseListenersOnDispose(renderer)
 }
 
 const envCache=new WeakMap<THREE.WebGLRenderer,THREE.Texture>()
