@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import random
+import shutil
 import socket
 import sqlite3
 import subprocess
@@ -23,11 +24,13 @@ import game
 from courses import COURSES, LESSONS
 from library import import_book
 from book_fixture import make_epub
+from server_fixture import server_token
 
 # Finishing everything earns one chest and one battle per lesson and per path.
 EARNED = len(LESSONS) + len(COURSES)
 
 STAMP = '2026-10-05T22:00:00+00:00'
+HP1, HP2 = game.boss_hp(1), game.boss_hp(2)
 
 
 def progress_fixture():
@@ -62,13 +65,43 @@ class LootTests(unittest.TestCase):
         ]
         for stage, names in enumerate(expected, 1):
             self.assertEqual(game.stage_names(stage), names)
-            self.assertEqual(game.boss_hp(stage), round(3000 * 1.7**(stage - 1)))
+            power, health = game.STAGE_TARGETS[stage - 1]
+            self.assertEqual(game.stage_target(stage), (power, health))
+            self.assertEqual(game.boss_hp(stage), int(round(game.BOSS_HP_PER_POWER[stage - 1] * power, -2)))
+            if stage > 1:
+                self.assertGreater(game.boss_hp(stage), game.boss_hp(stage - 1))
+                self.assertGreater(power, game.STAGE_TARGETS[stage - 2][0])
+            current = game.campaign(dict(stage=stage, bossDamage=0))
+            self.assertEqual((current['targetPower'], current['targetHealth']), (power, health))
+            self.assertAlmostEqual(current['enemyHealth'], power / 36)
+            self.assertAlmostEqual(current['enemyDamage'], health / 480)
         for stage in range(11, 31):
             boss = ('Tyrant', 'Behemoth', 'Herald', 'Warden', 'Devourer')[(stage - 11) % 5]
             self.assertEqual(game.stage_names(stage), (f'The Abyss · Depth {stage - 10}',
                                                       'Abyssal ' + boss))
             self.assertEqual(game.boss_hp(stage), round(game.boss_hp(10) * 1.25**(stage - 10)))
+            self.assertGreater(game.stage_target(stage)[0], game.stage_target(stage - 1)[0])
+        # Damage saved against an earlier, larger boss leaves the boss alive at 1 health.
+        old = game.campaign(dict(stage=1, bossDamage=10**6))
+        self.assertEqual((old['bossDamage'], old['bossRemaining']), (HP1 - 1, 1))
         self.assertEqual(len(game.CAMPAIGN_STAGES), 10)
+
+    def test_class_colors_are_our_own_and_readable(self):
+        blizzard = {'#C69B6D', '#F48CBA', '#C41E3A', '#AAD372', '#0070DD', '#FFF468', '#00FF98',
+                    '#FF7C0A', '#A330C9', '#FFFFFF', '#3FC7EB', '#8788EE'}
+
+        def luminance(color):
+            channels = [int(color[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+            linear = [c / 12.92 if c <= .03928 else ((c + .055) / 1.055)**2.4 for c in channels]
+            return .2126 * linear[0] + .7152 * linear[1] + .0722 * linear[2]
+
+        for cls in game.CLASSES:
+            self.assertNotIn(cls['color'].upper(), blizzard)
+            # Class names are drawn in the class color on the game's panels and chosen buttons.
+            for background in ('#131623', '#1a1e2f', '#24263a'):
+                contrast = (luminance(cls['color']) + .05) / (luminance(background) + .05)
+                self.assertGreaterEqual(contrast, 4.5, (cls['id'], background))
+        self.assertNotEqual(next(r['color'] for r in game.RARITIES if r['id'] == 'epic'), '#A335EE')
 
     def test_every_class_all_tiers(self):
         expected_keys = {'primary', 'stamina', 'crit', 'haste', 'mastery',
@@ -222,7 +255,7 @@ class LootTests(unittest.TestCase):
                          game.roll_chest(*args, random.Random(14)))
 
     def test_curriculum_monte_carlo(self):
-        self.assertEqual((len(LESSONS), len(COURSES)), (71, 13))
+        self.assertEqual((len(LESSONS), len(COURSES)), (72, 13))
         # Welcome, then each path's lessons followed by the path chest.
         tiers = [1]
         for course in COURSES:
@@ -275,6 +308,19 @@ class LootTests(unittest.TestCase):
             halfLessonsLegendary=half_lesson_legendary / 1000)), flush=True)
 
 
+class BalanceSimulationTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which('node') and (ROOT / 'node_modules' / 'esbuild').is_dir(),
+                         'needs Node and the installed npm packages')
+    def test_battle_rules_hold_in_the_headless_engine(self):
+        """Burns cap at 3 per source, bosses resist stuns, a dead hero deals no damage, and
+        Auto does at least as well as standing still for the dash classes."""
+        result = subprocess.run(['node', str(ROOT / 'scripts' / 'game_balance_sim.mjs'), 'check',
+                                 '--workers', '4'], cwd=ROOT, capture_output=True, text=True,
+                                timeout=300, env={**os.environ, 'WORKSHOP_PYTHON': sys.executable})
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout.strip().splitlines()[-1], 'ok')
+
+
 class GameStateTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(prefix='ml-game-unit-')
@@ -315,8 +361,9 @@ class GameStateTests(unittest.TestCase):
             self.progress['completed'][lesson['id']] = dict(at=STAMP, xp=lesson['xp'])
         later = '2026-10-06T01:00:00+00:00'
         self.progress['completed']['foundations-3']['at'] = later
-        projects = [dict(id=d, title=d.title(), steps=['One', 'Two'], difficulty=d)
-                    for d in ('beginner', 'intermediate', 'advanced', 'unknown')]
+        projects = [dict(id=d, title=d.title(), steps=['One', 'Two'], level=level)
+                    for d, level in (('start', 'Start small'), ('build', 'Build next'),
+                                     ('capstone', 'Capstone'), ('unknown', None))]
         projects += [dict(id='empty', title='Empty', steps=[])]
         self.progress['projects'] = projects
         self.progress['projectState'] = {p['id']: dict(reviewed=[0, 0], updatedAt=1000)
@@ -331,9 +378,10 @@ class GameStateTests(unittest.TestCase):
         sources = {c['source']: c for c in game.earned_chests(self.progress)}
         self.assertEqual(sources['path:foundations']['earnedAt'], later)
         self.assertEqual(sources['path:foundations']['title'], 'ML foundations mastered')
-        for difficulty, tier in [('beginner', 2), ('intermediate', 3), ('advanced', 4), ('unknown', 3)]:
-            reward = sources['project:' + difficulty]
+        for project_id, tier in [('start', 2), ('build', 3), ('capstone', 4), ('unknown', 3)]:
+            reward = sources['project:' + project_id]
             self.assertEqual(reward['tier'], tier)
+            self.assertEqual(reward['subtitle'], 'Project walkthrough')
             self.assertEqual(reward['earnedAt'], '1970-01-01T00:00:01+00:00')
         self.assertNotIn('project:empty', sources)
         self.assertEqual(sources['reading:guide-a']['earnedAt'], '1970-01-01T00:00:02+00:00')
@@ -345,6 +393,82 @@ class GameStateTests(unittest.TestCase):
                           saved['hero']['levelProgress']), (650, 7, .5))
         dates = [datetime.fromisoformat(c['earnedAt']) for c in saved['chests']['unopened']]
         self.assertEqual(dates, sorted(dates))
+
+    def test_project_chests_need_every_task_and_checks_add_a_tier(self):
+        def task(tid, checked=True):
+            verify = dict(commands=['run'], expect='ok')
+            if checked:
+                verify['check'] = dict(type='contains', value='ok')
+            return dict(id=tid, title=tid.title(), verify=verify)
+        projects = [dict(id=level.split()[0].lower(), title=level, level=level,
+                         tasks=[task('one'), task('two'), task('read', checked=False)],
+                         stretch=task('extra'), steps=['One', 'Two', 'Read'])
+                    for level in ('Start small', 'Build next', 'Capstone')]
+        self.progress['projects'] = projects
+        state = self.progress['projectState'] = {
+            p['id']: dict(reviewed=[0, 1], updatedAt=1000, tasks={}) for p in projects}
+
+        def chests():
+            return {c['source']: c for c in game.earned_chests(self.progress)
+                    if c['kind'] == 'project'}
+        # Ticking two of three tasks is not finished, even with every check and the stretch passed.
+        state['capstone']['tasks'] = {t: dict(verifiedAt=5) for t in ('one', 'two', 'extra')}
+        self.assertEqual(chests(), {})
+        for saved in state.values():
+            saved['reviewed'] = [0, 1, 2]
+        self.assertEqual({s: c['tier'] for s, c in chests().items()},
+                         {'project:start': 2, 'project:build': 3, 'project:capstone': 5})
+        self.assertEqual(chests()['project:capstone']['subtitle'], 'Project · every check passed')
+        self.assertEqual(chests()['project:start']['subtitle'], 'Project')
+        # One missing check removes the bonus; the stretch task and unchecked tasks never count.
+        state['start']['tasks'] = dict(one=dict(verifiedAt=5), two=dict(notes='later'))
+        state['build']['tasks'] = dict(one=dict(verifiedAt=5), two=dict(verifiedAt=6))
+        self.assertEqual({s: c['tier'] for s, c in chests().items()},
+                         {'project:start': 2, 'project:build': 4, 'project:capstone': 5})
+        # A project without any checks earns its level's tier only.
+        projects[0]['tasks'] = [task('one', False), task('two', False), task('read', False)]
+        self.assertEqual(chests()['project:start']['tier'], 2)
+
+    def test_retired_projects_keep_earned_chests(self):
+        self.progress['retiredProjects'] = [dict(id='public-micrograd', title='micrograd', steps=3),
+                                            dict(id='public-pokerl', title='PokeRL', steps=3)]
+        self.progress['projectState'] = {
+            'public-micrograd': dict(notes='kept', reviewed=[0, 1, 2], updatedAt=1000),
+            'public-pokerl': dict(notes='', reviewed=[0, 2], updatedAt=1000),
+            'removed-local-project': dict(notes='x', reviewed=[0], updatedAt=1000)}
+        chests = {c['source']: c for c in game.earned_chests(self.progress)}
+        self.assertEqual(set(chests), {'project:public-micrograd'})
+        self.assertEqual((chests['project:public-micrograd']['tier'],
+                          chests['project:public-micrograd']['subtitle']), (3, 'Retired project'))
+        self.hero()
+        opened = self.action('open', dict(source='project:public-micrograd'))
+        self.assertEqual(opened['chest']['source'], 'project:public-micrograd')
+
+    def test_lesson_passed_after_its_solution_gives_a_lower_chest(self):
+        later = '2026-10-06T01:00:00+00:00'
+        lessons = {l['id']: l for l in LESSONS}
+        tiers = {lid: game.LESSON_TIERS[lid] for lid in ('foundations-1', 'foundations-4', 'foundations-6')}
+        self.assertEqual(tiers, {'foundations-1': 1, 'foundations-4': 2, 'foundations-6': 3})
+        for lid in tiers:
+            self.progress['completed'][lid] = dict(at=STAMP, xp=lessons[lid]['xp'])
+        # Shown before passing: one tier lower, never below 1. Shown after passing: unchanged.
+        self.progress['revealed'] = {'foundations-1': STAMP, 'foundations-4': '2026-10-05T21:00:00+00:00',
+                                     'foundations-6': later}
+        sources = {c['source']: c for c in game.earned_chests(self.progress)}
+        self.assertEqual({lid: sources['lesson:' + lid]['tier'] for lid in tiers},
+                         {'foundations-1': 1, 'foundations-4': 1, 'foundations-6': 3})
+        self.assertEqual(sources['lesson:foundations-4']['subtitle'], 'ML foundations · solution shown first')
+        self.assertEqual(sources['lesson:foundations-6']['subtitle'], 'ML foundations')
+        # A chest opened earlier keeps the tier it was opened with.
+        self.progress['revealed'] = {}
+        self.hero()
+        opened = self.action('open', dict(source='lesson:foundations-4'))['chest']
+        self.assertEqual(opened['tier'], 2)
+        self.progress['revealed'] = {'foundations-4': '2026-10-05T21:00:00+00:00'}
+        saved = game.state(self.db, self.progress)
+        self.assertEqual(next(c for c in saved['chests']['opened'] if c['source'] == 'lesson:foundations-4')['tier'], 2)
+        self.assertFalse(game.solution_first('not a date', STAMP))
+        self.assertFalse(game.solution_first(None, STAMP))
 
     def test_schema_is_idempotent_and_progress_cap(self):
         self.hero()
@@ -405,6 +529,28 @@ class GameStateTests(unittest.TestCase):
         self.assertNotIn('chest', saved['equipment'])
         self.assertIn(original['chest'], [i['id'] for i in saved['items']])
 
+    def test_equip_many_applies_in_order_and_rolls_back_on_any_error(self):
+        saved = self.hero()
+        original = saved['equipment']
+        head = self.add_item('warrior', 'head', 'plate')
+        two_hand = self.add_item('warrior', 'mainhand', 'greatsword')
+        cloak = self.add_item('warrior', 'back', 'cloak')
+        other = self.add_item('mage', 'chest', 'cloth')
+        before = game.export(self.db)
+        bad = ([head['id'], other['id']], [head['id'], 999999], [head['id'], head['id']],
+               [two_hand['id'], original['mainhand']], [], [True], ['1'], [1.0], [2**63],
+               list(range(1, 11)), '1', None)
+        for ids in bad:
+            with self.subTest(ids=ids):
+                with self.assertRaises(ValueError):
+                    self.action('equip-many', dict(itemIds=ids))
+                self.assertEqual(game.export(self.db), before)
+        saved = self.action('equip-many', dict(itemIds=[head['id'], two_hand['id'], cloak['id']]))['game']
+        self.assertEqual({k: saved['equipment'][k] for k in ('head', 'mainhand', 'back')},
+                         dict(head=head['id'], mainhand=two_hand['id'], back=cloak['id']))
+        self.assertNotIn('offhand', saved['equipment'])
+        self.assertEqual(saved['equipment']['chest'], original['chest'])
+
     def test_failed_discard_and_failed_open_roll_back_everything(self):
         initial = self.hero()
         loose = self.add_item('warrior', 'mainhand', 'sword')
@@ -421,6 +567,49 @@ class GameStateTests(unittest.TestCase):
         self.action('discard', dict(itemIds=[loose['id']]))
         self.assertNotIn(loose['id'], [i['id'] for i in game.export(self.db)['items']])
         self.action('open', dict(source='welcome'))
+
+    def test_open_all_matches_opening_each_chest_in_turn(self):
+        self.progress = full_progress()
+        self.hero()
+        sources = [c['source'] for c in game.state(self.db, self.progress)['chests']['unopened']]
+        result = self.action('open-all', {}, random.Random(9))
+        self.assertEqual([opened['chest']['source'] for opened in result['opened']], sources)
+        self.assertEqual(result['game']['chests']['unopened'], [])
+        at_once = game.export(self.db)
+        self.assertEqual(sum(len(opened['items']) for opened in result['opened']), len(at_once['items']) - 5)
+        # The same chests opened one at a time, with the same random numbers, give the same loot and luck.
+        other = sqlite3.connect(Path(self.tmp.name) / 'other.sqlite3')
+        try:
+            game.ensure_schema(other)
+            game.handle(other, 'hero', dict(name='Durgan', race='orc', **{'class': 'warrior'}), self.progress, random.Random(55))
+            rng = random.Random(9)
+            for source in sources:
+                game.handle(other, 'open', dict(source=source), self.progress, rng)
+            one_by_one = game.export(other)
+        finally:
+            other.close()
+        loot = lambda export: [(i['name'], i['rarity'], i['ilvl'], i['slot'], i['source']) for i in sorted(export['items'], key=lambda i: i['id'])]
+        self.assertEqual(loot(at_once), loot(one_by_one))
+        self.assertEqual({k: at_once['meta'][k] for k in ('sinceEpic', 'sinceLegendary')},
+                         {k: one_by_one['meta'][k] for k in ('sinceEpic', 'sinceLegendary')})
+        with self.assertRaisesRegex(ValueError, 'no chests'):
+            self.action('open-all', {})
+
+    def test_a_failed_open_all_opens_nothing(self):
+        self.progress = full_progress()
+        self.hero()
+        before = game.export(self.db)
+        calls = []
+        def fail_late(*args):
+            calls.append(args)
+            if len(calls) == 20:
+                raise RuntimeError('injected write failure')
+            return original(*args)
+        original = game.put_meta
+        with patch.object(game, 'put_meta', side_effect=fail_late):
+            with self.assertRaisesRegex(RuntimeError, 'injected'):
+                self.action('open-all', {})
+        self.assertEqual(game.export(self.db), before)
 
     def test_backup_history_is_complete_and_retire_resets_all_game_tables(self):
         self.progress = full_progress()
@@ -481,8 +670,8 @@ class GameStateTests(unittest.TestCase):
             if index:
                 self.progress['completed'][f'foundations-{index}'] = dict(at=STAMP, xp=100)
             battle = self.action('battle/start', {})['battle']
-            self.assertEqual(battle['bossHp'], 3000)
-            self.assertEqual(battle['bossRemaining'], 3000 - (0, 700, 1200)[index])
+            self.assertEqual(battle['bossHp'], HP1)
+            self.assertEqual(battle['bossRemaining'], HP1 - (0, 700, 1200)[index])
             response = self.action('battle/finish', dict(
                 battleId=battle['id'], outcome='defeat', bossDamage=damage, kills=2, seconds=60))
             self.assertFalse(response['result']['stageCleared'])
@@ -501,7 +690,7 @@ class GameStateTests(unittest.TestCase):
         finished = self.action('battle/finish', payload)
         result, saved = finished['result'], finished['game']
         self.assertEqual({k: v for k, v in result.items() if k != 'chest'},
-                         dict(outcome='victory', damage=1500, stageCleared=True, stage=2))
+                         dict(outcome='victory', damage=HP1 - 1500, stageCleared=True, stage=2))
         reward = result['chest']
         self.assertEqual(reward['source'], 'boss:1')
         self.assertEqual(reward['kind'], 'boss')
@@ -509,10 +698,10 @@ class GameStateTests(unittest.TestCase):
         self.assertEqual(reward['title'], 'Grimpelt the Alpha defeated')
         self.assertEqual(reward['subtitle'], 'Stage 1 · Blighted Outskirts')
         self.assertEqual(saved['campaign']['bossDamage'], 0)
-        self.assertEqual(saved['campaign']['bossRemaining'], 5100)
+        self.assertEqual(saved['campaign']['bossRemaining'], HP2)
         self.assertEqual(saved['campaign']['stagesCleared'], 1)
         self.assertEqual(saved['lifetime'], dict(fights=4, victories=1, kills=14, deaths=3,
-                                               totalDamage=3000, bestDamage=1500))
+                                               totalDamage=HP1, bestDamage=max(700, HP1 - 1500)))
         self.assertEqual(saved['battles'], dict(earned=4, used=4, available=0))
         self.assertEqual(reward['earnedAt'], saved['history'][0]['finishedAt'])
         before = game.export(self.db)
@@ -538,7 +727,7 @@ class GameStateTests(unittest.TestCase):
         self.assertEqual(saved['battles'], dict(earned=EARNED + 1, used=0, available=EARNED + 1))
         battle = self.action('battle/start', {})['battle']
         self.action('battle/finish', dict(battleId=battle['id'], outcome='victory',
-                                          bossDamage=3000, kills=1, seconds=30))
+                                          bossDamage=HP1, kills=1, seconds=30))
         self.action('open', dict(source='welcome'))
         before = game.export(self.db)
         statements = []
@@ -636,7 +825,7 @@ class GameStateTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'response failed'):
                 self.action('battle/start', {})
         self.assertEqual(game.export(self.db), before)
-        payload = dict(battleId=battle['id'], outcome='victory', bossDamage=3000, kills=1, seconds=2)
+        payload = dict(battleId=battle['id'], outcome='victory', bossDamage=HP1, kills=1, seconds=2)
         original_put = game.put_meta
         def fail_second_write(db, key, value):
             if key == 'bossDamage':
@@ -698,17 +887,7 @@ class GameApiTests(unittest.TestCase):
             env={**os.environ, 'ML_WORKSHOP_DATA_DIR': cls.tmp.name, 'PYTHONDONTWRITEBYTECODE': '1'},
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         cls.addClassCleanup(cls.stop_server)
-        for _ in range(80):
-            try:
-                with urllib.request.urlopen(cls.url + '/api/bootstrap', timeout=1) as response:
-                    cls.token = json.load(response)['token']
-                break
-            except OSError:
-                if cls.proc.poll() is not None:
-                    raise RuntimeError('Game test server exited')
-                time.sleep(.1)
-        else:
-            raise RuntimeError('Game test server unavailable')
+        cls.token = server_token(cls.url, directory, cls.proc)
 
     @classmethod
     def stop_server(cls):
@@ -745,7 +924,7 @@ class GameApiTests(unittest.TestCase):
         db = sqlite3.connect(Path(self.tmp.name) / 'workshop.sqlite3')
         try:
             with db:
-                for table in ('completions', 'project_state', 'reading_state'):
+                for table in ('completions', 'solution_views', 'project_state', 'reading_state'):
                     db.execute('DELETE FROM ' + table)
         finally:
             db.close()
@@ -760,7 +939,9 @@ class GameApiTests(unittest.TestCase):
         self.assertEqual(initial['chests'], dict(opened=[], unopened=[]))
         self.assertEqual(set(initial), {'hero', 'items', 'equipment', 'chests',
                                        'luck', 'enabled', 'battles', 'campaign',
-                                       'lifetime', 'history', 'catalog'})
+                                       'lifetime', 'history', 'passives', 'catalog'})
+        self.assertIsNone(initial['passives'])
+        self.assertEqual(len(initial['catalog']['tree']['nodes']), 120)
         self.assertEqual((len(initial['catalog']['races']), len(initial['catalog']['classes'])), (13, 12))
         saved = self.hero(name='  Durgan  ')
         self.assertEqual(saved['hero']['name'], 'Durgan')
@@ -821,6 +1002,21 @@ class GameApiTests(unittest.TestCase):
         self.assertIn('foundations-1', self.request('/api/state')['completed'])
         self.assertEqual(len(self.request('/api/game')['chests']['unopened']), 3)
 
+    def test_solution_shown_before_passing_lowers_the_lesson_chest_over_http(self):
+        lessons = {l['id']: l for l in LESSONS}
+        # Without the session token the solution is not sent and the view is not recorded.
+        for headers in ({'X-Workshop-Token': None}, {'X-Workshop-Token': 'wrong'}):
+            self.assert_error('/api/solution/foundations-5', None, 403, headers)
+        self.request('/api/solution/foundations-4')
+        for lid in ('foundations-4', 'foundations-5'):
+            result = self.request('/api/run', dict(lessonId=lid, code=lessons[lid]['solution'], mode='check'))
+            self.assertTrue(result['passed'])
+        # Looking at the solution after passing changes nothing.
+        self.request('/api/solution/foundations-5')
+        chests = {c['source']: c for c in self.request('/api/game')['chests']['unopened']}
+        self.assertEqual(chests['lesson:foundations-4']['tier'], 1)
+        self.assertEqual(chests['lesson:foundations-5']['tier'], 2)
+
     def test_campaign_http_start_abandon_finish_and_backup(self):
         self.assertEqual(self.assert_error('/api/game/battle/start', {}), game.NEXT_BATTLE)
         self.hero()
@@ -828,7 +1024,9 @@ class GameApiTests(unittest.TestCase):
         self.request('/api/run', dict(lessonId='foundations-1', code=solution, mode='check'))
         first = self.request('/api/game/battle/start', {})
         self.assertEqual(set(first['battle']), {'id', 'stage', 'stageName', 'bossName',
-                                               'bossHp', 'bossDamage', 'bossRemaining'})
+                                               'bossHp', 'bossDamage', 'bossRemaining',
+                                               'targetPower', 'targetHealth', 'enemyHealth',
+                                               'enemyDamage'})
         self.assertEqual(first['game']['battles'], dict(earned=2, used=1, available=1))
         second = self.request('/api/game/battle/start', {})
         self.assertEqual(second['game']['history'][0]['outcome'], 'abandoned')
@@ -840,20 +1038,20 @@ class GameApiTests(unittest.TestCase):
         response = self.request('/api/game/battle/finish', {**payload, 'battleId': second['battle']['id']})
         self.assertEqual(response['result'], dict(outcome='defeat', damage=1000,
                                                  stageCleared=False, stage=1, chest=None))
-        self.assertEqual(response['game']['campaign']['bossRemaining'], 2000)
+        self.assertEqual(response['game']['campaign']['bossRemaining'], HP1 - 1000)
         self.assertEqual(self.assert_error('/api/game/battle/start', {}), game.NEXT_BATTLE)
         self.request('/api/project/state', dict(projectId='sample', notes='', reviewed=[0, 1], updatedAt=2000))
         third = self.request('/api/game/battle/start', {})['battle']
         self.assertEqual(third['bossDamage'], 1000)
-        self.assertEqual(third['bossRemaining'], 2000)
+        self.assertEqual(third['bossRemaining'], HP1 - 1000)
         response = self.request('/api/game/battle/finish', {**payload, 'battleId': third['id'],
-                                                           'bossDamage': 5000, 'outcome': 'defeat'})
+                                                           'bossDamage': HP1 + 1000, 'outcome': 'defeat'})
         self.assertEqual(response['result']['outcome'], 'victory')
-        self.assertEqual(response['result']['damage'], 2000)
+        self.assertEqual(response['result']['damage'], HP1 - 1000)
         self.assertEqual(response['game']['campaign']['stage'], 2)
         self.assertEqual(response['game']['campaign']['bossDamage'], 0)
         self.assertEqual(response['game']['lifetime'], dict(fights=3, victories=1, kills=8,
-                                                          deaths=1, totalDamage=3000, bestDamage=2000))
+                                                          deaths=1, totalDamage=HP1, bestDamage=HP1 - 1000))
         self.assertEqual(response['game']['battles'], dict(earned=3, used=3, available=0))
         self.assertEqual(response['result']['chest']['source'], 'boss:1')
         backup = self.request(self.request('/api/backup', {})['url'])['game']
@@ -935,7 +1133,7 @@ class GameApiTests(unittest.TestCase):
         self.assertEqual(Counter(status for status, _ in starts), {200: 1, 400: 7})
         self.assertTrue(all(body['error'] == game.NEXT_BATTLE for status, body in starts if status == 400))
         battle = next(body['battle'] for status, body in starts if status == 200)
-        payload = dict(battleId=battle['id'], outcome='victory', bossDamage=3000, kills=1, seconds=20)
+        payload = dict(battleId=battle['id'], outcome='victory', bossDamage=HP1, kills=1, seconds=20)
         with ThreadPoolExecutor(max_workers=8) as pool:
             finishes = list(pool.map(lambda _: attempt('/api/game/battle/finish', payload), range(8)))
         self.assertEqual(Counter(status for status, _ in finishes), {200: 1, 400: 7})
@@ -947,6 +1145,13 @@ class GameApiTests(unittest.TestCase):
                          ['boss:1'])
         self.assertEqual(self.request('/api/game/summary'),
                          dict(enabled=True, hero=True, unopened=2, battles=0, stage=2))
+
+    def test_open_all_over_http(self):
+        self.hero()
+        reply = self.request('/api/game/open-all', {})
+        self.assertEqual([opened['chest']['source'] for opened in reply['opened']], ['welcome'])
+        self.assertEqual(reply['game']['chests']['unopened'], [])
+        self.assertEqual(self.assert_error('/api/game/open-all', {}), 'There are no chests to open.')
 
     def test_concurrent_open_is_once_only(self):
         self.hero()
@@ -979,6 +1184,36 @@ class GameApiTests(unittest.TestCase):
         self.assertIsNone(self.request('/api/game')['hero'])
         self.assert_error('/api/game', None, 403, {'Origin': 'https://example.com'})
 
+    def test_passives_over_http(self):
+        body = dict(allocated=['start-warrior', 'warrior-1'])
+        self.assert_error('/api/game/passives', body)
+        self.hero()
+        game_state = self.request('/api/game')
+        self.assertEqual(game_state['passives']['points'], dict(earned=0, spent=0, available=0))
+        self.assertIn('needs more passive points', self.assert_error('/api/game/passives', body))
+        db = sqlite3.connect(Path(self.tmp.name) / 'workshop.sqlite3')
+        try:
+            with db:
+                for lesson in [l for l in LESSONS if l['course'] == 'foundations']:
+                    db.execute('INSERT INTO completions VALUES (?,?,?)', (lesson['id'], STAMP, lesson['xp']))
+        finally:
+            db.close()
+        saved = self.request('/api/game/passives', body)['game']['passives']
+        self.assertEqual(saved['points'], dict(earned=7, spent=1, available=6))
+        self.assertEqual(self.request('/api/game')['passives']['allocated'], ['start-warrior', 'warrior-1'])
+        # Like the other game routes, a change needs the session token and a same-origin request.
+        for headers in ({'X-Workshop-Token': None}, {'X-Workshop-Token': 'wrong'}, {'Origin': 'https://example.com'}):
+            self.assert_error('/api/game/passives', dict(allocated=['start-warrior']), 403, headers)
+        self.assertEqual(self.request('/api/game')['passives']['allocated'], ['start-warrior', 'warrior-1'])
+        battle = self.request('/api/game/battle/start', {})['battle']
+        self.assertIn('fight', self.assert_error('/api/game/passives', dict(allocated=['start-warrior'])))
+        self.request('/api/game/battle/finish', dict(battleId=battle['id'], outcome='retreat', bossDamage=0,
+                                                     kills=0, seconds=1))
+        self.assertEqual(self.request('/api/game/passives', dict(allocated=['start-warrior']))['game']['passives']
+                         ['points']['spent'], 0)
+        backup = self.request(self.request('/api/backup', {})['url'])
+        self.assertEqual(backup['game']['meta']['passives'], {'v': 1, 'nodes': []})
+
     def test_invalid_names_and_action_payloads(self):
         for name in ('', 'A', '123', 'A  B', '-Durgan', "Durgan'", 'A_B', 'éowyn',
                      'A' * 17, 'A\nB', 'A\tB', None, 3, [], {}):
@@ -993,12 +1228,17 @@ class GameApiTests(unittest.TestCase):
             ('open', {}), ('open', {'source': []}), ('open', {'source': 'path:cuda'}),
             ('equip', {}), ('equip', {'itemId': True}), ('equip', {'itemId': 999999}),
             ('equip', {'itemId': 2**63}), ('equip', {'itemId': 2**100}),
+            ('equip-many', {}), ('equip-many', {'itemIds': []}), ('equip-many', {'itemIds': [999999]}),
+            ('equip-many', {'itemIds': [True]}), ('equip-many', {'itemIds': [1] * 10}),
             ('unequip', {'slot': 'waist'}), ('unequip', {'slot': []}),
             ('discard', {'itemIds': []}), ('discard', {'itemIds': [True]}),
             ('discard', {'itemIds': [1] * 201}), ('discard', {'itemIds': [1.0]}),
             ('discard', {'itemIds': '1'}), ('discard', {'itemIds': [999999]}),
             ('discard', {'itemIds': [2**63]}), ('discard', {'itemIds': [2**100]}),
             ('retire', {}), ('retire', {'confirm': 'retire'}), ('unknown', {}),
+            ('passives', {}), ('passives', {'allocated': 'start-warrior'}), ('passives', {'allocated': []}),
+            ('passives', {'allocated': ['start-warrior', 'warrior-1']}),
+            ('passives', {'allocated': ['start-paladin']}), ('passives', {'allocated': [None]}),
         ]
         before = self.request('/api/game')
         for action, body in invalid:

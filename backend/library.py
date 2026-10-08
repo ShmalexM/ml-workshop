@@ -10,6 +10,7 @@ from urllib.parse import urlsplit, unquote, quote
 from xml.etree import ElementTree as ET
 import hashlib
 import json
+import logging
 import os
 import posixpath
 import pyexpat
@@ -37,6 +38,10 @@ MAX_SECTIONS = 2000
 MAX_SECTION_BYTES = 8 * 1024 * 1024
 MAX_PDF_PAGES = 10000
 MAX_OUTPUT_BYTES = 64 * 1024 * 1024
+# Images are copied unchanged, so they get their own budget: a well-illustrated book can hold more
+# than 64 MB of pictures. The count bounds the files one book adds to the data folder.
+MAX_IMAGES = 2000
+MAX_IMAGE_BYTES = 150 * 1024 * 1024
 MAX_TITLE = 300
 MAX_FIELD = 2000
 
@@ -219,15 +224,21 @@ class ChapterWriter:
             raise ValueError(self.message)
         (self.folder/f"{document['location']}.json").write_bytes(raw)
 
-def copy_image(archive, name, folder):
-    """Copy an image byte-for-byte without holding it in memory; the file is named by its hash."""
+def copy_image(archive, name, folder, limit):
+    """Copy an image byte-for-byte without holding it in memory; the file is named by its hash.
+
+    Stops with an error once more than `limit` bytes are unpacked.
+    """
     (folder/'assets').mkdir(exist_ok=True)
     partial = folder/'assets'/'.partial'
     h = hashlib.sha256()
     size = 0
     with archive.open(name) as stream, partial.open('wb') as out:
         for block in iter(lambda: stream.read(1024 * 1024), b''):
-            h.update(block); out.write(block); size += len(block)
+            size += len(block)
+            if size > limit:
+                raise ValueError(f'The images in this EPUB are larger than {megabytes(MAX_IMAGE_BYTES)} in total, which is over the import limit.')
+            h.update(block); out.write(block)
     target = 'assets/' + h.hexdigest()[:16] + PurePosixPath(name).suffix.lower()
     partial.replace(folder/target)
     return target, h.hexdigest(), size
@@ -255,16 +266,18 @@ def import_epub(source, folder, book_id):
         if len(pages)>MAX_SECTIONS:
             raise ValueError(f'This EPUB has more than {MAX_SECTIONS:,} sections, which is over the import limit.')
         chapters = {name:i+1 for i,name in enumerate(pages)}
+        images = {}
+        for item in manifest.values():
+            if item.get('media-type','') in IMAGE_TYPES:
+                images.setdefault(archive_path(base,item.get('href')),item.get('media-type'))
+        if len(images)>MAX_IMAGES:
+            raise ValueError(f'This EPUB has more than {MAX_IMAGES:,} images, which is over the import limit.')
         assets = {}
         image_records = []
-        for item in manifest.values():
-            media_type = item.get('media-type','')
-            if media_type not in IMAGE_TYPES:
-                continue
-            name = archive_path(base,item.get('href'))
-            if name in assets:
-                continue
-            target, sha256, size = copy_image(archive, name, folder)
+        budget = MAX_IMAGE_BYTES
+        for name,media_type in images.items():
+            target, sha256, size = copy_image(archive, name, folder, budget)
+            budget -= size
             assets[name] = target
             image_records.append(dict(source=name,path=target,sha256=sha256,bytes=size,mediaType=media_type))
         writer = ChapterWriter(folder, f'This EPUB unpacks to more than {megabytes(MAX_OUTPUT_BYTES)} of text and markup, which is over the import limit.')
@@ -330,7 +343,13 @@ def import_book(source, data_dir, book_id):
     target = root/book_id
     refresh = False
     if target.exists():
-        existing = json.loads((target/'book.json').read_text(encoding='utf-8'))
+        try:
+            existing = json.loads((target/'book.json').read_text(encoding='utf-8'))
+            # A version 1 book.json also holds the chapters. Its checksum is enough to reimport it.
+            if not (isinstance(existing,dict) and 'documents' in existing and isinstance(existing.get('sha256'),str)):
+                checked_summary(existing,book_id)
+        except (OSError,ValueError):
+            raise ValueError(f'The book in {target} could not be opened. Remove it, then import again.') from None
         if existing['sha256']==checksum:
             if existing.get('importVersion') == IMPORT_VERSION:
                 return existing
@@ -387,8 +406,25 @@ def split_legacy_book(folder, book):
         shutil.rmtree(staging,ignore_errors=True)
 
 # Summaries only, keyed by book.json path and file identity. Chapters are read from disk per request.
+# A book.json that cannot be read is cached as None, so its warning is logged once per file version.
 _SUMMARIES = {}
 _SUMMARY_LOCK = threading.Lock()
+LOG = logging.getLogger('library')
+# Fields the server and the reader use from book.json.
+SUMMARY_FIELDS = {'id':str,'title':str,'format':str,'count':int,'toc':list,'assets':list,'sourceFile':str,'sha256':str}
+
+class UnreadableBook(KeyError):
+    """data/library/<id>/book.json exists but cannot be read. The catalog lists the book so it can be removed."""
+
+def checked_summary(book, book_id):
+    if not isinstance(book,dict):
+        raise ValueError('book.json does not hold an object')
+    wrong = [key for key,kind in SUMMARY_FIELDS.items() if not isinstance(book.get(key),kind)]
+    if wrong:
+        raise ValueError('book.json has missing or invalid fields: ' + ', '.join(wrong))
+    if book['id']!=book_id or book['format'] not in ('pdf','epub'):
+        raise ValueError('book.json names another book or format')
+    return book
 
 class Library:
     def __init__(self,data_dir):
@@ -414,22 +450,54 @@ class Library:
             key = (stat.st_mtime_ns,stat.st_size,stat.st_ino)
             cached = _SUMMARIES.get(path)
             if cached and cached[0]==key:
+                if cached[1] is None:
+                    raise UnreadableBook(book_id)
                 return cached[1]
-            book = json.loads(path.read_text(encoding='utf-8'))
-            if 'documents' in book:
-                book = split_legacy_book(folder,book)
-                stat = path.stat()
-                key = (stat.st_mtime_ns,stat.st_size,stat.st_ino)
+            try:
+                book = json.loads(path.read_text(encoding='utf-8'))
+                if isinstance(book,dict) and 'documents' in book:
+                    book = split_legacy_book(folder,book)
+                    stat = path.stat()
+                    key = (stat.st_mtime_ns,stat.st_size,stat.st_ino)
+                checked_summary(book,book_id)
+            except FileNotFoundError:
+                raise KeyError('Unknown book') from None
+            except (OSError,ValueError,TypeError,KeyError,AttributeError) as error:
+                LOG.warning('Could not open the book in %s: %s', folder, error)
+                _SUMMARIES[path] = (key,None)
+                raise UnreadableBook(book_id) from None
             _SUMMARIES[path] = (key,book)
             return book
 
     def summary(self,book_id):
         return {key:value for key,value in self.book(book_id).items() if key!='sourceFile'}
 
-    def catalog(self):
+    def ids(self):
         if not self.root.exists():
             return []
-        return [self.summary(path.parent.name) for path in sorted(self.root.glob('*/book.json')) if BOOK_ID.fullmatch(path.parent.name)]
+        return [path.parent.name for path in sorted(self.root.glob('*/book.json')) if BOOK_ID.fullmatch(path.parent.name)]
+
+    def catalog(self):
+        """Summaries of the books that open. A damaged book.json is skipped with a warning; see unreadable()."""
+        books = []
+        for book_id in self.ids():
+            try:
+                books.append(self.summary(book_id))
+            except KeyError:
+                pass
+        return books
+
+    def unreadable(self):
+        """IDs of books whose book.json cannot be read. The Books page offers to remove them."""
+        found = []
+        for book_id in self.ids():
+            try:
+                self.book(book_id)
+            except UnreadableBook:
+                found.append(book_id)
+            except KeyError:
+                pass
+        return found
 
     def chapter(self,book_id,location):
         book = self.book(book_id)

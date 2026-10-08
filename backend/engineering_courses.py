@@ -235,8 +235,9 @@ def parse_task(payload):
  ('Rejects blank titles', 'raises(ValueError,lambda:parse_task({"title":" "}))'),
  ('Rejects bool as integer',
   'raises(ValueError,lambda:parse_task({"title":"x","priority":True}))'),
- ('Drops unrelated fields',
-  'parse_task({"title":"x","priority":5,"admin":True})=={"title":"x","priority":5}'),
+ ('Accepts priorities 1 to 5 and drops other fields',
+  '[parse_task({"title": "x", "priority": p, "admin": True}) for p in range(1, 6)] == '
+  '[{"title": "x", "priority": p} for p in range(1, 6)]'),
  ('Rejects missing fields and out-of-range priorities',
   'all(raises(ValueError, lambda payload=payload: parse_task(payload)) for payload in '
   '[None, {}, {"title": 7}, {"title": "x", "priority": 0}, {"title": "x", "priority": '
@@ -325,7 +326,8 @@ def page_after(rows, after, limit):
   'page_after([{"id":4},{"id":2},{"id":3}],1,2)==([{"id":2},{"id":3}],3)'),
  ('Excludes the prior cursor', 'page_after([{"id":2},{"id":3}],2,9)==([{"id":3}],None)'),
  ('Empty end page', 'page_after([],0,2)==([],None)'),
- ('Rejects zero page size', 'raises(ValueError,lambda:page_after([],0,0))'),
+ ('Rejects a zero or negative page size',
+  'all(raises(ValueError, lambda limit=limit: page_after([], 0, limit)) for limit in (0, -1))'),
  ('A full last page ends without reordering the input',
   '(lambda rows: page_after(rows, 0, 2) == ([{"id": 1}, {"id": 2}], None) and rows == '
   '[{"id": 2}, {"id": 1}])([{"id": 2}, {"id": 1}])')],['Cursor','Ordered query','Page + next cursor'],
@@ -373,6 +375,90 @@ def readiness(dependencies):
 ('Build the failure-name list from all dependencies. Filtering to required dependencies '
  'would hide optional failures.'),18)
 
+# Lesson 0 keeps the IDs of the existing web lessons, and with them saved progress, unchanged.
+add('web',0,'From Python to JavaScript',
+('The Web app engineering lessons use JavaScript, the language that runs in web browsers. '
+ 'The exercises run it in Node.js, which runs JavaScript outside a browser.\n\nJavaScript '
+ 'has the same ideas as Python from zero: names, functions, lists, dictionaries, loops and '
+ 'comparisons. They are written with different symbols. This lesson maps each Python form '
+ 'to its JavaScript form.'),
+('Python            JavaScript\n'
+ 'total = 0         let total = 0;\n'
+ 'def f(n): ...     function f(n) { ... }\n'
+ 'lambda n: n * 2   n => n * 2\n'
+ 'len(xs)           xs.length\n'
+ 'a == b            a === b\n'
+ 'print(total)      console.log(total);'),
+('const total = 0; stores a value under a name that cannot be given a new value later. let '
+ 'count = 0; makes a name that can: count += 1; works as in Python. Lines end with a '
+ 'semicolon, and the lines of a block sit inside curly brackets { } instead of under an '
+ 'indented line. function double(n) { return n * 2; } does what def double(n): return n * '
+ '2 does. The short form n => n * 2 is an arrow function: a function with no name, usually '
+ 'passed to another function.\n\n'
+ 'An array such as [7, 9] is a Python list, and xs.length is len(xs). An object such as '
+ '{name: "ana", score: 7} is like a dictionary. If result holds it, result.name reads its '
+ 'name field. '
+ 'for (const x of xs) { ... } visits each item, like for x in xs:. Compare with ===, which '
+ 'is true only when both the value and the type match, so 1 === "1" is false. The older == '
+ 'converts types first, so 1 == "1" is true. xs.filter(x => x > 2) keeps the items for which '
+ 'the function returns true, and xs.map(x => x * 2) makes a new array from the result for '
+ 'each item. console.log is print. true, false and null are True, False and None.'),
+['In scoresFor(results, name), keep the results whose name is === name, using filter.',
+ 'Turn each kept result into its score with map, and return the new array.',
+ 'In total(scores), add up the scores with let and a for...of loop, and return the sum.'],
+['filter keeps the results whose name matches. map then turns each kept result into its '
+ 'score.',
+ 'For example, words.filter(word => word.length === 3) keeps the three-letter words, and '
+ 'words.map(word => word.length) gives the length of each word.',
+ 'Return results.filter(result => result.name === name).map(result => result.score). In '
+ 'total, add each score to sum inside for (const score of scores) { ... }.'],
+'''
+// A result is an object such as {name: "ana", score: 7}.
+function scoresFor(results, name) {
+  // Return an array of this name's scores, in order.
+  return [];
+}
+
+function total(scores) {
+  // Add up the scores with a for...of loop.
+  let sum = 0;
+  return sum;
+}
+
+const results = [{name: "ana", score: 7}, {name: "ben", score: 4}, {name: "ana", score: 9}];
+console.log(scoresFor(results, "ana"));
+console.log(total(scoresFor(results, "ana")));
+''',
+'''
+function scoresFor(results, name) {
+  return results.filter(result => result.name === name).map(result => result.score);
+}
+
+function total(scores) {
+  let sum = 0;
+  for (const score of scores) {
+    sum += score;
+  }
+  return sum;
+}
+
+const results = [{name: "ana", score: 7}, {name: "ben", score: 4}, {name: "ana", score: 9}];
+console.log(scoresFor(results, "ana"));
+console.log(total(scoresFor(results, "ana")));
+''',
+[('Finds both of ana\'s scores in order',
+  'equal(scoresFor([{name:"ana",score:7},{name:"ben",score:4},{name:"ana",score:9}],"ana"),[7,9])'),
+ ('Matches the whole name and its type with ===',
+  'scoresFor([{name:"anna",score:1},{name:"1",score:3}],"ana").length===0 && '
+  'scoresFor([{name:"1",score:3}],1).length===0'),
+ ('Leaves the results array unchanged',
+  '(()=>{const r=Object.freeze([Object.freeze({name:"a",score:2}),Object.freeze({name:"b",score:5})]);'
+  'return equal(scoresFor(r,"b"),[5])&&r.length===2})()'),
+ ('Adds up the scores', 'total([7,9])===16 && total([2,-1,4])===5'),
+ ('Gives 0 for no scores', 'total([])===0 && equal(scoresFor([],"ana"),[])')],
+['Python you know','JavaScript form','Same result'],
+('Use === to compare. == turns "1" into 1 before comparing, so a name stored as text can '
+ 'match a number.'),12)
 add('web',1,'Update UI state without mutation',
 ('A reducer takes the current state and an action, then returns the next state. A pure '
  'function produces the same result for the same inputs and leaves its inputs unchanged. '
@@ -410,7 +496,7 @@ function counter(state, action) {
   return state;
 }
 ''',
-[('Increments while preserving fields','equal(counter({count:1,label:"runs"},{type:"increment",amount:2}),{count:3,label:"runs"})'),('Resets','counter({count:8},{type:"reset"}).count===0'),('Does not mutate input','(()=>{const s=Object.freeze({count:2});return counter(s,{type:"increment",amount:1}).count===3&&s.count===2})()'),('Unknown action preserves identity','(()=>{const s={count:4};return counter(s,{type:"other"})===s})()')],['User action','Pure reducer','Render next state'],
+[('Increments while preserving fields','equal(counter({count:1,label:"runs"},{type:"increment",amount:2}),{count:3,label:"runs"})'),('Resets count and keeps other fields','equal(counter({count:8,label:"keep"},{type:"reset"}),{count:0,label:"keep"})'),('Does not mutate input','(()=>{const s=Object.freeze({count:2,label:"x"});return counter(s,{type:"increment",amount:1}).count===3&&counter(s,{type:"reset"}).count===0&&s.count===2})()'),('Unknown action preserves identity','(()=>{const s={count:4};return counter(s,{type:"other"})===s})()')],['User action','Pure reducer','Render next state'],
 ('Spread state before setting count. Spreading it afterward would overwrite the updated '
  'count.'))
 add('web',2,'Ignore an out-of-order response',
@@ -455,7 +541,8 @@ add('web',3,'Derive a filtered view',
  'lowercasing. Among matches, priority 3 comes before priority 1. Equal priorities use '
  'ascending numeric IDs. filter creates a new array, so sorting it leaves the source order '
  'intact.'),
-['Trim and lowercase query, then match it against each lowercased title.',
+['Trim the query and ignore case on both sides. A row matches when its title contains '
+ 'the query anywhere: " GPU " matches "my gpu notes".',
  'Sort the matches by priority, highest first, then numeric id, lowest first.',
  'Return a new array from visibleRows(rows, query). Do not reorder the rows array you were '
  'given.'],
@@ -478,9 +565,9 @@ function visibleRows(rows, query) {
   return matches.sort((a, b) => b.priority - a.priority || a.id - b.id);
 }
 ''',
-[('Matches case and whitespace',
-  'visibleRows([{id:1,title:"GPU work",priority:1},{id:2,title:"API",priority:2}]," gpu '
-  '").length===1'),
+[('Matches anywhere in the title, ignoring case and spaces',
+  'equal(visibleRows([{id:1,title:"GPU work",priority:1},{id:2,title:"API",priority:2},'
+  '{id:3,title:"my gpu",priority:1}]," GpU ").map(r=>r.id),[1,3])'),
  ('Breaks ties by ID',
   'equal(visibleRows([{id:2,title:"a",priority:1},{id:1,title:"b",priority:1}],"").map(r=>r.id),[1,2])'),
  ('Sorts by priority first',
@@ -630,7 +717,7 @@ def returns(rewards, gamma):
         values.append(total)
     return list(reversed(values))
 ''',
-[('Propagates delayed rewards','returns([1,2,3],.5)==[2.75,3.5,3]'),('Zero discount is immediate reward','returns([1,-2,3],0)==[1,-2,3]'),('Empty rollout','returns([],1)==[]'),('Rejects invalid gamma','raises(ValueError,lambda:returns([1],1.1))')],['Episode rewards', 'Work backward', 'Discounted returns'],
+[('Propagates delayed rewards and leaves rewards unchanged','(lambda rewards: (returns(rewards, .5), rewards))([1, 2, 3]) == ([2.75, 3.5, 3], [1, 2, 3])'),('Zero discount is immediate reward','returns([1,-2,3],0)==[1,-2,3]'),('Empty rollout','returns([],1)==[]'),('Rejects gamma above 1','raises(ValueError,lambda:returns([1],1.1))'),('Rejects a negative gamma','raises(ValueError, lambda: returns([1, 2], -0.5))')],['Episode rewards', 'Work backward', 'Discounted returns'],
 ('Compute from the end, then reverse the result. Otherwise the returned values will '
  'describe the wrong time steps.'))
 add('rl',3,'Balance exploration and exploitation',
@@ -760,12 +847,13 @@ add('data',2,'Chunk text with bounded overlap',
 ('For tokens [a, b, c, d, e], size 3, and overlap 1, return [a, b, c] and [c, d, e]. Each '
  'start advances by 3 − 1 = 2. Stop when a chunk reaches the end. Another chunk starting '
  'at e would contain only text already covered.'),
-['Require integer size > 0 and integer overlap with 0 <= overlap < size. Raise ValueError '
- 'otherwise.',
+['Require integer size > 0 and integer overlap with 0 <= overlap < size. True and False '
+ 'do not count as integers. Raise ValueError otherwise.',
  'Slice tokens into lists of at most size elements, advancing by size - overlap.',
  'Return the chunks from chunks(tokens, size, overlap). Stop when a chunk reaches the end, '
  'and return [] for empty input.'],
-['Validate size and overlap first. Then track a start index, beginning at zero.',
+['Validate size and overlap first; type(size) is int is False for True and False. Then '
+ 'track a start index, beginning at zero.',
  'raise stops the function with an error. For example, if not names: raise '
  'ValueError("names is empty") rejects an empty list.',
  'Append tokens[start:start + size]. Stop if start + size >= len(tokens); otherwise add '
@@ -791,12 +879,12 @@ def chunks(tokens, size, overlap):
     return result
 ''',
 [('Overlaps adjacent chunks', 'chunks(list(range(7)),4,1)==[[0,1,2,3],[3,4,5,6]]'),
- ('Preserves final partial chunk', 'chunks([1,2,3,4,5],3,1)==[[1,2,3],[3,4,5]]'),
+ ('Preserves final partial chunk', 'chunks([1, 2, 3, 4], 3, 1) == [[1, 2, 3], [3, 4]]'),
  ('Empty document', 'chunks([],3,1)==[]'),
  ('Rejects nonprogressing stride', 'raises(ValueError,lambda:chunks([1],3,3))'),
- ('Rejects zero size and noninteger settings',
-  'raises(ValueError, lambda: chunks([1], 0, 0)) and raises(ValueError, lambda: '
-  'chunks([1], 2.5, 0)) and raises(ValueError, lambda: chunks([1], 3, -1))')],['Token sequence','Bounded overlap','Retrievable chunks'],
+ ('Rejects zero size, negative overlap, and non-integers such as 2.5 or True',
+  'all(raises(ValueError, lambda args=args: chunks(*args)) for args in [([1], 0, 0), '
+  '([1], 2.5, 0), ([1], 3, -1), ([1], True, 0), ([1, 2], 2, False)])')],['Token sequence','Bounded overlap','Retrievable chunks'],
 ('An overlap equal to size would give stride zero and an endless loop. Validate before '
  'starting.'))
 add('data',3,'Traverse a graph without looping',
@@ -878,7 +966,8 @@ def recall_at_k(ranked, relevant, k):
     return len(set(ranked[:k]) & relevant) / len(relevant) if relevant else 0.0
 ''',
 [('Counts top-k relevant hits', 'recall_at_k(["a","x","b"],{"a","b"},2)==.5'),
- ('Duplicates do not inflate recall', 'recall_at_k(["a","a","b"],{"a","b"},2)==.5'),
+ ('Counts duplicates once and divides by all relevant IDs',
+  'recall_at_k(["a", "a", "b"], {"a", "b", "c", "d"}, 2) == 0.25'),
  ('No relevant IDs returns 0', 'recall_at_k(["a"],set(),3)==0'),
  ('Zero cutoff', 'recall_at_k(["a"],{"a"},0)==0'),
  ('Rejects negative cutoff', 'raises(ValueError, lambda: recall_at_k(["a"], {"a"}, -1))')],['Ranked results','Ground-truth relevance','Recall at k'],
@@ -926,13 +1015,13 @@ def retry_delays(base, cap, attempts, budget):
     return delays
 ''',
 [('Exponential with cap', 'retry_delays(1,4,5,20)==[1,2,4,4,4]'),
+ ('Caps the first delay too', 'retry_delays(8, 2, 2, 20) == [2, 2]'),
  ('Stops at total budget', 'retry_delays(1,9,5,6)==[1,2]'),
  ('Exact boundary allowed', 'retry_delays(2,8,3,6)==[2,4]'),
- ('Zero attempts', 'retry_delays(1,8,0,9)==[]'),
- ('Handles zero budget and rejects invalid settings',
-  'retry_delays(1, 8, 3, 0) == [] and all(raises(ValueError, lambda args=args: '
-  'retry_delays(*args)) for args in [(0, 4, 2, 10), (1, 0, 2, 10), (1, 4, -1, 10), (1, 4, '
-  '2, -1)])')],['Transient failure','Retry budget','Delay or stop'],
+ ('Handles zero attempts or budget and rejects invalid settings',
+  'retry_delays(1, 8, 0, 9) == [] and retry_delays(1, 8, 3, 0) == [] and all(raises(ValueError, '
+  'lambda args=args: retry_delays(*args)) for args in [(0, 4, 2, 10), (-1, 4, 2, 10), '
+  '(1, 0, 2, 10), (1, -4, 2, 10), (1, 4, -1, 10), (1, 4, 2, -1)])')],['Transient failure','Retry budget','Delay or stop'],
 ('Check spent + delay before appending. Checking afterward would include a wait that '
  'exceeds the budget.'))
 add('reliability',2,'Redact structured telemetry',

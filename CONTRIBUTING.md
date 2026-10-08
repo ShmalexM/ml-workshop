@@ -18,13 +18,13 @@ Remove personal notes, local paths and secrets from logs and screenshots before 
 
 Install [Node.js](https://nodejs.org/en/download) 22.13 or newer (24 recommended), including npm, and [Python](https://www.python.org/downloads/) 3.12 or newer. CI uses Python 3.12. [uv](https://docs.astral.sh/uv/getting-started/installation/) is optional; setup uses it when available and otherwise uses Python's built-in `venv` and pip. On Linux, your distribution may also require its `python3-venv` package.
 
-Clone this repository, then use the setup wrapper for your OS. Allow several GB for a full ML install. Internet is needed for installation; installed lessons run offline. Setup creates `.venv`, installs packages, builds the interface, and opens your browser. It does not install Python packages globally. Rerun setup after updating or to repair dependencies; your saved progress is kept.
+Clone this repository, then use the setup wrapper for your OS. Setup installs the exact package versions in `requirements.lock`, or `requirements-light.lock` for a light install, and checks every file against its SHA-256 hash. PyTorch comes from its CPU index at download.pytorch.org. Allow several GB for a full ML install. Internet is needed for installation; installed lessons run offline. Setup creates `.venv`, installs packages, builds the interface, and opens your browser. It does not install Python packages globally. Rerun setup after updating or to repair dependencies; your saved progress is kept.
 
 To update a clone, export your progress, stop the app, run `git pull --ff-only`, then rerun setup. If you are developing on a branch, commit or stash your source edits before integrating updates. Setup preserves `data/`.
 
 ### macOS
 
-On Apple silicon, setup uses the pinned `requirements.lock` snapshot. On Intel Macs, run setup with `--no-ml`: current PyTorch and TensorFlow releases no longer ship Intel macOS packages. With Homebrew, `brew install node uv` provides the prerequisites; the macOS wrapper can use uv to obtain Python 3.12.
+On Intel Macs, run setup with `--no-ml`: current PyTorch and TensorFlow releases no longer ship Intel macOS packages. With Homebrew, `brew install node uv` provides the prerequisites; the macOS wrapper can use uv to obtain Python 3.12.
 
 ```sh
 git clone https://github.com/ShmalexM/ml-workshop.git
@@ -69,7 +69,7 @@ Pass `--no-ml` to setup to skip PyTorch, TensorFlow, Transformers, tokenizers, L
 .\"Setup Engineering Workshop.cmd" --no-ml --no-launch
 ```
 
-Once running, open http://127.0.0.1:7318. Closing the browser leaves the local server running. Set `ML_WORKSHOP_PORT` to use another port and `ML_WORKSHOP_DATA_DIR` to keep progress, logs, and the PID file in another directory. Use the same settings when starting and stopping. Relative data paths are resolved against the checkout directory. These settings apply to the browser launchers; the native Mac window uses the default configuration.
+The launcher opens the app in your browser at the address it prints, `http://127.0.0.1:7318/#session=<token>`. The token connects that browser; after that, http://127.0.0.1:7318 is enough. Closing the browser leaves the local server running. Set `ML_WORKSHOP_PORT` to use another port and `ML_WORKSHOP_DATA_DIR` to keep progress, logs, and the PID file in another directory. Use the same settings when starting and stopping. Relative data paths are resolved against the checkout directory. These settings apply to the browser launchers; the native Mac window uses the default configuration.
 
 ### Native Mac window
 
@@ -93,7 +93,7 @@ All platforms cap returned output at 24,000 bytes and clean up exercise process 
 
 - **Setup cannot find Python or Node/npm:** install the prerequisites, reopen your terminal, and rerun setup. uv is optional.
 - **Frontend not built or packages missing:** rerun setup from the checkout directory.
-- **Port 7318 is in use:** stop the program that uses it, or set `ML_WORKSHOP_PORT` to an unused port. If it is another Engineering Workshop server, the launcher opens that server.
+- **Port 7318 is in use:** stop the program that uses it, or set `ML_WORKSHOP_PORT` to an unused port. If it is the server of this checkout, the launcher opens it. If it is another copy with a different data folder, the launcher stops with an error, because this browser cannot get that server's session token.
 
 ## Develop locally
 
@@ -112,7 +112,7 @@ To edit the frontend, start the app and run `npm run dev`. It watches and rebuil
 Lessons live in `backend/python_course.py`, `backend/courses.py`, `backend/extra_lessons.py` and `backend/engineering_courses.py`. The public schema is described by `src/types.ts`; start from a nearby lesson.
 
 1. Give the lesson a stable, unique ID. Progress is keyed by ID, so preserve existing IDs.
-2. Explain one concept with a worked case, three diagram steps, three tasks, and three hints that go from a nudge to nearly the answer. Define each term where it is first used. Link to primary documentation.
+2. Explain one concept with a worked case, three diagram steps, three tasks, and three hints that go from a nudge to nearly the answer. Define each term where it is first used. Link to primary documentation. A new term that the glossary lacks goes in `backend/glossary.py`; terms link automatically where they first appear in the intro and explanation.
 3. Include starter code with a runnable demo call and a reference solution that uses the starter's names. The starter must run without an error and fail the checks; the solution must pass.
 4. Add three to five checks that exercise behavior across inputs. Include a boundary case and reject plausible wrong implementations; avoid checking source spelling. Add those wrong implementations to `tests/test_wrong_answers.py`.
 5. Keep exercises small, deterministic, offline, and within the runner's limits. No downloads, API credentials, telemetry, or paid services. Label synthetic data and simulated hardware accurately.
@@ -157,9 +157,22 @@ The suite checks solutions and starters, plausible wrong answers, worked example
 
 CI runs on every pull request and every push to `main`. The macOS job builds the frontend and runs the full suite, including every ML lesson, on Apple silicon with Python 3.12. The Linux and Windows jobs run light setup, build, and all non-ML tests. An installer job packages a release with `scripts/package_release.py` and installs it on macOS, Linux and Windows without the ML libraries. It then runs `tests/check_install.py`, updates the copy and uninstalls it. To try the installer locally, package a release, then run `EW_ARCHIVE=release/engineering-workshop.tar.gz EW_HOME=<temporary folder> EW_LIGHT=1 EW_NO_LAUNCH=1 EW_NO_SHORTCUTS=1 sh install.sh`. CI does not install the ML libraries with the installer, or on Linux and Windows. It does not test desktop browser integration or NVIDIA hardware. Windows exercises have a wall timeout and returned-output cap, but no CPU or file-size limit. For UI changes, check both desktop and narrow layouts and each lesson stage: Understand, See an example, and Try it yourself.
 
+## Update pinned dependencies
+
+**Python packages.** `requirements.txt` lists the allowed version ranges. After you change it, run `python scripts/lock_requirements.py` with [uv](https://docs.astral.sh/uv/) on PATH. It rewrites `requirements.lock` and `requirements-light.lock` with exact versions and SHA-256 hashes for macOS, Linux and Windows on Python 3.12, and keeps the current versions where it can. Add `--upgrade` to move every package to the newest version allowed. Commit the lock files with the change.
+
+**uv and Node.js in the installers.** `install.sh` and `install.ps1` pin the uv and Node.js versions and the SHA-256 hash of each download. To update them, change the versions in both scripts and replace every hash. Take the hashes only from these sources:
+
+- uv: download each archive the scripts use from the uv release on GitHub. Check it with `gh attestation verify <file> --repo astral-sh/uv`, then take its hash with `shasum -a 256 <file>`.
+- Node.js: use an LTS release with the major version in `.nvmrc`. Download `SHASUMS256.txt` and `SHASUMS256.txt.sig` from `https://nodejs.org/dist/v<version>/` and check the signature with the keys from [nodejs/release-keys](https://github.com/nodejs/release-keys): `gpgv --keyring <path to gpg-only-active-keys/pubring.kbx> SHASUMS256.txt.sig SHASUMS256.txt`. Then copy the hashes of the archives the scripts use.
+
+`tests/test_installer.py` checks that both scripts use the same versions and have a hash for every platform they support.
+
 ## Publish a release
 
 Raise `version` in `package.json`, add the changes to [CHANGELOG.md](CHANGELOG.md), and merge to `main`. The release workflow then publishes `v<version>` with the archives the install command downloads, and installs it on macOS, Linux and Windows with the public command as a final check. Pushing a tag such as `v1.2.0` also works; a tag with a hyphen makes a prerelease.
+
+The workflow builds the archives in a job with a read-only token. A separate job with write access downloads them, adds a build provenance attestation, and creates the release; it runs no npm or pip code. [SECURITY.md](SECURITY.md#verify-a-download) shows how to verify an archive.
 
 `docs/social-preview.png` (1280×640) is the image that link previews show. It is set in the repository's GitHub settings, so replace it there when it changes.
 

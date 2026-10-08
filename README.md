@@ -4,7 +4,7 @@
 [![Latest release](https://img.shields.io/github/v/release/ShmalexM/ml-workshop)](https://github.com/ShmalexM/ml-workshop/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-Engineering Workshop is an app for learning machine learning and software engineering by writing code. It has 71 short lessons in 13 paths, from Python and ML basics, PyTorch, TensorFlow and CUDA to agent harnesses, backends and web apps. Each lesson explains one idea, shows a small example, and then runs checks on your own code. If you have never written code, start with Python from zero. It teaches the Python that the other paths use, from the first line of a program. Everything runs on your computer and works offline after the install, without an account, an API key or a GPU. It is free and open source under the MIT license.
+Engineering Workshop is an app for learning machine learning and software engineering by writing code. It has 72 short lessons in 13 paths, from Python and ML basics, PyTorch, TensorFlow and CUDA to agent harnesses, backends and web apps. Each lesson explains one idea, shows a small example, and then runs checks on your own code. If you have never written code, start with Python from zero. It teaches the Python that the other paths use, from the first line of a program. Everything runs on your computer and works offline after the install, without an account, an API key or a GPU. It is free and open source under the MIT license.
 
 ![A lesson in the See an example stage: a worked example, its output and a prediction question](docs/guided-lesson-screenshot.jpg)
 
@@ -50,19 +50,19 @@ Everything goes into one folder: `~/.local/share/engineering-workshop` on macOS 
 | CUDA & GPU programming | 6 | Thread/block indexing, bounds, transfers, 2D kernels, and shared memory |
 | Agent harness engineering | 4 | State machines, tool contracts, budgets, and trace evaluation |
 | Backend & API engineering | 4 | Input validation, idempotency, pagination, and readiness |
-| Web app engineering | 4 | JavaScript reducers, stale responses, derived views, and saved-state migration |
+| Web app engineering | 5 | JavaScript for Python learners, reducers, stale responses, derived views, and saved-state migration |
 | Reinforcement learning | 4 | Environment contracts, returns, exploration, and terminal/truncated targets |
 | Data & retrieval engineering | 4 | Revision deduplication, chunking, bounded graph walks, and recall |
 | Shipping & reliability | 4 | Retry budgets, structured redaction, change plans, and release gates |
 | Interactive & native systems | 4 | Lifecycle, frame time, aspect ratios, and event replay |
 
-The exercises are in Python, except the Web app engineering lessons, which use JavaScript. A lesson takes about 8 to 20 minutes.
+The exercises are in Python, except the Web app engineering lessons, which use JavaScript. The first Web lesson shows the JavaScript forms of the Python from zero basics. A lesson takes about 8 to 20 minutes.
 
-Each lesson has three stages: **Understand**, **See an example** and **Try it yourself**. You read a short explanation, run a small example and answer a question about it. Then you write your own code. **Run code** (⌘ Enter, or Ctrl Enter on Linux and Windows) shows the output. **Check answer** (⌘ Shift Enter, or Ctrl Shift Enter) runs the checks and gives you XP the first time they all pass. Hints open one at a time, and the last step after them is **Show solution**. **Show solution** is also at the end of the exercise, so it works at any time, and **Compare with my code** marks the lines that differ from your draft. To leave the editor with the keyboard, press Esc, then Tab. Code suggestions are off unless you turn them on in **Settings**.
+Each lesson has three stages: **Understand**, **See an example** and **Try it yourself**. You read a short explanation, run a small example and answer a question about it. At the top of **Understand**, **You’ll use** lists the Python or JavaScript that the exercise needs, such as `zip` or `raise`, each linked to the lesson that teaches it. Then you write your own code. **Run code** (⌘ Enter, or Ctrl Enter on Linux and Windows) shows the output. **Check answer** (⌘ Shift Enter, or Ctrl Shift Enter) runs the checks and gives you XP the first time they all pass. Hints open one at a time, and the last step after them is **Show solution**. **Show solution** is also at the end of the exercise, so it works at any time, and **Compare with my code** marks the lines that differ from your draft. To leave the editor with the keyboard, press Esc, then Tab. Code suggestions are off unless you turn them on in **Settings**.
 
-All lessons are open from the start. On first launch, the **Paths** page asks whether you have written Python before; **No** opens Python from zero. The page suggests an order for four roles, and **Progress → All lessons** lists every lesson with filters by path and status. In a lesson, the **Lessons** button opens the lesson list. See the [ML learning guide](docs/learning-plan.md).
+All lessons are open from the start. On first launch, the **Paths** page asks whether you have written Python before; **No** opens Python from zero. A line under the opening text also says that most paths assume the basics from Python from zero, with a link to it. The page suggests an order for four roles, and **Progress → All lessons** lists every lesson with filters by path and status. In a lesson, the **Lessons** button opens the lesson list, and **Glossary** opens a searchable list of 143 terms. A word with a dotted underline is a glossary term: click it, or press Enter on it, to see its definition and the lesson that teaches it. See the [ML learning guide](docs/learning-plan.md).
 
-**Projects** lists 12 public repositories, from Start small to Capstone. Each has a preparation lesson, a link to a starting file and three walkthrough steps. See [Learn from public projects](docs/project-learning.md).
+**Projects** lists 12 public repositories, from Start small to Capstone, each pinned to one commit. A project gives setup commands for macOS/Linux and Windows, a command to run it with the output to expect, and 3 to 5 tasks. Each task links to the lines to read, says what to change and gives a command to check the result. You can paste the output to check it in the browser; the text is not saved. See [Learn from public projects](docs/project-learning.md).
 
 **Books** is an offline PDF and EPUB reader. Drop your copy onto a book's card or use **Choose file**; **Add another book** accepts other titles and editions. Imports show progress and open without a reload, with search, bookmarks, notes and a saved reading position. Compatible editions of Modal's *GPU Glossary* and Philip Kiely's *Inference Engineering* have 15 reading guides linking their sections to lessons. The book cards link to the publishers; book files are not included in this repository. See [Local book library](docs/local-library.md).
 
@@ -70,15 +70,33 @@ All lessons are open from the start. On first launch, the **Paths** page asks wh
 
 Finished work earns rewards in a small fantasy game next to the lessons. The game is optional. Turn it off in **Settings** to hide it completely.
 
-- **Chests.** Every finished lesson, path, project walkthrough and reading guide earns one chest. Harder work earns a better chest. A lesson's chest depends on its path and on how far into the path the lesson is. A finished path earns one of the two best chests.
-- **Gear.** You create one hero from 13 World of Warcraft races and 12 classes. Chests hold only gear that your class can use, in five rarities: Basic (white), Common (green), Rare (blue), Epic (red) and Legendary (orange). Better gear looks more ornate on the 3D hero and in your bags. Finishing every lesson, path and project opens about 155 items, and 3 or 4 of them are Legendary.
+- **Chests.** Every finished lesson, path, project and reading guide earns one chest. Harder work earns a better chest. A lesson's chest depends on its path and on how far into the path the lesson is, and is one tier lower if you opened **Show solution** before passing it. A finished path earns one of the two best chests.
+- **Gear.** You create one hero from 13 World of Warcraft races and 12 classes. Chests hold only gear that your class can use, in five rarities: Basic (white), Common (green), Rare (blue), Epic (purple) and Legendary (orange). Better gear looks more ornate on the 3D hero and in your bags. Finishing every lesson, path and project opens about 155 items, and 3 or 4 of them are Legendary.
 - **Battles.** Each of these chests also earns one fight in a top-down arena. Click to move and attack, and press Q, W, E and R to use your class's abilities. Each stage ends with a boss, and beating it earns a chest. A new hero usually loses at first. The damage you deal to a boss carries over between fights, and better gear makes your hero stronger. The **Auto** button plays the fight for you.
+- **Skill tree.** Each level after the first and each mastered learning path gives one passive point, 72 with the whole curriculum. **Skill tree** opens a 120-node tree around your class. Small nodes add stats, notables change how abilities work, and four keystones on the borders between sectors trade one strength for another. Changes are free outside fights: edit a draft, then press **Apply**. **Practice** opens an arena with a training dummy and optional waves. It uses no battles and saves nothing, so you can try a build before a real fight.
 
 ![The Hero armory: a 3D hero with equipped gear, and a list of chests earned from lessons](docs/hero-screenshot.jpg)
 
 The game uses three.js and needs WebGL. Its data is in the same local database as your progress, and progress exports include it.
 
-The race and class names are a nod to World of Warcraft. This project is not affiliated with or endorsed by Blizzard Entertainment. The app makes all of its own art.
+The race and class names are a nod to World of Warcraft. This project is not affiliated with or endorsed by Blizzard Entertainment. The app makes all of its own art. World of Warcraft, Warcraft and Blizzard Entertainment are trademarks or registered trademarks of Blizzard Entertainment, Inc.
+
+## Optional AI assistant
+
+The app has an optional assistant for questions about a lesson, your code or an error. It is off by default. The app sends nothing to an AI provider until you turn the assistant on and save a provider.
+
+You bring the model:
+
+- **On this computer:** Ollama or LM Studio. Your questions do not leave the computer.
+- **Hosted:** OpenRouter, OpenAI or another OpenAI-compatible service, with your own API key. That provider's prices and terms apply.
+
+To set it up, open **Settings → AI assistant**, turn it on, choose a provider and a model, and press **Test connection**. Then press **Ask** in the header, or ⌘J (Ctrl+J on Linux and Windows). In a lesson, **Explain this error** next to an error or a failed check opens the assistant with a question ready to send.
+
+Chips above the question box show what goes with your question: the lesson and stage, the worked example without its answer, your code, the last run and the hints you opened. Notes are off by default. Turn any chip off before you send. On other pages, only the page name is sent.
+
+By default the assistant works as a tutor. It gives one hint at a time and does not write the solution; **Show solution** in the lesson still has it. **Allow full solutions** in Settings changes this. The assistant cannot change your progress: the checks still decide when a lesson is done.
+
+The API key is saved in `data/assistant.json`, which only your user account can read. The app shows only its last 4 characters, leaves it out of progress exports, and deletes the file when you uninstall. Conversations stay in the open tab until you reload it.
 
 ## Privacy and safety
 
@@ -86,6 +104,7 @@ The race and class names are a nod to World of Warcraft. This project is not aff
 - The server listens only on `127.0.0.1`, so other computers cannot connect to it. The page in your browser can connect only to that server.
 - Your progress, drafts and notes are saved in `workshop.sqlite3` in the `data` folder. **Settings → Export progress and notes** saves a JSON copy. Review it before you share it, because it can contain your notes and project details. JSON import is planned. For a full restore, stop the app and copy back a `data` folder that you saved while the app was stopped.
 - The lessons work offline. The framework lessons use small local inputs. They do not download models or call an LLM API.
+- The installer checks the app, uv, Node.js and every Python package against SHA-256 hashes before it uses them. [SECURITY.md](SECURITY.md#verify-a-download) shows how to check a release yourself.
 - Your code runs with your own user account's permissions, as when you run a script yourself. Each exercise runs in a new process and a temporary folder, with a 50-second time limit and a limit on returned output. On macOS and Linux, CPU time and file size are limited too. These limits do not isolate your code from your files, so only run code you trust.
 
 See [SECURITY.md](SECURITY.md) and the [architecture notes](docs/architecture.md) for details.
@@ -98,7 +117,7 @@ No. The CUDA lessons run your kernels in Numba's CPU simulator instead of on a G
 
 ### Does it send my code or data anywhere?
 
-No. The app has no account, analytics or telemetry. Your code runs on your computer, and your progress stays in the `data` folder. You need the internet only to install or update the app and to open reference links. See [Privacy and safety](#privacy-and-safety).
+No, unless you turn on the [optional AI assistant](#optional-ai-assistant). The app has no account, analytics or telemetry. Your code runs on your computer, and your progress stays in the `data` folder. You need the internet only to install or update the app and to open reference links. With the assistant on, your questions and the page context you allow go to the provider you chose; with Ollama or LM Studio, that provider runs on your computer. See [Privacy and safety](#privacy-and-safety).
 
 ### Is it free?
 
@@ -108,7 +127,7 @@ Yes. The app and all lessons are free and open source under the [MIT license](LI
 
 To update, run the install command again. Your progress is kept.
 
-To uninstall, run the command for your system. This removes the app, and your progress stays in the `data` folder.
+To uninstall, run the command for your system. This removes the app, and your progress stays in the `data` folder. Uninstall also deletes the AI assistant's settings and API key.
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/ShmalexM/ml-workshop/main/install.sh | sh -s -- --uninstall
@@ -136,8 +155,8 @@ Yes. Open **Settings** and, under **Hero game**, clear **Earn chests and battles
 
 - **The install command stops with an error.** It prints the reason and the path of `install.log` in the install folder. Fix the cause, such as a lost internet connection, and run the command again.
 - **The app does not open.** Run the install command again. It repairs the app and keeps your progress.
-- **Port 7318 is in use.** The app uses port 7318 on `127.0.0.1`. Stop the other program that uses it. If another copy of Engineering Workshop already runs on that port, the app opens that copy and shows its progress.
-- **Saving fails after the server restarts.** The page normally gets a new session token and retries the save by itself. If saving still fails, reload the page.
+- **Port 7318 is in use.** The app uses port 7318 on `127.0.0.1`. Stop the other program that uses it. If another copy of Engineering Workshop with a different data folder runs on that port, the app says so; stop that copy first.
+- **Saving fails, or the page says to open Engineering Workshop from its shortcut.** This browser does not have the session token. The token stays the same when the server restarts, so this happens in a new browser, after you clear the browser's site data, or after the `session-token` file in the `data` folder is deleted. Open the app from its shortcut, or run the start command again. Lesson drafts typed in the meantime stay in the browser and are saved when the page loads again.
 - **Something else goes wrong.** Look in `server.log` in the `data` folder. Remove personal information before you share it.
 
 ## Run from a clone

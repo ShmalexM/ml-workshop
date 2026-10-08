@@ -46,9 +46,14 @@ lesson('foundations',2,'Measure the error',
 'MSE = mean((prediction − target)²)',
 ('For predictions [2, 4] and targets [1, 6], the squared errors are [1, 4]. Their mean is '
  '(1 + 4) / 2 = 2.5. This loss measures how wrong the predictions are. The gradient in the '
- 'next lesson tells you which way to change a weight.'),
+ 'next lesson tells you which way to change a weight.\n\n'
+ 'The code uses four pieces of Python. zip(predictions, targets) pairs the two lists by '
+ 'position. for p, t in ... unpacks each pair into two names. (p - t) ** 2 squares the '
+ 'difference. raise ValueError("...") stops the function when the input makes no sense, '
+ 'such as an empty list. Python from zero lessons 2, 7, 8 and 10 cover them.'),
 ['Pair each prediction with its target.',
- 'Return the mean of their squared differences from mse(predictions, targets).',
+ 'Return the mean of their squared differences from mse(predictions, targets). Divide by the '
+ 'number of pairs, so perfect predictions give 0.',
  'Raise ValueError for empty lists or lists of different lengths.'],
 'Check the lengths before using zip. Otherwise it silently stops at the shorter list.',
 ['Check that both lists are nonempty and have the same length before using zip.',
@@ -71,10 +76,11 @@ def mse(predictions, targets):
 
 print(mse([2, 4], [1, 6]))
 ''', [('MSE is 2.5', 'mse([2,4],[1,6])==2.5'),
- ('Perfect predictions have zero loss', 'mse([1,2],[1,2])==0'),
  ('Errors of -2 and +2 count the same', 'mse([-2,2],[0,0])==4'),
+ ('Perfect predictions count as 0', '[mse([1,2],[1,2]), mse([1,3],[1,1])] == [0, 2]'),
  ('Empty lists rejected', 'raises(ValueError, lambda: mse([],[]))'),
- ('Mismatched lists rejected', 'raises(ValueError, lambda: mse([1],[1,2]))')], ['Predict','Compare','Average error'])
+ ('Lists of different lengths rejected',
+  'raises(ValueError, lambda: mse([1],[1,2])) and raises(ValueError, lambda: mse([1,2],[1]))')], ['Predict','Compare','Average error'])
 
 lesson('foundations',3,'Follow the gradient',
 ('The gradient tells you how the loss changes when you nudge a parameter. With one '
@@ -84,7 +90,13 @@ lesson('foundations',3,'Follow the gradient',
 ('This toy model has no input; its prediction is the weight, so its loss is (weight − '
  'target)². At weight 0 and target 3, the gradient is 2 × (0 − 3) = −6. A learning rate of 0.1 gives the '
  'update 0 − 0.1 × (−6) = 0.6. Try the plot below to see how the learning rate changes '
- 'each step.'),
+ 'each step.\n\n'
+ 'Where 2 × (weight − target) comes from: call the difference d = weight − target, so the '
+ 'loss is d × d. Raise the weight by a small amount h. The difference becomes d + h, and '
+ 'the loss becomes (d + h)² = d² + 2 × d × h + h². The loss grew by 2 × d × h + h². '
+ 'Divide that by h to get the slope: 2 × d + h. As h shrinks toward 0, the slope gets '
+ 'closer to 2 × d, which is 2 × (weight − target). Python from zero lesson 12 measured '
+ 'the same slope with h = 0.001 and got about −6.'),
 ['Compute the gradient of (weight − target)².',
  'Subtract learning_rate times the gradient from weight.',
  'Return the updated weight from step(weight, target, learning_rate).'],
@@ -102,7 +114,7 @@ def step(weight, target, learning_rate):
     return weight - learning_rate * 2 * (weight - target)
 
 print(step(0, 3, 0.1))
-''', [('Moves toward target','abs(step(0,3,.1)-.6)<1e-9'),('Moves down when above target','abs(step(5,3,.1)-4.6)<1e-9'),('Zero gradient leaves weight unchanged','step(3,3,.1)==3'),('Zero learning rate freezes training','step(1,3,0)==1')], ['Loss','Gradient','Update'])
+''', [('Moves toward target','abs(step(0,3,.1)-.6)<1e-9'),('Moves down when above target','abs(step(5,3,.025)-4.9)<1e-9'),('A learning rate of 0.2 takes twice the step of 0.1','abs(step(0,3,.2)-1.2)<1e-9'),('Zero gradient leaves weight unchanged','step(3,3,.1)==3'),('Zero learning rate freezes training','step(1,3,0)==1')], ['Loss','Gradient','Update'])
 
 lesson('foundations',4,'Train, validate, test',
 ('A model can fit its training examples and still fail on new data. Generalization means '
@@ -188,7 +200,14 @@ lesson('foundations',6,'A complete training loop',
 ('An epoch is one pass over the training set. With x = 1, y = 3, and both parameters at '
  'zero, the error is −3. Both gradients are −6, so learning rate 0.1 moves weight and bias '
  'to 0.6. Compute both gradients from the same old parameters so they describe the same '
- 'predictions.'),
+ 'predictions.\n\n'
+ 'Where dw and db come from: for one example, the loss is error², and lesson 3 showed '
+ 'that the slope of a square is 2 × error. Raising the bias by a small amount h raises the '
+ 'prediction, and so the error, by h. So the loss changes 2 × error times as fast as the '
+ 'bias: db = 2 × error. Raising the weight by h raises the prediction by h × x, because '
+ 'the weight is multiplied by x. So the loss changes 2 × error × x times as fast as the '
+ 'weight: dw = 2 × error × x. The loss of the training set is the mean over its examples, '
+ 'so each gradient is the mean of these values.'),
 ['Start weight and bias at zero in train(xs, ys, epochs=400, lr=0.05).',
  'For each epoch, compute all errors and both mean gradients before updating either '
  'parameter.',
@@ -258,7 +277,7 @@ def linear_batch(x, weights, bias):
 
 x = torch.tensor([[1.0, 2.0], [3.0, 4.0]])
 print(linear_batch(x, torch.tensor([[2.0], [1.0]]), 0.5))
-''', [('Computes a batch','torch.allclose(linear_batch(torch.tensor([[1.,2.],[3.,4.]]),torch.tensor([[2.],[1.]]),.5),torch.tensor([[4.5],[10.5]]))'),('Preserves output shape','tuple(linear_batch(torch.zeros(3,2),torch.ones(2,4),1).shape)==(3,4)'),('Broadcasts bias per output','torch.allclose(linear_batch(torch.zeros(1,2),torch.ones(2,2),torch.tensor([1.,2.])),torch.tensor([[1.,2.]]))')], ['x (3, 2)', '@ weights (2, 1)', 'result (3, 1)'])
+''', [('Computes a batch','torch.allclose(linear_batch(torch.tensor([[1.,2.],[3.,4.]]),torch.tensor([[2.],[1.]]),.5),torch.tensor([[4.5],[10.5]]))'),('Preserves output shape','tuple(linear_batch(torch.zeros(3,2),torch.ones(2,4),1).shape)==(3,4)'),('Broadcasts bias per output','torch.allclose(linear_batch(torch.zeros(1,2),torch.ones(2,2),torch.tensor([1.,2.])),torch.tensor([[1.,2.]]))'),('Keeps negative results','torch.allclose(linear_batch(torch.tensor([[-1.]]),torch.tensor([[2.]]),0),torch.tensor([[-2.]]))')], ['x (3, 2)', '@ weights (2, 1)', 'result (3, 1)'])
 
 lesson('pytorch',2,'Let autograd do the math',
 ('If you create a tensor with requires_grad=True, PyTorch records operations that use it. '
@@ -294,7 +313,7 @@ def derivative(value):
     return x.grad.item()
 
 print(derivative(2))
-''', [('Derivative at 2 is 7','abs(derivative(2)-7)<1e-6'),('Derivative at -3 is -3','abs(derivative(-3)+3)<1e-6'),('Derivative at 0 is 3','abs(derivative(0)-3)<1e-6')], ['Record graph','Backward','Read gradient'])
+''', [('Derivative at 2 is 7','abs(derivative(2)-7)<1e-6'),('Derivative at -3 is -3','abs(derivative(-3)+3)<1e-6'),('Derivative at 0 is 3','abs(derivative(0)-3)<1e-6'),('Uses backward() to find the gradient','calls("torch.Tensor.backward", lambda: derivative(2))')], ['Record graph','Backward','Read gradient'])
 
 lesson('pytorch',3,'Build a neural network',
 ('Two Linear layers in a row still compute one linear function. Add ReLU between them to '
@@ -529,7 +548,7 @@ def derivative(value):
     with tf.GradientTape() as tape:
         loss = x * x + 3 * x
     return float(tape.gradient(loss, x).numpy())
-''', [('Derivative at 2','abs(derivative(2)-7)<1e-6'),('Derivative at -3','abs(derivative(-3)+3)<1e-6'),('Derivative at zero','abs(derivative(0)-3)<1e-6')], ['Tape context','Forward expression','tape.gradient'])
+''', [('Derivative at 2','abs(derivative(2)-7)<1e-6'),('Derivative at -3','abs(derivative(-3)+3)<1e-6'),('Derivative at zero','abs(derivative(0)-3)<1e-6'),('Uses tape.gradient() to find the gradient','calls("tensorflow.GradientTape.gradient", lambda: derivative(2))')], ['Tape context','Forward expression','tape.gradient'])
 
 lesson('tensorflow',3,'Compose a Keras model',
 ('Keras Sequential runs layers in order. Put ReLU, which replaces negative values with '
@@ -697,5 +716,18 @@ for item in LESSONS:item['example']=GUIDES[item['id']]
 
 BY_ID={lesson['id']:lesson for lesson in LESSONS}
 
+from functools import cache
+from glossary import GLOSSARY, lesson_texts, linked_terms
+from lesson_uses import lesson_uses
+
+# The curriculum does not change while the server runs, so it is built once.
+@cache
 def public_curriculum():
-    return {'courses':COURSES,'lessons':[{k:v for k,v in lesson.items() if k not in ('solution','checks')} | {'checkLabels':[c['label'] for c in lesson['checks']]} for lesson in LESSONS]}
+    lessons=[{k:v for k,v in lesson.items() if k not in ('solution','checks')} | {
+        'checkLabels':[c['label'] for c in lesson['checks']],
+        # Glossary terms in the intro and explanation, in order of first appearance.
+        'glossary':linked_terms(lesson_texts(lesson),lesson['course']),
+        # The Python or JavaScript constructs the starter and solution use, for "You'll use".
+        'uses':lesson_uses(lesson)} for lesson in LESSONS]
+    glossary=[{k:v for k,v in entry.items() if k!='paths'} for entry in GLOSSARY]
+    return {'courses':COURSES,'lessons':lessons,'glossary':glossary}

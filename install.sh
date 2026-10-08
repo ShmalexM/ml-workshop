@@ -20,8 +20,10 @@
 set -eu
 
 RELEASE_URL=https://github.com/ShmalexM/ml-workshop/releases/latest/download
-UV_VERSION=0.12.23 # Keep in step with install.ps1.
-NODE_MAJOR=24      # Same major version as .nvmrc.
+# uv and Node.js versions and their SHA-256 hashes are pinned here and in install.ps1.
+# CONTRIBUTING.md explains how to update them.
+UV_VERSION=0.12.23
+NODE_VERSION=24.21.0 # Node.js 24 LTS, the major version in .nvmrc.
 # The native Mac app from scripts/install-launcher.py uses dev.ml-workshop.desktop.
 APP_ID=dev.ml-workshop.launcher
 ML_NOTE='The PyTorch, TensorFlow, Modern AI stack and CUDA lessons need them; all other lessons work.'
@@ -59,7 +61,7 @@ download() {
   if have curl; then
     curl --proto '=https' --tlsv1.2 -fsSL --retry 3 --connect-timeout 30 -o "$2" "$1" </dev/null >>"$LOG" 2>&1
   else
-    wget -q -O "$2" "$1" </dev/null >>"$LOG" 2>&1
+    wget --https-only -q -O "$2" "$1" </dev/null >>"$LOG" 2>&1
   fi
 }
 
@@ -67,12 +69,31 @@ sha256_of() {
   if have sha256sum; then sha256sum <"$1"; else shasum -a 256 <"$1"; fi | cut -d ' ' -f 1
 }
 
+# Check that file $1, the download named $2, has the SHA-256 hash $3.
+check_sha256() {
+  actual=$(sha256_of "$1")
+  log "sha256 $2: expected $3, got $actual"
+  [ -n "$3" ] && [ "$3" = "$actual" ]
+}
+
 # Check file $1 against the checksum listed for name $2 in checksum file $3.
 verify() {
-  expected=$(awk -v name="$2" '$2 == name || $2 == "*" name { print $1; exit }' "$3")
-  actual=$(sha256_of "$1")
-  log "sha256 $2: expected $expected, got $actual"
-  [ -n "$expected" ] && [ "$expected" = "$actual" ]
+  check_sha256 "$1" "$2" "$(awk -v name="$2" '$2 == name || $2 == "*" name { print $1; exit }' "$3")"
+}
+
+# The SHA-256 hash of a uv or Node.js download, from the uv release and the signed
+# SHASUMS256.txt of the Node.js release. Prints nothing for a download not listed here.
+pinned_sha256() {
+  case $1 in
+    0.12.23/uv-aarch64-apple-darwin.tar.gz) say 50487ae565ccd96e499056b4674d438f4c53170202617b4c759defe0c6a1b544 ;;
+    0.12.23/uv-x86_64-apple-darwin.tar.gz) say 960da44cb4b73685206ddd250b19e0a117fa41095710c1038f081f5cb613efb4 ;;
+    0.12.23/uv-aarch64-unknown-linux-musl.tar.gz) say b536543cc4d50661986b165c76ee8aa9056e4fa332edcd153ff2e98760f9359b ;;
+    0.12.23/uv-x86_64-unknown-linux-musl.tar.gz) say 1cff8783850e794470aadb73f54b749542a511fc57b0ce6468b64bd3852e0ade ;;
+    node-v24.21.0-darwin-arm64.tar.gz) say bed7eea5325e1108f32ce5228ddd6a5f0f08a499ee42aa7442aea583702f6057 ;;
+    node-v24.21.0-darwin-x64.tar.gz) say 1462cb3b3046b815cf8ea436d3da450ec1a9f11dac7e5a46b0ada5305d7e8097 ;;
+    node-v24.21.0-linux-arm64.tar.gz) say 724282c3b43aec998aa9527380465b45d229e021b58035f5f4f63095eabfe5d5 ;;
+    node-v24.21.0-linux-x64.tar.gz) say 6e1db87ef58b8819e5d5402eff1536491b18edd8eb7bee5ef7897876e88dc5ff ;;
+  esac
 }
 
 # Quote $1 for a POSIX shell script.
@@ -125,7 +146,10 @@ check_tools() {
   if [ "$(id -u)" = 0 ] && [ -n "${SUDO_USER:-}" ]; then
     fail "Run this command without sudo. Engineering Workshop installs into your own home folder."
   fi
-  have curl || have wget || fail "Install curl, then run this command again."
+  # BusyBox wget does not support --https-only, which download() passes to wget.
+  if ! have curl && ! { have wget && wget --help 2>&1 | grep -q -e --https-only; }; then
+    fail "Install curl, then run this command again."
+  fi
   for tool in tar gzip awk sed; do
     have "$tool" || fail "This computer is missing the '$tool' command. Install it, then run this command again."
   done
@@ -137,6 +161,9 @@ prepare_home() {
     fail "$EW_HOME has files that this installer did not create. Set EW_HOME to another folder."
   fi
   mkdir -p "$EW_HOME" "$DATA" "$RUNTIME" || fail "Could not create $EW_HOME."
+  # Other accounts on this computer must not read progress, notes or the session token.
+  # Older installs made these folders 0755.
+  chmod 700 "$EW_HOME" "$DATA" || fail "Could not set the permissions of $EW_HOME."
   say 'Created by the Engineering Workshop installer.' >"$MARKER"
   LOG=$EW_HOME/install.log
   : >"$LOG"
@@ -178,10 +205,10 @@ ensure_uv() {
   case $("$UV" --version 2>/dev/null || true) in "uv $UV_VERSION "*) return 0 ;; esac
   name=uv-$UV_TARGET.tar.gz
   url=https://github.com/astral-sh/uv/releases/download/$UV_VERSION/$name
-  if ! download "$url" "$WORK/$name" || ! download "$url.sha256" "$WORK/$name.sha256"; then
+  download "$url" "$WORK/$name" ||
     fail "Could not download uv, which installs Python. Check your internet connection and try again."
-  fi
-  verify "$WORK/$name" "$name" "$WORK/$name.sha256" || fail "The uv download is damaged. Run the command again."
+  check_sha256 "$WORK/$name" "$name" "$(pinned_sha256 "$UV_VERSION/$name")" ||
+    fail "The uv download is damaged. Run the command again."
   run tar -xzf "$WORK/$name" -C "$WORK" || fail "Could not unpack uv."
   mkdir -p "$RUNTIME/uv"
   mv -f "$WORK/uv-$UV_TARGET/uv" "$UV"
@@ -194,17 +221,14 @@ ensure_python() {
   export UV_PYTHON_INSTALL_DIR="$RUNTIME/python" UV_CACHE_DIR="$RUNTIME/cache" \
     UV_MANAGED_PYTHON=1 UV_NO_CONFIG=1 UV_VENV_RELOCATABLE=1
   unset PYTHONHOME PYTHONPATH VIRTUAL_ENV
-  if [ "$OS" = linux ]; then
-    # PyTorch from PyPI pulls in several GB of CUDA libraries that the lessons never use.
-    export UV_TORCH_BACKEND=cpu
-  fi
   ensure_uv
   run "$UV" python install 3.12 --no-bin --no-registry ||
     fail "Could not install Python 3.12. Check your internet connection and try again."
   PYTHON=$("$UV" python find 3.12 2>>"$LOG") || fail "Could not find the Python 3.12 that was just installed."
 }
 
-# scripts/setup.py creates app/.venv with this Python and installs the requirements with uv.
+# scripts/setup.py creates app/.venv with this Python and installs the hash-locked
+# requirements with uv.
 setup_packages() {
   run env PATH="$RUNTIME/uv:$PATH" "$PYTHON" "$STAGE/scripts/setup.py" --no-build --no-launch "$@"
 }
@@ -259,21 +283,15 @@ prepare_node() {
   fi
   current=$RUNTIME/node/bin/node
   if [ -L "$current" ] || ! node_ok "$current"; then current=; fi
-  base=https://nodejs.org/dist/latest-v$NODE_MAJOR.x
-  name=
-  if download "$base/SHASUMS256.txt" "$WORK/SHASUMS256.txt"; then
-    name=$(awk -v target="$NODE_TARGET" '$2 ~ "^node-v[0-9.]+-" target "\\.tar\\.gz$" { print $2; exit }' "$WORK/SHASUMS256.txt")
-  fi
-  if [ -n "$name" ]; then
-    version=${name#node-}
-    if [ -n "$current" ] && [ "$("$current" --version)" = "${version%%-*}" ]; then return 0; fi
-    say "Installing Node.js for the JavaScript lessons..."
-    NODE_NEW=$WORK/node/${name%.tar.gz}
-    if download "$base/$name" "$WORK/$name" && verify "$WORK/$name" "$name" "$WORK/SHASUMS256.txt" &&
-      mkdir "$WORK/node" && run tar -xzf "$WORK/$name" -C "$WORK/node" && node_ok "$NODE_NEW/bin/node"; then
-      NODE_PLAN=replace
-      return 0
-    fi
+  if [ -n "$current" ] && [ "$("$current" --version)" = "v$NODE_VERSION" ]; then return 0; fi
+  say "Installing Node.js for the JavaScript lessons..."
+  name=node-v$NODE_VERSION-$NODE_TARGET.tar.gz
+  NODE_NEW=$WORK/node/${name%.tar.gz}
+  if download "https://nodejs.org/dist/v$NODE_VERSION/$name" "$WORK/$name" &&
+    check_sha256 "$WORK/$name" "$name" "$(pinned_sha256 "$name")" &&
+    mkdir "$WORK/node" && run tar -xzf "$WORK/$name" -C "$WORK/node" && node_ok "$NODE_NEW/bin/node"; then
+    NODE_PLAN=replace
+    return 0
   fi
   if [ -n "$current" ]; then
     log "Kept Node.js $("$current" --version)."
@@ -400,9 +418,12 @@ finish() {
   else
     say "Starting Engineering Workshop..."
     errors=$EW_HOME/.launch-errors
-    if url=$("$APP/.venv/bin/python" "$APP/scripts/installed.py" </dev/null 2>"$errors"); then
+    # Start the app with the user's own umask, so a browser that it starts does not inherit 077.
+    # The launcher and the server make their own files private.
+    if url=$(umask "$USER_UMASK" && "$APP/.venv/bin/python" "$APP/scripts/installed.py" </dev/null 2>"$errors"); then
       rm -f "$errors"
-      say "Done. Engineering Workshop is open in your browser at $url"
+      # The launcher prints the address with the session token after #. Show only the address.
+      say "Done. Engineering Workshop is open in your browser at ${url%%#*}"
     else
       reason=$(cat "$errors")
       cat "$errors" >>"$LOG"
@@ -454,6 +475,11 @@ uninstall_app() {
     say "Removed Engineering Workshop and your progress."
   else
     rm -f "$LOG"
+    # The AI assistant file can hold an API key, which is a billing credential. Progress stays.
+    if [ -f "$DATA/assistant.json" ]; then
+      rm -f "$DATA/assistant.json" || fail "Could not remove $DATA/assistant.json."
+      say "Removed the AI assistant settings and API key."
+    fi
     say "Removed Engineering Workshop. Your progress is still in $DATA."
     say "To delete it too, run the uninstall command again with --purge at the end."
   fi
@@ -467,6 +493,9 @@ usage() {
 }
 
 main() {
+  # Everything the installer creates is readable only by this user: 0600 files, 0700 folders.
+  USER_UMASK=$(umask)
+  umask 077
   LOG=
   FAILED=0
   MODE=install_app

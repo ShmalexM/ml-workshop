@@ -127,6 +127,24 @@ class ImportLimitTests(unittest.TestCase):
             source=make_custom_epub(self.root/'small.epub',{'one.xhtml':page('<p>'+'d'*2000+'</p>')})
             with self.assertRaisesRegex(ValueError,'over the import limit'):import_book(source,self.data,'small')
         self.assertNothingPublished()
+    def test_image_count_and_size_caps(self):
+        def illustrated(path, count, size):
+            images = ''.join(f'<item id="i{n}" href="i{n}.png" media-type="image/png"/>' for n in range(count))
+            with zipfile.ZipFile(path, 'w', zipfile.ZIP_DEFLATED) as archive:
+                archive.writestr('mimetype', 'application/epub+zip')
+                archive.writestr('META-INF/container.xml', '<container><rootfiles><rootfile full-path="OEBPS/book.opf"/></rootfiles></container>')
+                archive.writestr('OEBPS/book.opf', f'<package><metadata><title>Pictures</title></metadata><manifest><item id="c" href="c.xhtml" media-type="application/xhtml+xml"/>{images}</manifest><spine><itemref idref="c"/></spine></package>')
+                archive.writestr('OEBPS/c.xhtml', page('<p>Pictures</p>'))
+                for n in range(count):archive.writestr(f'OEBPS/i{n}.png', bytes([n]) * size)
+            return path
+        with patch.object(library, 'MAX_IMAGES', 3):
+            with self.assertRaisesRegex(ValueError, 'more than 3 images'):import_book(illustrated(self.root/'many.epub', 4, 10), self.data, 'many')
+        self.assertNothingPublished()
+        # The image bytes are counted while they are copied, not taken from the zip header.
+        with patch.object(library, 'MAX_IMAGE_BYTES', 2500):
+            with self.assertRaisesRegex(ValueError, 'images in this EPUB are larger than'):import_book(illustrated(self.root/'large.epub', 3, 1000), self.data, 'large')
+            self.assertNothingPublished()
+            self.assertEqual(len(import_book(illustrated(self.root/'fits.epub', 2, 1000), self.data, 'fits')['assets']), 2)
     def test_section_count_and_total_output_caps(self):
         chapters={f's{i}.xhtml':page(f'<p>Section {i}</p>') for i in range(2001)}
         with self.assertRaisesRegex(ValueError,'more than 2,000 sections'):
@@ -234,5 +252,25 @@ class StorageTests(unittest.TestCase):
         self.assertNotIn('fixture',{book['id'] for book in library_.catalog()})
         with self.assertRaises(KeyError):library_.chapter('fixture',1)
         self.assertEqual(list((self.data/'library').glob('.*')),[])
+    def test_a_damaged_book_is_listed_as_unreadable_and_can_be_removed(self):
+        import_book(make_epub(self.root/'other.epub'),self.data,'other')
+        for damage in ('{"title": "cut off', '[]', json.dumps({**self.book,'count':'2'}), json.dumps({**self.book,'id':'fixture'}), b'\xff\xfe'):
+            with self.subTest(damage=str(damage)[:30]):
+                path=self.data/'library/other/book.json'
+                if isinstance(damage,bytes):path.write_bytes(damage)
+                else:path.write_text(damage)
+                library_=Library(self.data)
+                with self.assertLogs('library','WARNING') as logged:
+                    self.assertEqual([book['id'] for book in library_.catalog()],['fixture'])
+                self.assertEqual(len(logged.output),1)
+                self.assertIn('other',logged.output[0])
+                # Logged once per version of the file.
+                with self.assertNoLogs('library','WARNING'):
+                    self.assertEqual(library_.unreadable(),['other'])
+                    self.assertEqual([hit['bookId'] for hit in library_.search('warp')],['fixture','fixture'])
+                with self.assertRaises(KeyError):library_.chapter('other',1)
+                with self.assertRaisesRegex(ValueError,'could not be opened'):import_book(self.root/'other.epub',self.data,'other')
+        library_.remove('other')
+        self.assertEqual((library_.catalog()[0]['id'],library_.unreadable()),('fixture',[]))
 
 if __name__=='__main__':unittest.main()

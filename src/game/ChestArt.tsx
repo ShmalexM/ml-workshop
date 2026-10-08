@@ -5,7 +5,7 @@ const LOOKS:Record<number,Look>={
  1:{body:['#8a6038','#5a3c22'],lid:['#946840','#634327'],band:'#6b5238',rivet:'#8d7656',glow:null,lock:'#7a6a55'},
  2:{body:['#6a4628','#3e2814'],lid:['#74502e','#462e18'],band:'#4d535c',rivet:'#9aa3ad',glow:null,lock:'#8a929c'},
  3:{body:['#33507e','#172742'],lid:['#3d5e92','#1c2f50'],band:'#a9c1e2',rivet:'#e6f0ff',glow:'#4ea7ff',lock:'#cfe1ff'},
- 4:{body:['#2a1a20','#0f080b'],lid:['#33202a','#140a0e'],band:'#4a2a30',rivet:'#a0303a',glow:'#ff2b3a',lock:'#d8cbb0'},
+ 4:{body:['#221a2a','#0c080f'],lid:['#2b2033','#110a14'],band:'#3d2a4a',rivet:'#7f3ab0',glow:'#a64df0',lock:'#d8cbb0'},
  5:{body:['#f0c35a','#a8711c'],lid:['#f8d478','#b47a22'],band:'#fff0c0',rivet:'#fff8e0',glow:'#ff9a1f',lock:'#ff9a1f'},
 }
 

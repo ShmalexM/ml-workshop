@@ -12,7 +12,8 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 from courses import BY_ID
 from runner import execute
-from test_curriculum import OFFLINE_PREFIX, JS_OFFLINE_PREFIX, require_lesson_modules
+from test_curriculum import OFFLINE_PREFIX, JS_OFFLINE_PREFIX, require_lesson_modules, missing_lesson_modules
+from parallel_runs import PrefetchedRuns
 
 
 def reference(lesson_id):
@@ -173,6 +174,14 @@ WRONG_ANSWERS["foundations-5"] = [("accepts missing training statistics", change
 WRONG_ANSWERS["reliability-2"] = [("unimplemented redaction", "def redact(value):\n    return None")]
 WRONG_ANSWERS["interactive-4"] = [("unimplemented progress merge", "def merge_progress(state, events):\n    return None")]
 WRONG_ANSWERS["web-3"] = [("always returns an empty view", "function visibleRows(rows, query) { return []; }")]
+# The JavaScript bridge lesson: the Python habits that JavaScript treats differently.
+WRONG_ANSWERS["web-0"] = [
+    ("compares with == instead of ===", changed("web-0", "result.name === name", "result.name == name")),
+    ("matches part of a name", changed("web-0", "result.name === name", "result.name.includes(name)")),
+    ("returns the matching results instead of their scores", changed(
+        "web-0", ".map(result => result.score)", "")),
+    ("restarts the sum on each pass", changed("web-0", "    sum += score;", "    sum = score;")),
+]
 # The task asks for `return train, validation, test`; a list of the three lists is a different value.
 WRONG_ANSWERS["foundations-4"] = [("returns a list instead of a tuple", changed(
     "foundations-4", "return (rows[:train_end], rows[train_end:val_end], rows[val_end:])",
@@ -345,6 +354,529 @@ WRONG_ANSWERS.update({
     ],
 })
 
+# Adversarial QA of 2026-10-08: each program is the exact submission that used to pass.
+QA_WRONG_ANSWERS = {
+    "python-1": [("skip printing", "items=3\nprice=2\ndelivery=1\ntotal=items*price+delivery\n")],
+    "python-4": [
+        ("hardcoded range", """def clamp(value, low, high):
+    if value < low:
+        return 0
+    elif value > high:
+        return high
+    else:
+        return value
+
+print(clamp(15, 0, 10))
+"""),
+        ("hardcoded upper", """def clamp(value, low, high):
+    if value < low:
+        return low
+    elif value > high:
+        return 10
+    else:
+        return value
+
+print(clamp(15, 0, 10))
+"""),
+    ],
+    "python-5": [("pop last mutates", """def last(values):
+    return values.pop()
+
+def middle(values):
+    return values[1:-1]
+
+print(last([4, 5, 6]))
+print(middle([1, 2, 3, 4]))
+""")],
+    "python-6": [("use forbidden sum", """def total(values):
+    return sum(values)
+
+def mean(values):
+    return total(values) / len(values)
+
+print(total([1, 2, 3]))
+print(mean([2, 4]))
+""")],
+    "python-7": [("assume same lengths", """def differences(predictions, targets):
+    return [predictions[i] - targets[i] for i in range(len(predictions))]
+
+print(differences([3, 5], [1, 5]))
+""")],
+    "python-9": [
+        ("normalize case", """def count_words(words):
+    counts = {}
+    for word in words:
+        word = word.lower()
+        counts[word] = counts.get(word, 0) + 1
+    return counts
+
+print(count_words(["red", "blue", "red"]))
+"""),
+        ("count only adjacent", """def count_words(words):
+    counts = {}
+    for word in words:
+        counts[word] = 1 + (counts.get(word, 0) if word == words[0] else 0)
+    return counts
+
+print(count_words(["red", "blue", "red"]))
+"""),
+    ],
+    "python-10": [("floor mean", """def safe_mean(values):
+    if not values:
+        raise ValueError("values is empty")
+    return sum(values) // len(values)
+
+print(safe_mean([2, 4]))
+""")],
+    "python-11": [("negative distance sign", """import math
+
+
+def distance(x, y):
+    return math.sqrt(x ** 2 + y ** 2) if x >= 0 else -math.sqrt(x ** 2 + y ** 2)
+
+def describe(name, value):
+    return f"{name} = {value:.2f}"
+
+print(distance(3, 4))
+print(describe("loss", 0.12345))
+""")],
+    "python-12": [
+        ("floor division", """def slope(x1, y1, x2, y2):
+    if x1 == x2:
+        raise ValueError("x1 and x2 must differ")
+    return (y2 - y1) // (x2 - x1)
+
+print(slope(0, 1, 1, 3))
+"""),
+        ("reject all equal y", """def slope(x1, y1, x2, y2):
+    if x1 == x2 or y1 == y2:
+        raise ValueError("x1 and x2 must differ")
+    return (y2 - y1) / (x2 - x1)
+
+print(slope(0, 1, 1, 3))
+"""),
+    ],
+    "foundations-2": [("only reject longer targets", """def mse(predictions, targets):
+    if not predictions or len(predictions) < len(targets):
+        raise ValueError('Expected nonempty, matching lists')
+    return sum((p - t) ** 2 for p, t in zip(predictions, targets)) / len(targets)
+
+print(mse([2, 4], [1, 6]))
+""")],
+    "pytorch-1": [("absolute output", """import torch
+
+def linear_batch(x, weights, bias):
+    return (x @ weights + bias).abs()
+
+x = torch.tensor([[1.0, 2.0], [3.0, 4.0]])
+print(linear_batch(x, torch.tensor([[2.0], [1.0]]), 0.5))
+""")],
+    "pytorch-2": [("no PyTorch at all", "def derivative(value):\n    return 2.0 * value + 3.0\n")],
+    "backend-1": [("reject valid low priority", """def parse_task(payload):
+    if not isinstance(payload, dict):
+        raise ValueError('Expected object')
+    title = payload.get('title')
+    priority = payload.get('priority', 3)
+    if (
+        not isinstance(title, str)
+        or not title.strip()
+        or type(priority) is not int
+        or priority != 3 and priority != 5
+    ):
+        raise ValueError('Invalid task')
+    return {'title': title.strip(), 'priority': priority}
+""")],
+    "backend-3": [("allow negative limit", """def page_after(rows, after, limit):
+    if limit == 0:
+        raise ValueError('Positive limit required')
+    remaining = sorted((row for row in rows if row['id'] > after), key=lambda row: row['id'])
+    selected = remaining[:limit]
+    next_cursor = selected[-1]['id'] if len(remaining) > limit else None
+    return (selected, next_cursor)
+""")],
+    "data-2": [
+        ("allow boolean size", """def chunks(tokens, size, overlap):
+    if not isinstance(size, int) or type(overlap) is not int or size <= 0 or (not 0 <= overlap < size):
+        raise ValueError('Invalid chunk settings')
+    result = []
+    start = 0
+    while start < len(tokens):
+        result.append(tokens[start:start + size])
+        if start + size >= len(tokens):
+            break
+        start += size - overlap
+    return result
+"""),
+        ("drop partial chunk", """def chunks(tokens, size, overlap):
+    if type(size) is not int or type(overlap) is not int or size <= 0 or (not 0 <= overlap < size):
+        raise ValueError('Invalid chunk settings')
+    result = []
+    start = 0
+    while start < len(tokens):
+        if start + size <= len(tokens):
+            result.append(tokens[start:start + size])
+        if start + size >= len(tokens):
+            break
+        start += size - overlap
+    return result
+"""),
+    ],
+    "data-4": [("wrong denominator", """def recall_at_k(ranked, relevant, k):
+    if k < 0:
+        raise ValueError('Negative cutoff')
+    relevant = set(relevant)
+    return len(set(ranked[:k]) & relevant) / max(1,k) if relevant else 0.0
+""")],
+    "rl-2": [("no lower bound", """def returns(rewards, gamma):
+    if gamma > 1:
+        raise ValueError('Invalid discount')
+    values = []
+    total = 0
+    for reward in reversed(rewards):
+        total = reward + gamma * total
+        values.append(total)
+    return list(reversed(values))
+""")],
+    "reliability-1": [
+        ("uncapped first", """def retry_delays(base, cap, attempts, budget):
+    if base <= 0 or cap <= 0 or attempts < 0 or budget < 0:
+        raise ValueError('Invalid retry settings')
+    delays = []
+    spent = 0
+    delay = base
+    for _ in range(attempts):
+        if spent + delay > budget:
+            break
+        delays.append(delay)
+        spent += delay
+        delay = min(cap, delay * 2)
+    return delays
+"""),
+        ("no negative base rejection", """def retry_delays(base, cap, attempts, budget):
+    if base == 0 or cap <= 0 or attempts < 0 or budget < 0:
+        raise ValueError('Invalid retry settings')
+    delays = []
+    spent = 0
+    delay = min(base, cap)
+    for _ in range(attempts):
+        if spent + delay > budget:
+            break
+        delays.append(delay)
+        spent += delay
+        delay = min(cap, delay * 2)
+    return delays
+"""),
+    ],
+    "web-1": [("reset discards fields", """function counter(state, action) {
+  if (action.type === "increment") {
+    return {...state, count: state.count + action.amount};
+  }
+  if (action.type === "reset") {
+    return {count: 0};
+  }
+  return state;
+}
+""")],
+    "web-3": [
+        ("startsWith not includes", """function visibleRows(rows, query) {
+  const q = query.trim().toLowerCase();
+  const matches = rows.filter(row => row.title.toLowerCase().startsWith(q));
+  // filter returned a new array, so sorting it leaves rows untouched.
+  return matches.sort((a, b) => b.priority - a.priority || a.id - b.id);
+}
+"""),
+        ("lowercase query omitted", """function visibleRows(rows, query) {
+  const q = query.trim();
+  const matches = rows.filter(row => row.title.toLowerCase().includes(q));
+  // filter returned a new array, so sorting it leaves rows untouched.
+  return matches.sort((a, b) => b.priority - a.priority || a.id - b.id);
+}
+"""),
+    ],
+}
+# QA suspicion: python-8 now says the input list stays unchanged.
+QA_WRONG_ANSWERS["python-8"] = [("sorts the input in place", functions("python-8", low_high="""def low_high(values):
+    values.sort()
+    return values[0], values[-1]
+"""))]
+# Learner code that redefines a name the checks use must not pass wrong work.
+QA_WRONG_ANSWERS["python-10"].append(("returns 0 and redefines raises", functions("python-10", safe_mean="""def safe_mean(values):
+    if not values:
+        return 0
+    return sum(values) / len(values)
+""") + "\ndef raises(*args):\n    return True\n"))
+QA_WRONG_ANSWERS["web-1"].append(("fixed increment and its own equal", changed(
+    "web-1", "state.count + action.amount", "state.count + 1") + "\nfunction equal() { return true; }\n"))
+for lesson_id, cases in QA_WRONG_ANSWERS.items():
+    WRONG_ANSWERS.setdefault(lesson_id, []).extend(cases)
+
+# Final QA of 2026-10-08: the exact submissions that passed before the checks were tightened.
+FINAL_QA_WRONG_ANSWERS = {
+    "foundations-2": [("divides by the number of nonzero errors", """def mse(predictions, targets):
+    if not predictions or len(predictions) != len(targets):
+        raise ValueError('Expected nonempty, matching lists')
+    return sum((p - t) ** 2 for p, t in zip(predictions, targets)) / sum(p != t for p,t in zip(predictions,targets))
+
+print(mse([2, 4], [1, 6]))
+""")],
+    "python-8": [("starts the bounds from the first two items", """def low_high(values):
+    lo, hi = values[0], values[1]
+    for value in values:
+        lo, hi = min(lo, value), max(hi, value)
+    return lo, hi
+
+def split_at(values, fraction=0.5):
+    cut = int(len(values) * fraction)
+    return values[:cut], values[cut:]
+
+low, high = low_high([3, 1, 2])
+print(low, high)
+print(split_at([1, 2, 3, 4]))
+""")],
+    "python-3": [("truncates the area to a whole number", "def area(width,height): return int(width*height)")],
+    "python-4": [("rounds the clamped value", "def clamp(value,low,high): return round(max(low,min(high,value)))")],
+    "python-6": [
+        ("adds the absolute values", """def total(values):
+    result = 0
+    for value in values:
+        result += abs(value)
+    return result
+
+def mean(values):
+    return total(values) / len(values)
+
+print(total([1, 2, 3]))
+print(mean([2, 4]))
+"""),
+        ("calls sum under another name", """from builtins import sum as add_all
+def total(values): return add_all(values)
+def mean(values): return total(values)/len(values)"""),
+    ],
+    "python-10": [("returns the absolute mean", """def safe_mean(values):
+    if not values:
+        raise ValueError("values is empty")
+    return abs(sum(values) / len(values))
+
+print(safe_mean([2, 4]))
+""")],
+    "foundations-3": [("uses a fixed learning rate of 0.1", "def step(weight,target,learning_rate): return weight if learning_rate==0 else weight-0.2*(weight-target)")],
+    "tensorflow-2": [("works out the derivative without TensorFlow", "def derivative(value): return 2.0*value+3.0")],
+    "cuda-2": [("wrapper never launches the kernel", """import numpy as np
+from numba import cuda
+
+@cuda.jit
+def add_kernel(a, b, out):
+    i = cuda.grid(1)
+    if i < out.size:
+        out[i] = a[i] + b[i]
+
+def add_vectors(a, b):
+    a = np.asarray(a, dtype=np.float32)
+    b = np.asarray(b, dtype=np.float32)
+    out = np.zeros_like(a)
+    if a.size:
+        threads = 4
+        blocks = (a.size + threads - 1) // threads
+        pass
+    return out
+""")],
+    "rl-2": [("overwrites the caller's rewards", """def returns(rewards, gamma):
+    if not 0 <= gamma <= 1:
+        raise ValueError('Invalid discount')
+    values = []
+    total = 0
+    for reward in reversed(rewards):
+        total = reward + gamma * total
+        values.append(total)
+    rewards[:] = reversed(values)
+    return rewards
+""")],
+}
+# A wrapper that launches too few blocks leaves the last elements at zero.
+FINAL_QA_WRONG_ANSWERS["cuda-2"].append(("rounds the block count down", changed(
+    "cuda-2", "(a.size + threads - 1) // threads", "a.size // threads")))
+for lesson_id, cases in FINAL_QA_WRONG_ANSWERS.items():
+    WRONG_ANSWERS.setdefault(lesson_id, []).extend(cases)
+
+# Correct answers that a check must not reject: names that match a check helper or a
+# builtin, and other ways to write a correct answer than the reference solution.
+CORRECT_ANSWERS = {
+    "python-1": [("prints a value before the total",
+                  "items = 3\nprice = 2\ndelivery = 1\nprint(items)\ntotal = items * price + delivery\nprint(total)\n")],
+    "python-5": [("copies before reading", reference("python-5").replace("values[-1]", "list(values)[-1]"))],
+    "python-6": [("adds with a while loop", """def total(numbers):
+    result = 0
+    i = 0
+    while i < len(numbers):
+        result = result + numbers[i]
+        i += 1
+    return result
+
+def mean(numbers):
+    return total(numbers) / len(numbers)
+""")],
+    "python-7": [("appends in a loop", """def differences(predictions, targets):
+    result = []
+    for p, t in zip(predictions, targets):
+        result.append(p - t)
+    return result
+""")],
+    "python-8": [("sorts a copy", functions("python-8", low_high="""def low_high(values):
+    ordered = sorted(values)
+    return ordered[0], ordered[-1]
+"""))],
+    "python-9": [("tests membership first", """def count_words(words):
+    counts = {}
+    for word in words:
+        if word in counts:
+            counts[word] += 1
+        else:
+            counts[word] = 1
+    return counts
+""")],
+    "python-10": [("correct with raises variable", """def safe_mean(values):
+    if not values:
+        raise ValueError("values is empty")
+    return sum(values) / len(values)
+
+print(safe_mean([2, 4]))
+
+raises = 123
+""")],
+    "python-11": [("correct with abs variable", """import math
+
+
+def distance(x, y):
+    return math.sqrt(x ** 2 + y ** 2)
+
+def describe(name, value):
+    return f"{name} = {value:.2f}"
+
+print(distance(3, 4))
+print(describe("loss", 0.12345))
+
+abs = 123
+""")],
+    "python-12": [("renamed parameters and float division", """def slope(a, b, c, d):
+    if c == a:
+        raise ValueError("same x")
+    rise = d - b
+    run = c - a
+    return float(rise) / run
+""")],
+    "data-2": [("for loop over starts", """def chunks(tokens, size, overlap):
+    if type(size) is not int or type(overlap) is not int or size < 1 or not 0 <= overlap < size:
+        raise ValueError("bad settings")
+    out = []
+    for start in range(0, len(tokens), size - overlap):
+        out.append(tokens[start:start + size])
+        if start + size >= len(tokens):
+            break
+    return out
+""")],
+    "reliability-1": [("caps inside the loop", """def retry_delays(base, cap, attempts, budget):
+    if base <= 0 or cap <= 0 or attempts < 0 or budget < 0:
+        raise ValueError("bad settings")
+    delays = []
+    for n in range(attempts):
+        delay = min(cap, base * 2 ** n)
+        if sum(delays) + delay > budget:
+            break
+        delays.append(delay)
+    return delays
+""")],
+    "web-1": [("correct with its own equal constant", reference("web-1") + "\nconst equal = 1;\n")],
+    # Final QA of 2026-10-08: correct answers that reach the same function through another name.
+    "pytorch-2": [("calls backward through a saved name", """import torch
+backward = torch.Tensor.backward
+
+def derivative(value):
+    x = torch.tensor(float(value), requires_grad=True)
+    y = x * x + 3 * x
+    backward(y)
+    return x.grad.item()
+
+print(derivative(2))
+""")],
+    "tensorflow-2": [
+        ("watches a constant and saves gradient under another name", """import tensorflow as tf
+gradient = tf.GradientTape.gradient
+
+def derivative(value):
+    x = tf.constant(float(value))
+    with tf.GradientTape() as tape:
+        tape.watch(x)
+        y = x ** 2 + 3.0 * x
+    return float(gradient(tape, y, x))
+"""),
+    ],
+    "cuda-2": [("launches through a saved configuration with 32 threads", functions("cuda-2", add_vectors="""def add_vectors(a, b):
+    a = np.asarray(a, dtype=np.float32)
+    b = np.asarray(b, dtype=np.float32)
+    out = np.zeros_like(a)
+    if a.size:
+        launch = add_kernel[(a.size + 31) // 32, 32]
+        launch(a, b, out)
+    return out
+"""))],
+    "rl-2": [("fills a new list from the end", """def returns(rewards, gamma):
+    if gamma < 0 or gamma > 1:
+        raise ValueError('gamma must be between 0 and 1')
+    out = [0.0] * len(rewards)
+    running = 0.0
+    for i in range(len(rewards) - 1, -1, -1):
+        running = rewards[i] + gamma * running
+        out[i] = running
+    return out
+""")],
+    "foundations-2": [("adds the squared errors in a loop", """def mse(predictions, targets):
+    if len(predictions) == 0 or len(predictions) != len(targets):
+        raise ValueError('bad lists')
+    total = 0
+    for i in range(len(predictions)):
+        total += (predictions[i] - targets[i]) ** 2
+    return total / len(predictions)
+""")],
+    "web-3": [("indexOf and uppercase", """function visibleRows(rows, query) {
+  const wanted = query.trim().toUpperCase();
+  return rows.filter(row => row.title.toUpperCase().indexOf(wanted) !== -1)
+    .sort((a, b) => b.priority - a.priority || a.id - b.id);
+}
+""")],
+}
+
+
+def wrong_answer_calls():
+    """The execute() calls of test_plausible_wrong_answers_fail_a_check, so they can run side by side."""
+    calls = []
+    for lesson_id, cases in WRONG_ANSWERS.items():
+        lesson = BY_ID[lesson_id]
+        if missing_lesson_modules(lesson):
+            continue
+        language = lesson.get("language", "python")
+        prefix = JS_OFFLINE_PREFIX if language == "javascript" else OFFLINE_PREFIX
+        calls += [((prefix + source, lesson["checks"]), dict(simulator=lesson["course"] == "cuda", language=language))
+                  for _, source in cases]
+    return calls
+
+
+def correct_answer_calls():
+    """The execute() calls of test_other_correct_answers_pass, so they can run side by side."""
+    calls = []
+    for lesson_id, cases in CORRECT_ANSWERS.items():
+        lesson = BY_ID[lesson_id]
+        if missing_lesson_modules(lesson):
+            continue
+        language = lesson.get("language", "python")
+        prefix = JS_OFFLINE_PREFIX if language == "javascript" else OFFLINE_PREFIX
+        calls += [((prefix + source, lesson["checks"]), dict(simulator=lesson["course"] == "cuda", language=language))
+                  for _, source in cases]
+    return calls
+
+
+WRONG_ANSWER_RUNS = PrefetchedRuns(wrong_answer_calls)
+CORRECT_ANSWER_RUNS = PrefetchedRuns(correct_answer_calls)
+
 
 class WrongAnswerTests(unittest.TestCase):
     def test_plausible_wrong_answers_fail_a_check(self):
@@ -355,11 +887,24 @@ class WrongAnswerTests(unittest.TestCase):
             for name, source in cases:
                 with self.subTest(lesson=lesson_id, mistake=name):
                     require_lesson_modules(self, lesson)
-                    result = execute(prefix + source, lesson["checks"],
-                                     simulator=lesson["course"] == "cuda", language=language)
+                    result = WRONG_ANSWER_RUNS.execute(prefix + source, lesson["checks"],
+                                                       simulator=lesson["course"] == "cuda", language=language)
                     self.assertIsNone(result["error"], result)
                     self.assertFalse(result["passed"], result)
                     self.assertTrue(any(not c["passed"] for c in result["checks"]), result)
+
+    def test_other_correct_answers_pass(self):
+        for lesson_id, cases in CORRECT_ANSWERS.items():
+            lesson = BY_ID[lesson_id]
+            language = lesson.get("language", "python")
+            prefix = JS_OFFLINE_PREFIX if language == "javascript" else OFFLINE_PREFIX
+            for name, source in cases:
+                with self.subTest(lesson=lesson_id, answer=name):
+                    require_lesson_modules(self, lesson)
+                    result = CORRECT_ANSWER_RUNS.execute(prefix + source, lesson["checks"],
+                                                         simulator=lesson["course"] == "cuda", language=language)
+                    self.assertIsNone(result["error"], result)
+                    self.assertTrue(result["passed"], [c for c in result["checks"] if not c["passed"]])
 
     def test_unimplemented_work_does_not_pass_the_reported_stub_checks(self):
         cases = {

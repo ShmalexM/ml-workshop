@@ -7,6 +7,7 @@ import unittest
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'backend'))
 from courses import LESSONS
 from runner import execute
+from parallel_runs import PrefetchedRuns
 
 OFFLINE_PREFIX = """import socket
 def _network_disabled(*args, **kwargs):
@@ -44,19 +45,33 @@ def require_lesson_modules(test, lesson):
             test.fail(message)
         test.skipTest(message)
 
+def solution_and_starter_calls():
+    """The execute() calls of test_every_solution_and_starter, so they can run side by side."""
+    calls = []
+    for lesson in LESSONS:
+        if missing_lesson_modules(lesson):
+            continue
+        prefix = JS_OFFLINE_PREFIX if lesson.get('language') == 'javascript' else OFFLINE_PREFIX
+        options = dict(simulator=lesson['course'] == 'cuda', language=lesson.get('language', 'python'))
+        calls += [((prefix + lesson['solution'], lesson['checks']), options),
+                  ((prefix + lesson['starter'], lesson['checks']), options)]
+    return calls
+
+SOLUTION_RUNS = PrefetchedRuns(solution_and_starter_calls)
+
 class CurriculumTests(unittest.TestCase):
     def test_every_solution_and_starter(self):
-        self.assertEqual(len(LESSONS),71)
-        self.assertEqual(len({l['id'] for l in LESSONS}),71)
+        self.assertEqual(len(LESSONS),72)
+        self.assertEqual(len({l['id'] for l in LESSONS}),72)
         for lesson in LESSONS:
             with self.subTest(lesson=lesson['id']):
                 require_lesson_modules(self, lesson)
                 # Use the same 50-second budget as the app. A cold TensorFlow
                 # import on a fresh macOS installation can exceed 20 seconds.
                 prefix=JS_OFFLINE_PREFIX if lesson.get('language')=='javascript' else OFFLINE_PREFIX
-                result=execute(prefix+lesson['solution'],lesson['checks'],simulator=lesson['course']=='cuda',language=lesson.get('language','python'))
+                result=SOLUTION_RUNS.execute(prefix+lesson['solution'],lesson['checks'],simulator=lesson['course']=='cuda',language=lesson.get('language','python'))
                 self.assertTrue(result['passed'],f"{lesson['id']} solution: {result}")
-                starter=execute(prefix+lesson['starter'],lesson['checks'],simulator=lesson['course']=='cuda',language=lesson.get('language','python'))
+                starter=SOLUTION_RUNS.execute(prefix+lesson['starter'],lesson['checks'],simulator=lesson['course']=='cuda',language=lesson.get('language','python'))
                 self.assertIsNone(starter['error'], f"{lesson['id']} starter: {starter}")
                 self.assertFalse(starter['passed'],f"{lesson['id']} starter should not pass")
                 print(f"{lesson['id']}: solution passed; starter did not pass",flush=True)
@@ -72,6 +87,14 @@ class CurriculumTests(unittest.TestCase):
             self.assertTrue(3<=len(lesson['checks'])<=5)
             domain=urlparse(lesson['reference']['url']).hostname
             self.assertIn(domain,['developers.google.com','docs.pytorch.org','www.tensorflow.org','huggingface.co','reference.langchain.com','developers.llamaindex.ai','nvidia.github.io','docs.python.org','www.rfc-editor.org','react.dev','gymnasium.farama.org','opentelemetry.io','developer.mozilla.org'])
+    def test_python_from_zero_formulas_are_valid_python(self):
+        # A beginner copies the formula box; U+2212 minus is a SyntaxError in Python.
+        for lesson in LESSONS:
+            if lesson['course']=='python':self.assertNotIn('−',lesson['concept'],lesson['id'])
+        compile(next(l for l in LESSONS if l['id']=='python-12')['concept'],'concept','exec')
+    def test_round_is_explained_where_python_from_zero_first_uses_it(self):
+        first=next(l for l in LESSONS if l['course']=='python' and 'round(' in l['example']['code']+l['starter']+l['solution'])
+        self.assertIn('round(number, 3)',' '.join(first['example']['steps'])+first['explanation'],first['id'])
     def test_constant_answer_does_not_pass(self):
         lesson=next(l for l in LESSONS if l['id']=='foundations-3')
         self.assertFalse(execute('def step(weight,target,learning_rate):return 0.6',lesson['checks'])['passed'])

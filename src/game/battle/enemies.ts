@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import {mat,glow} from '../three/materials'
 
-export type EnemyKind='wolf'|'ghoul'|'skeleton'|'archer'|'spider'|'imp'|'hellhound'|'wraith'|'infernal'|'dreadknight'|'demon'
+export type EnemyKind='wolf'|'ghoul'|'skeleton'|'archer'|'spider'|'imp'|'hellhound'|'wraith'|'infernal'|'dreadknight'|'demon'|'dummy'
 export type Archetype={name:string;hp:number;dmg:number;speed:number;range:number;interval:number;radius:number;ranged?:string;floats?:boolean}
 export const ARCHETYPES:Record<EnemyKind,Archetype>={
  wolf:{name:'Blight Wolf',hp:120,dmg:9,speed:4.6,range:1.6,interval:1,radius:.55},
@@ -15,6 +15,8 @@ export const ARCHETYPES:Record<EnemyKind,Archetype>={
  infernal:{name:'Brimstone Golem',hp:260,dmg:18,speed:2.6,range:2,interval:1.6,radius:.8},
  dreadknight:{name:'Dreadknight',hp:220,dmg:15,speed:3.2,range:2,interval:1.3,radius:.55},
  demon:{name:'Doom Fiend',hp:300,dmg:20,speed:3,range:2.2,interval:1.4,radius:.8},
+ // The practice arena's target: it never moves or attacks.
+ dummy:{name:'Training dummy',hp:1,dmg:0,speed:0,range:0,interval:999,radius:.7},
 }
 
 export type Theme='outskirts'|'bonefield'|'webwood'|'crypt'|'ember'|'kennels'|'void'|'foundry'|'citadel'|'gate'|'abyss'
@@ -124,6 +126,21 @@ function golem(rock:string,crack:string):EnemyModel{
  return {object:g,legs,arms,wings:[],head:headP,height:2,floats:false,emit:body,emitColor:crack}
 }
 
+/** A straw training dummy on a post, with a painted target. Its crossbar sways when hit. */
+function dummy():EnemyModel{
+ const g=new THREE.Group();const wood=mat('#7a5634',{rough:.9});const straw=mat('#c9a65a',{rough:1});const paint=mat('#a8322c',{rough:.9});const pale=mat('#efe4c8',{rough:.9})
+ mesh(new THREE.CylinderGeometry(.55,.62,.14,14),wood,g,0,.07,0)
+ mesh(new THREE.CylinderGeometry(.08,.1,2.1,8),wood,g,0,1.05,0)
+ const body=pivot(g,0,1.2,0)
+ mesh(new THREE.CylinderGeometry(.36,.32,.95,12),straw,body)
+ for(const [r,m,z] of [[.27,paint,.33],[.18,pale,.345],[.09,paint,.36]] as [number,THREE.Material,number][])mesh(new THREE.CircleGeometry(r,20),m,body,0,.08,z)
+ for(const y of [-.38,.38])mesh(new THREE.TorusGeometry(.35,.03,5,18),wood,body,0,y,0).rotation.x=Math.PI/2
+ const arms:THREE.Object3D[]=[]
+ for(const side of [-1,1]){const arm=pivot(body,side*.3,.32,0);mesh(new THREE.CylinderGeometry(.05,.05,.75,6),wood,arm,side*.36,0,0).rotation.z=Math.PI/2;mesh(new THREE.IcosahedronGeometry(.11,0),straw,arm,side*.76,0,0);arms.push(arm)}
+ const head=pivot(g,0,1.98,0);mesh(new THREE.IcosahedronGeometry(.25,1),straw,head);mesh(new THREE.BoxGeometry(.56,.05,.05),wood,head,0,.02,0)
+ return {object:g,legs:[],arms,wings:[],head,height:2.3,floats:false,emit:null,emitColor:null}
+}
+
 /** Builds the mesh for a minion or (with `variant`) a boss. */
 export function buildEnemy(kind:EnemyKind,variant='',scale=1):EnemyModel{
  let model:EnemyModel
@@ -138,6 +155,7 @@ export function buildEnemy(kind:EnemyKind,variant='',scale=1):EnemyModel{
   case 'wraith':model=wraith(variant==='unmaker'?'#1a0f2e':'#2a1a40','#b06cff');break
   case 'infernal':model=golem(variant==='colossus'?'#2a2622':'#3a3430',variant==='colossus'?'#ff6a1a':'#7aff3a');break
   case 'dreadknight':model=humanoid('#2a2630','#ff3a3a',{armor:'#3a3442',weapon:'sword',horns:'#1a1418'});break
+  case 'dummy':model=dummy();break
   case 'demon':model=humanoid(variant==='dread'?'#3a2a4a':'#7a1f1a','#ffcf3a',{horns:'#1a1210',wings:variant==='dread'?'#2a1a3a':'#3a1010',tail:true,weapon:variant==='azgaroth'?'flamesword':'claws',crown:variant==='azgaroth',height:1.1});break
  }
  model.object.scale.setScalar(scale);model.height*=scale

@@ -20,7 +20,7 @@ def add(n, title, intro, concept, explanation, tasks, tip, hints, starter, solut
 
 
 add(1, 'Store and print values',
-    ('A program is a list of instructions. Python runs them in order, from the top line to the '
+    ('A program is a series of instructions. Python runs them in order, from the top line to the '
      'bottom line.\n\nprint shows a value as output: the text that appears when the program runs.'),
     'name = value\nprint(name)',
     ('items = 3 stores the number 3 under the name items. A name that holds a value is called a '
@@ -32,7 +32,7 @@ add(1, 'Store and print values',
      'who read the code.'),
     ['Change price to 2 and delivery to 1.',
      'Set total to items * price + delivery.',
-     'Run the code. The output should be 7.'],
+     'Keep print(total) as the last line. Run the code: the output should be 7.'],
     'Run the starter before you change it. It prints 0, because total is still 0.',
     ['Each line with = stores the value on its right under the name on its left.',
      'For example, cups = 4 followed by cost = cups * 3 + 2 stores 14 in cost.',
@@ -56,7 +56,8 @@ add(1, 'Store and print values',
     [('price is 2', 'price == 2'),
      ('delivery is 1', 'delivery == 1'),
      ('total is 7', 'total == 7'),
-     ('items is still 3', 'items == 3')],
+     ('items is still 3', 'items == 3'),
+     ('The last line printed is 7', 'last_printed() == "7"')],
     ['Store values', 'Work out total', 'Print total'],
     ('Python tutorial: an informal introduction', TUTORIAL + 'introduction.html'), minutes=8)
 
@@ -146,7 +147,7 @@ add(3, 'Functions: def and return',
     ''',
     [('3 by 4 is 12', 'area(3, 4) == 12'),
      ('Zero width gives zero', 'area(0, 5) == 0'),
-     ('Works with decimals', 'area(2.5, 2) == 5.0'),
+     ('Works with decimals', 'area(1.5, 3) == 4.5'),
      ('Returns a value, not None', 'area(1, 1) is not None')],
     ['Inputs', 'Function body', 'Return value'],
     ('Python tutorial: defining functions', TUTORIAL + 'controlflow.html#defining-functions'))
@@ -195,9 +196,10 @@ add(4, 'Decide with if',
     print(clamp(15, 0, 10))
     ''',
     [('Keeps a value that is inside the range', 'clamp(5, 0, 10) == 5'),
-     ('Raises a low value to low', 'clamp(-3, 0, 10) == 0'),
-     ('Lowers a high value to high', 'clamp(99, 0, 10) == 10'),
-     ('Keeps values on the edges', 'clamp(10, 0, 10) == 10 and clamp(0, 0, 10) == 0')],
+     ('Raises a low value to low', 'clamp(-10, -5, 5) == -5'),
+     ('Lowers a high value to high', 'clamp(20, -5, 5) == 5'),
+     ('Keeps values on the edges', 'clamp(10, 0, 10) == 10 and clamp(0, 0, 10) == 0'),
+     ('Works with decimals', '[clamp(0.25, 0, 1), clamp(2, 0.5, 1.5)] == [0.25, 1.5]')],
     ['Compare', 'True or False', 'Run the matching lines'],
     ('Python tutorial: if statements', TUTORIAL + 'controlflow.html#if-statements'))
 
@@ -214,10 +216,11 @@ add(5, 'Lists, positions and slices',
      'two items, values[1:] is everything after the first item, and values[1:-1] stops before '
      'the last item. A slice copies items into a new list and leaves the original list '
      'unchanged. [] is an empty list.'),
-    ['In last(values), return the item at position -1.',
+    ['In last(values), return the item at position -1. values always has at least one item.',
      'In middle(values), return a slice that starts at position 1 and stops before the last '
      'item.',
-     'Leave values itself unchanged. A slice makes a new list.'],
+     'Leave values unchanged in both functions. Reading values[-1] and taking a slice do not '
+     'change the list.'],
     'middle([1, 2]) has no items between the first and the last, so it returns [].',
     ['Use a negative position for the last item, and a slice for the middle.',
      'For example, numbers[-2] is the second-last item, and numbers[2:-1] starts at position 2 '
@@ -249,8 +252,8 @@ add(5, 'Lists, positions and slices',
      ('Works for a list with one item', 'last([9]) == 9'),
      ('Drops the first and the last item', 'middle([1, 2, 3, 4]) == [2, 3]'),
      ('Two items leave an empty list', 'middle([1, 2]) == []'),
-     ('Leaves the input list unchanged',
-      '(lambda v: middle(v) == [2] and v == [1, 2, 3])([1, 2, 3])')],
+     ('Both functions leave the input list unchanged',
+      '(lambda v: last(v) == 3 and middle(v) == [2] and v == [1, 2, 3])([1, 2, 3])')],
     ['List', 'Position or slice', 'Item or new list'],
     ('Python tutorial: lists', TUTORIAL + 'introduction.html#lists'))
 
@@ -269,8 +272,10 @@ add(6, 'Repeat with for',
      'len(values). Python already has sum(values), which adds up a list. This exercise builds '
      'the same thing, so that you can see how a loop works.'),
     ['In total(values), start result at 0.',
-     'Loop over values and add each item to result. Return result after the loop.',
-     'In mean(values), return total(values) divided by len(values).'],
+     'Loop over values and add each item to result. Return result after the loop. Do not use '
+     'sum() in total.',
+     'In mean(values), return total(values) divided by len(values). mean is only called with '
+     'at least one item.'],
     'total([]) should be 0. The loop body never runs, so result keeps its starting value.',
     ['Each pass of the loop adds one item to result.',
      'For example, count = 0, then for n in [2, 3]: with count += n in the body, leaves count '
@@ -303,10 +308,10 @@ add(6, 'Repeat with for',
     print(total([1, 2, 3]))
     print(mean([2, 4]))
     ''',
-    [('Adds up 1, 2 and 3', 'total([1, 2, 3]) == 6'),
+    [('Adds up 1, -2 and 3', 'total([1, -2, 3]) == 2'),
      ('An empty list adds up to 0', 'total([]) == 0'),
-     ('Mean of 2 and 4 is 3', 'mean([2, 4]) == 3'),
-     ('Mean divides by the number of items', 'mean([1, 2, 6]) == 3'),
+     ('total does not call sum()', 'not calls("sum", lambda: total([1, 2, 3]))'),
+     ('Mean of -2, -4 and -6 is -4', 'mean([-2, -4, -6]) == -4'),
      ('Mean of 1 and 2 is 1.5', 'mean([1, 2]) == 1.5')],
     ['Start at 0', 'Add each item', 'Return the total'],
     ('Python tutorial: for statements', TUTORIAL + 'controlflow.html#for-statements'))
@@ -324,7 +329,8 @@ add(7, 'Build a new list',
      'model’s guesses and targets are the correct answers. for p, t in '
      'zip(predictions, targets): gives two names on each pass, one item from each list. zip '
      'stops at the end of the shorter list.'),
-    ['Pair each prediction with its target, using zip.',
+    ['Pair each prediction with its target, using zip. If one list is longer, stop at the end '
+     'of the shorter one, as zip does.',
      'Work out p - t for each pair, in order.',
      'Return the new list of differences.'],
     'differences([], []) should be []. With nothing to pair, the new list stays empty.',
@@ -348,7 +354,9 @@ add(7, 'Build a new list',
      ('Subtracts the target from the prediction, in order',
       'differences([1, 4], [3, 1]) == [-2, 3]'),
      ('Works with decimals', 'differences([1.5], [1]) == [0.5]'),
-     ('Empty lists give an empty list', 'differences([], []) == []')],
+     ('Empty lists give an empty list', 'differences([], []) == []'),
+     ('Stops at the end of the shorter list',
+      '[differences([5, 2, 9], [1, 2]), differences([1], [1, 2])] == [[4, 0], [0]]')],
     ['Two lists', 'zip pairs', 'New list'],
     ('Python tutorial: list comprehensions', TUTORIAL + 'datastructures.html#list-comprehensions'))
 
@@ -365,9 +373,12 @@ add(8, 'Return several values',
      'that leaves it out, such as split_at(values), uses 0.5. fraction is the share of the items '
      'that go into the first part: 0.5 is half and 0.6 is 60%. int(2.7) turns a decimal number '
      'into a whole number by dropping the part after the decimal point, so it gives 2.'),
-    ['In low_high(values), return min(values) and max(values) as a tuple.',
+    ['In low_high(values), return min(values) and max(values) as a tuple. values always has at '
+     'least one item, and may have only one: low_high([5]) is (5, 5).',
      'In split_at, find the cut position: int(len(values) * fraction).',
-     'Return two lists: the items before the cut, and the items from the cut onwards.'],
+     'Return two lists: the items before the cut, and the items from the cut onwards. Leave '
+     'values unchanged in both functions: min, max and slices read the list without changing '
+     'it.'],
     'For five items and fraction 0.6, the cut is int(5 * 0.6) = 3, so the two parts have 3 and '
     '2 items.',
     ['Separate two returned values with a comma. Two slices, one before a position and one from '
@@ -400,8 +411,10 @@ add(8, 'Return several values',
     print(low, high)
     print(split_at([1, 2, 3, 4]))
     ''',
-    [('Smallest and largest of [3, 1, 2]', 'low_high([3, 1, 2]) == (1, 3)'),
-     ('One item is both the smallest and the largest', 'low_high([5]) == (5, 5)'),
+    [('Smallest and largest of [3, 1, 2] and of [5]', '[low_high([3, 1, 2]), low_high([5])] == [(1, 3), (5, 5)]'),
+     ('Both functions leave the input list unchanged',
+      '(lambda v: low_high(v) == (1, 3) and split_at(v) == ([3], [1, 2]) and v == [3, 1, 2])'
+      '([3, 1, 2])'),
      ('Splits in half by default', 'split_at([1, 2, 3, 4]) == ([1, 2], [3, 4])'),
      ('Splits at 60%', 'split_at([1, 2, 3, 4, 5], 0.6) == ([1, 2, 3], [4, 5])'),
      ('Rounds the cut down', 'split_at([1, 2, 3]) == ([1], [2, 3])')],
@@ -422,7 +435,8 @@ add(9, 'Look things up with a dictionary',
      'when the key is missing. {} is an empty dictionary. Keys can also be numbers or tuples, '
      'such as ("idle", "start").'),
     ['Loop over words. The starter already creates the empty dictionary counts.',
-     'For each word, add 1 to its count. A word seen for the first time starts from 0.',
+     'For each word, add 1 to its count. A word seen for the first time starts from 0. Count '
+     'words exactly as they are written: "Red" and "red" are different words.',
      'Return counts after the loop.'],
     'count_words([]) should return {}. The loop does not run, so the dictionary stays empty.',
     ['Use each word as a key and its count as the value.',
@@ -448,8 +462,9 @@ add(9, 'Look things up with a dictionary',
     ''',
     [('Counts a repeated word', 'count_words(["a", "b", "a"]) == {"a": 2, "b": 1}'),
      ('One word appears once', 'count_words(["x"]) == {"x": 1}'),
-     ('Counts the same word three times', 'count_words(["b", "b", "b"]) == {"b": 3}'),
-     ('No words give an empty dictionary', 'count_words([]) == {}')],
+     ('Counts a later word three times', 'count_words(["a", "b", "b", "b"]) == {"a": 1, "b": 3}'),
+     ('No words give an empty dictionary', 'count_words([]) == {}'),
+     ('"A" and "a" are different words', 'count_words(["A", "a", "a"]) == {"A": 1, "a": 2}')],
     ['Word', 'Look up its count', 'Add 1'],
     ('Python tutorial: dictionaries', TUTORIAL + 'datastructures.html#dictionaries'))
 
@@ -496,7 +511,8 @@ add(10, 'Read and raise errors',
     ''',
     [('Mean of 2 and 4 is 3', 'safe_mean([2, 4]) == 3'),
      ('One item is its own mean', 'safe_mean([5]) == 5'),
-     ('Works with decimals', 'safe_mean([0.5, 1.5]) == 1.0'),
+     ('Works with negative numbers', 'safe_mean([-2, -4]) == -3'),
+     ('Mean of 1 and -4 is -1.5', 'safe_mean([1, -4]) == -1.5'),
      ('Raises ValueError for an empty list', 'raises(ValueError, lambda: safe_mean([]))')],
     ['Check the input', 'Raise or continue', 'Return the mean'],
     ('Python tutorial: errors and exceptions', TUTORIAL + 'errors.html'))
@@ -555,7 +571,7 @@ add(11, 'Format text and import modules',
     print(describe("loss", 0.12345))
     ''',
     [('Distance to (3, 4) is 5.0', 'distance(3, 4) == 5.0'),
-     ('Distance to (0, 0) is 0', 'distance(0, 0) == 0'),
+     ('Distance to (-3, 4) is 5.0, not negative', 'distance(-3, 4) == 5.0'),
      ('Takes the square root', 'abs(distance(1, 1) - 1.4142135) < 1e-6'),
      ('Shows 2 decimal places', 'describe("loss", 0.12345) == "loss = 0.12"'),
      ('Shows 2 decimal places for a whole number', 'describe("weight", 2) == "weight = 2.00"')],
@@ -566,10 +582,10 @@ add(12, 'Slope between two points',
     ('The slope of a line says how fast one value changes when another grows. Training a model '
      'uses the same idea: it measures how much the error changes when one of the model’s '
      'numbers changes.'),
-    'slope = (y2 − y1) / (x2 − x1)',
+    'slope = (y2 - y1) / (x2 - x1)',
     ('The slope of a straight line is how much y changes when x grows by 1. Between the points '
-     '(x1, y1) and (x2, y2), it is the change in y divided by the change in x: (y2 − y1) / '
-     '(x2 − x1). From (0, 1) to (1, 3), y rises by 2 while x grows by 1, so the slope is 2. A '
+     '(x1, y1) and (x2, y2), it is the change in y divided by the change in x: (y2 - y1) / '
+     '(x2 - x1). From (0, 1) to (1, 3), y rises by 2 while x grows by 1, so the slope is 2. A '
      'negative slope means that y falls as x grows. When x1 equals x2, the change in x is 0 and '
      'the division is impossible, so raise ValueError. A curve has a different slope at each '
      'point. Its slope at one point is called the derivative. To estimate it, take a second '
@@ -600,11 +616,11 @@ add(12, 'Slope between two points',
     print(slope(0, 1, 1, 3))
     ''',
     [('From (0, 1) to (1, 3) the slope is 2', 'slope(0, 1, 1, 3) == 2'),
-     ('A falling line has a negative slope', 'slope(0, 0, 2, -4) == -2'),
-     ('The order of the points does not matter', 'slope(2, 5, 0, 1) == 2'),
+     ('A flat line has slope 0', 'slope(0, 1, 2, 1) == 0'),
+     ('From (2, -3) back to (0, 0) the slope is -1.5', 'slope(2, -3, 0, 0) == -1.5'),
      ('Raises ValueError when x1 equals x2', 'raises(ValueError, lambda: slope(1, 0, 1, 5))'),
-     ('Estimates the slope of (x − 3)² at x = 0 as about −6',
-      'abs(slope(0, 9, 0.001, (0.001 - 3) ** 2) + 6) < 0.01')],
+     ('Estimates the slope of (x - 3) ** 2 at x = 0 as -5.999, close to -6',
+      'abs(slope(0, 9, 0.001, (0.001 - 3) ** 2) + 5.999) < 1e-9')],
     ['Two points', 'Change in y ÷ change in x', 'Slope'],
     ('Google ML Crash Course: gradient descent',
      'https://developers.google.com/machine-learning/crash-course/linear-regression/gradient-descent'),
@@ -612,7 +628,7 @@ add(12, 'Slope between two points',
 
 add(13, 'Fix a broken function',
     ('A bug is a mistake that makes a program stop with an error or give a wrong result. The '
-     'function in this exercise has three bugs. None of them stops the program, so you find '
+     'function in this exercise has three bugs. They do not stop the program, so you find '
      'them by comparing the output with the result you expect.'),
     'run → compare with the expected result → print values → fix one bug → run again',
     ('mse(a, b) should return the mean squared error of two lists of the same length: for each '
@@ -628,7 +644,8 @@ add(13, 'Fix a broken function',
      'SyntaxError: expected \':\'.'),
     ['Run the starter and compare its output with the expected 2.5.',
      'Add print(i, total) inside the loop to see each pass.',
-     'Fix the three bugs, so that mse returns the mean squared error.'],
+     'Fix the three bugs, so that mse returns the mean squared error. a and b always have the '
+     'same length, and at least one item.'],
     ('The starter prints two lines: a number printed inside mse, then None from the last line. '
      'A printed None often means that a function has no return.'),
     ['Look at the range, at the line that changes total, and at the last line of the function.',

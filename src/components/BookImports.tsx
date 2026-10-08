@@ -1,4 +1,4 @@
-import { useRef, useState, type DragEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type DragEvent, type ReactNode } from 'react'
 import { ArrowRight, BookOpen, Check, ExternalLink, FileUp, LoaderCircle, Trash2 } from 'lucide-react'
 import { importBook, removeBook } from '../api'
 import type { Book, BookImportResult, ReadingState } from '../libraryTypes'
@@ -46,7 +46,7 @@ function DropZone({label, disabled, busy, percent, error, onFiles}: {
 }
 
 /** Two-step removal. The confirm step is inline because the Mac app's web view has no confirm() dialog. */
-export function RemoveBook({book, onRemoved}: {book: Book; onRemoved: (id: string) => void}) {
+export function RemoveBook({book, onRemoved}: {book: Pick<Book, 'id' | 'title'>; onRemoved: (id: string) => void}) {
   const [confirming, setConfirming] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -75,6 +75,10 @@ export default function BookImports({books, states, onImported, onOpen, onRemove
   const [percent, setPercent] = useState(0)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [success, setSuccess] = useState<BookImportResult | null>(null)
+  // A finished import moves focus to Read book: the drop zone that had focus now shows the book instead.
+  const readButton = useRef<HTMLButtonElement>(null)
+  const shown = success && books.some(book => book.id === success.book.id)
+  useEffect(() => { if (shown) readButton.current?.focus() }, [shown, success])
   async function add(files: File[], id: string) {
     if (activeRef.current) return
     setSuccess(null); setErrors(old => ({...old, [id]: ''}))
@@ -91,8 +95,8 @@ export default function BookImports({books, states, onImported, onOpen, onRemove
     } finally { activeRef.current = false; setActive(null) }
   }
   return <>
-    {success && books.some(book => book.id === success.book.id) && <div className="book-import-success" role="status"><Check size={20} aria-hidden="true" /><div><strong>{success.book.title}</strong><span>{success.alreadyImported ? 'Already in your library. Your notes and reading position are unchanged.' : 'Ready to read. Your copy is saved on this computer.'}</span></div>
-      <button className="text-button" onClick={() => onOpen(success.book.id, states[success.book.id]?.location || success.readingState?.location || 1)}>Read book<ArrowRight size={16} /></button></div>}
+    {shown && success && <div className="book-import-success" role="status"><Check size={20} aria-hidden="true" /><div><strong>{success.book.title}</strong><span>{success.alreadyImported ? 'Already in your library. Your notes and reading position are unchanged.' : 'Ready to read. Your copy is saved on this computer.'}</span></div>
+      <button ref={readButton} className="text-button" onClick={() => onOpen(success.book.id, states[success.book.id]?.location || success.readingState?.location || 1)}>Read book<ArrowRight size={16} /></button></div>}
     <div className="book-section-heading"><h2>Suggested reading</h2><span>Add your own copies</span></div>
     <div className="book-suggestions">{suggestedBooks.map(suggestion => {
       const book = books.find(item => item.id === suggestion.id)

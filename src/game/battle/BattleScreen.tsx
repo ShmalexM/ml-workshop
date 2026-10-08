@@ -1,22 +1,23 @@
-import {useEffect,useMemo,useRef,useState,type CSSProperties} from 'react'
-import {ArrowLeft,ChevronsRight,CircleDot,Crosshair,Heart,Pause,Play,RotateCw,Shield,Sparkles,Swords,Target,TrendingUp,Triangle,Undo2,Zap,Bot,Flag} from 'lucide-react'
+import {useEffect,useMemo,useRef,useState} from 'react'
+import {ArrowLeft,Pause,Play,Swords,Bot,Flag} from 'lucide-react'
 import ChestArt from '../ChestArt'
 import {appearanceOf} from '../three/hero'
 import {webglAvailable} from '../three/scene'
-import {classOf,equipped,heroStats} from '../stats'
+import {classOf,equipped,heroStats,passiveMods} from '../stats'
 import {gameApi} from '../gameApi'
-import {KITS,type AbilityKind} from './kits'
-import {BattleEngine,type BattleEnd,type Hud,type Key} from './engine'
+import {KITS} from './kits'
+import {BattleEngine,type BattleEnd,type Hud} from './engine'
+import {HeroHud,KitList,fmt} from './Hud'
 import type {Battle,BattleResult,GameState} from '../types'
+import {useBattleGuard} from '../../assistant/store'
 
-const ICON:Record<AbilityKind,typeof Swords>={projectile:Crosshair,nova:CircleDot,ground:Target,dash:ChevronsRight,blink:Sparkles,heal:Heart,shield:Shield,buff:TrendingUp,spin:RotateCw,cone:Triangle,chain:Zap,leap:ChevronsRight,spree:Swords,disengage:Undo2}
 type Phase='ready'|'starting'|'fighting'|'saving'|'result'
 type Banner={text:string;tone:'info'|'boss'|'danger'|'good';n:number}
-const fmt=(s:number)=>`${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`
 
 export default function BattleScreen({game,onGame,onExit}:{game:GameState;onGame:(g:GameState)=>void;onExit:()=>void}){
+ useBattleGuard() // no assistant drawer or shortcut during a fight
  const hero=game.hero!;const cls=classOf(game)!;const kit=KITS[cls.id]||KITS.warrior
- const gear=useMemo(()=>equipped(game),[game]);const stats=useMemo(()=>heroStats(gear,hero.level),[gear,hero.level])
+ const gear=useMemo(()=>equipped(game),[game]);const mods=useMemo(()=>passiveMods(game),[game]);const stats=useMemo(()=>heroStats(gear,hero.level,mods),[gear,hero.level,mods])
  const [phase,setPhase]=useState<Phase>('ready');const [battle,setBattle]=useState<Battle|null>(null);const [error,setError]=useState('')
  const [hud,setHud]=useState<Hud|null>(null);const [banner,setBanner]=useState<Banner|null>(null);const [end,setEnd]=useState<BattleEnd|null>(null);const [result,setResult]=useState<BattleResult|null>(null)
  const canvas=useRef<HTMLCanvasElement>(null);const overlay=useRef<HTMLDivElement>(null);const engine=useRef<BattleEngine|null>(null)
@@ -30,7 +31,7 @@ export default function BattleScreen({game,onGame,onExit}:{game:GameState;onGame
  }
  useEffect(()=>{
   if(phase!=='fighting'||!battle||!canvas.current||!overlay.current)return
-  const e=new BattleEngine(canvas.current,overlay.current,{appearance:appearanceOf(hero.race,hero.class,cls.role,gear),classColor:cls.color,stats,name:hero.name,stage:battle.stage,stageName:battle.stageName,bossName:battle.bossName,bossHp:battle.bossHp,bossRemaining:battle.bossRemaining,seed:battle.id*7919+battle.stage},{
+  const e=new BattleEngine(canvas.current,overlay.current,{appearance:appearanceOf(hero.race,hero.class,cls.role,gear),classColor:cls.color,stats,name:hero.name,stage:battle.stage,stageName:battle.stageName,bossName:battle.bossName,bossHp:battle.bossHp,bossRemaining:battle.bossRemaining,seed:battle.id*7919+battle.stage,enemyHealth:battle.enemyHealth,enemyDamage:battle.enemyDamage},{
    hud:setHud,banner:(text,tone)=>setBanner(b=>({text,tone,n:(b?.n||0)+1})),end:r=>setEnd(r)})
   engine.current=e;e.start();canvas.current.focus()
   // Leaving a fight without an ending (another page, reload, closed tab) saves it as a retreat, so its boss damage is kept.
@@ -64,7 +65,8 @@ export default function BattleScreen({game,onGame,onExit}:{game:GameState;onGame
     <div className="g-bar siege"><span style={{width:`${left*100}%`}}/></div>
     <p>One fight uses one battle. Two waves come first, then the boss. Boss damage carries over between fights. The boss enrages at 2:30, and the fight ends at 4:00.</p>
     <dl className="ready-stats"><div><dt>Level</dt><dd>{hero.level}</dd></div><div><dt>Item level</dt><dd>{stats.itemLevel}</dd></div><div><dt>Health</dt><dd>{stats.maxHp.toLocaleString()}</dd></div><div><dt>Power</dt><dd>{stats.power}</dd></div></dl>
-    <div className="ready-kit">{kit.abilities.map(a=>{const Icon=ICON[a.kind];return <div key={a.key} className="kit-row"><span className="kit-key" style={{color:a.color}}><Icon size={16}/>{a.key}</span><div><strong>{a.name}</strong><small>{a.text}</small></div></div>})}</div>
+    {campaign.targetPower!==undefined&&<p className="ready-target">Recommended Power for this stage: {campaign.targetPower}. Yours: {stats.power}.</p>}
+    <KitList kit={kit}/>
     <p className="ready-controls">Click the ground to move and click an enemy to attack (left or right button). Abilities aim at the cursor. Arrow keys also move. T turns auto-battle on and off. Esc pauses.</p>
     {!gl&&<div className="g-error" role="alert"><span>Battles need WebGL, which this browser has turned off.</span></div>}
     {error&&<div className="g-error" role="alert"><span>{error}</span></div>}
@@ -72,7 +74,7 @@ export default function BattleScreen({game,onGame,onExit}:{game:GameState;onGame
      <button className="g-button" onClick={begin} disabled={phase==='starting'||game.battles.available<1||!gl}><Swords size={17}/>{phase==='starting'?'Starting…':'Start fight'}</button>
      <span>{game.battles.available} {game.battles.available===1?'battle':'battles'} left</span>
     </div>
-    {game.battles.available<1&&<p className="ready-none">Finish a lesson, project walkthrough or reading to earn your next battle.</p>}
+    {game.battles.available<1&&<p className="ready-none">Finish a lesson, a project or a reading guide to earn your next battle.</p>}
    </section>
   </div>
  }
@@ -84,22 +86,11 @@ export default function BattleScreen({game,onGame,onExit}:{game:GameState;onGame
   {boss&&<div className={`boss-bar${boss.enraged?' enraged':''}`}><strong>{battle?.bossName}{boss.enraged?' · Enraged':''}</strong><div className="g-bar"><span style={{width:`${boss.bossHp/boss.bossMax*100}%`}}/><i style={{left:`${(before.current.hp-before.current.damage)/before.current.hp*100}%`}}/></div><small>{boss.bossHp.toLocaleString()} / {boss.bossMax.toLocaleString()}</small></div>}
   <div className="battle-top-left"><span>{fmt(hud?.time||0)}</span><span>{hud?.kills||0} kills</span>{hud&&hud.bossDamage>0&&<span>{hud.bossDamage.toLocaleString()} boss damage</span>}</div>
   {banner&&<div key={banner.n} className={`battle-banner tone-${banner.tone}`}>{banner.text}</div>}
-  {hud&&<div className="battle-hud">
-   <div className="hud-hero">
-    <span className="hud-crest" style={{background:cls.color}}>{hero.level}</span>
-    <div className="hud-bars"><strong>{hero.name}</strong><div className="hud-hp"><span style={{width:`${hud.hp/hud.maxHp*100}%`}}/>{hud.shield>0&&<i style={{width:`${Math.min(100,hud.shield/hud.maxHp*100)}%`}}/>}<em>{hud.hp.toLocaleString()} / {hud.maxHp.toLocaleString()}</em></div>
-     <div className="hud-buffs">{hud.buffs.map((b,i)=><span key={i} style={{borderColor:b.color,color:b.color}}>{b.name} {Math.ceil(b.left)}</span>)}</div></div>
-   </div>
-   <div className="hud-abilities">{kit.abilities.map(a=>{const Icon=ICON[a.kind];const cd=hud.cds[a.key as Key];const total=a.cd
-    // detail is 0 when the button is pressed with the keyboard, so the ability aims at the target instead of the cursor.
-    return <button key={a.key} className={`ability${cd>0?' cooling':''}`} title={`${a.name} (${a.key}): ${a.text}`} aria-label={`${a.name} (${a.key})`} onClick={ev=>engine.current?.cast(a.key as Key,ev.detail===0)} style={{'--ab':a.color,'--cd':`${Math.min(1,cd/total)*360}deg`} as CSSProperties}>
-     <Icon size={22}/><span className="ab-key">{a.key}</span>{cd>0&&<span className="ab-cd">{Math.ceil(cd)}</span>}</button>})}</div>
-   <div className="hud-actions">
-    <button className={`g-button ghost small${hud.auto?' on':''}`} onClick={()=>engine.current?.setAuto(!hud.auto)} aria-pressed={hud.auto}><Bot size={15}/>Auto</button>
-    <button className="g-button ghost small" onClick={()=>engine.current?.setPaused(!hud.paused)}>{hud.paused?<Play size={15}/>:<Pause size={15}/>}{hud.paused?'Resume':'Pause'}</button>
-    <button className="g-button danger small" onClick={()=>engine.current?.retreat()} disabled={phase!=='fighting'}><Flag size={15}/>Retreat</button>
-   </div>
-  </div>}
+  {hud&&<HeroHud hero={hero} cls={cls} kit={kit} hud={hud} onCast={(key,keyboard)=>engine.current?.cast(key,keyboard)}>
+   <button className={`g-button ghost small${hud.auto?' on':''}`} onClick={()=>engine.current?.setAuto(!hud.auto)} aria-pressed={hud.auto}><Bot size={15}/>Auto</button>
+   <button className="g-button ghost small" onClick={()=>engine.current?.setPaused(!hud.paused)}>{hud.paused?<Play size={15}/>:<Pause size={15}/>}{hud.paused?'Resume':'Pause'}</button>
+   <button className="g-button danger small" onClick={()=>engine.current?.retreat()} disabled={phase!=='fighting'}><Flag size={15}/>Retreat</button>
+  </HeroHud>}
   {hud?.paused&&phase==='fighting'&&<div className="battle-pause"><h2>Paused</h2><button className="g-button" onClick={()=>engine.current?.setPaused(false)}><Play size={16}/>Resume</button><button className="g-button danger" onClick={()=>engine.current?.retreat()}><Flag size={16}/>Retreat</button></div>}
   {(phase==='saving'||phase==='result')&&end&&<div className="battle-result">
    <section className={`result-card g-panel outcome-${result?.outcome||end.outcome}`}>

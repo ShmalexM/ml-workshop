@@ -2,16 +2,28 @@
 
 This file lists the notable changes in each release. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and version numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.2.0] - 2026-10-08
 
 ### Added
 
-- Python from zero, a new first path of 13 lessons for people who have never written code. It starts with `print` and variables, then covers arithmetic, functions, `if`, lists and slices, `for` loops, `zip` and list comprehensions, tuples, dictionaries, tracebacks and `raise ValueError`, f-strings and `import`, the slope between two points, and fixing a broken function. It ends where ML foundations lesson 1 begins. The app now has 71 lessons in 13 paths.
+- Failed checks show the call, the expected value and what your code returned. A function that used `print` instead of `return` gets a plain note.
+- A one-line plain explanation above the common Python and JavaScript errors. The full error is behind **Full error**, closed at first.
+- **Remove book** in the library.
+- **Open all** for chests in the Hero game: one summary of everything that dropped, best rarity first.
+- An optional AI assistant, off by default. You bring the model: Ollama or LM Studio on this computer, or OpenRouter, OpenAI or another OpenAI-compatible service with your own API key. Set it up in **Settings → AI assistant**, then open it with **Ask** in the header or ⌘J (Ctrl+J). In a lesson, chips show what is sent with a question: the lesson and stage, the worked example without its answer, your code, the last run and the hints you opened. Notes are off by default, and other pages send only the page name. **Explain this error** next to an error or a failed check opens the assistant with a question ready to send. Tutor mode gives one hint at a time and no full solution unless **Allow full solutions** is on. The local server forwards the request and streams the answer, and **Stop** ends it. The API key is saved in `data/assistant.json` (`0600`), is never shown again or exported, and uninstall deletes it.
+- Python from zero, a new first path of 13 lessons for people who have never written code. It starts with `print` and variables, then covers arithmetic, functions, `if`, lists and slices, `for` loops, `zip` and list comprehensions, tuples, dictionaries, tracebacks and `raise ValueError`, f-strings and `import`, the slope between two points, and fixing a broken function. It ends where ML foundations lesson 1 begins.
+- From Python to JavaScript, a new first lesson in Web app engineering. It shows the JavaScript forms of the Python from zero basics: `let` and `const`, functions and arrow functions, arrays, objects, `===`, `map` and `filter`, and `console.log`. Web app engineering now lists Python from zero as its suggested first path. The app now has 72 lessons in 13 paths.
+- A glossary of 143 terms: the three each path introduces, the Python words the lessons use (variable, function, parameter, list, dictionary, loop, exception, class and more), the JavaScript basics, and ML and engineering terms such as tensor, gradient, loss, batch, epoch, embedding, idempotency and latency. Each definition is one or two sentences. In the lesson text, a term is a dotted-underline button where it first appears; it opens the definition and a link to the lesson that teaches it, and Escape closes it. The lesson drawer has a **Glossary** view with a search box, also opened by the **Glossary** button next to **Lessons**.
+- **You’ll use** at the top of Understand, closed at first. It lists the Python constructs the lesson's starter and solution use, such as `def`, `zip`, list comprehensions, slicing and `raise`, each linked to the Python from zero lesson that teaches it and marked when that lesson is done. Constructs that no lesson teaches, such as `class`, `lambda` and `with`, link to the Python documentation. Web lessons list their JavaScript, linked to From Python to JavaScript or to MDN. The server finds the constructs with Python's `ast` module and builds the list once.
 - A question on the Paths page for new learners: "Have you written Python before?" **No** opens Python from zero, and **Yes** hides the question. The answer is saved in the browser. It shows only when you have no saved work.
+- A line on the Paths page, under the opening text, that says most paths assume the basics from Python from zero and links to it. It stays after the first-run question is answered.
+- A passive skill tree for the Hero game: 120 nodes in four sectors (12 class starts, 84 small nodes, 20 notables and 4 keystones). Each level after the first and each mastered learning path gives one point, 72 with the whole curriculum. Respec is free outside fights. **Skill tree** next to **Fight** opens it; a list view and arrow keys cover the same nodes. A practice arena with a training dummy and optional waves tries a build without using a battle. `npm run game:sim -- builds` measures what each build is worth.
 
 ### Changed
 
 - ML foundations and the other Python paths list Python from zero as a suggested first path, and the ML & GPU engineer order starts with it.
+- ML foundations lesson 2 explains the Python in its code: the worked example pairs the lists with `zip` in one step and squares the errors in a second, and the explanation names `zip`, unpacking, `**` and `raise`. Lessons 3 and 6 show where their gradient formulas come from.
+- The Terms box on each path's first lesson takes its definitions from the glossary. Python from zero lesson 13 says "They do not stop the program" instead of "None of them stops the program", so that None links only to the Python value.
 - In the Hero game, Python from zero lessons earn the smallest chests: the first seven earn a Worn Footlocker.
 - The lesson list is a drawer, opened with **Lessons** next to the back link. From 1440px it sits beside the lesson and remembers when you close it; on smaller screens it opens over the lesson.
 - The right panel follows the lesson stage: none in Understand, the worked example in See an example, and the editor in Try it yourself. The line between the lesson text and the editor can be dragged.
@@ -23,13 +35,40 @@ This file lists the notable changes in each release. The format follows [Keep a 
 - Settings starts with the Hero game, backup and editor options. Versions and the CUDA note are in **About this install**.
 - The header says "Code runs on this computer" instead of "Local runtime".
 - The chest earned for a lesson is a line under the lesson buttons instead of a pop-up over **Next lesson**.
+- **Projects** has 12 hands-on projects, each pinned to one commit. A project gives setup and run commands, 3 to 5 tasks that link to the lines to change, and a command to check each task. Tasks can be ticked and have their own notes. Pasted output is checked in the browser and not saved. A project's chest tier follows its level, and is one tier higher when every check passed. Notes and ticks on the earlier walkthroughs are kept under **Retired projects**.
+- Hero game balance: each campaign stage has a recommended Power, shown on the fight screen, and enemies and bosses scale with it. Class abilities are retuned so classes with equal gear deal closer amounts of boss damage over the ten stages, bosses cannot be stun-locked, and burns stack at most 3 times. A lesson passed after **Show solution** earns a chest one tier lower; the solution dialog says so. The armory shows how much Power and Health each upgrade adds, and the bags have **Equip all upgrades** and **Discard all non-upgrades**. Epic items are purple instead of red. Class colors and some ability names are the app's own instead of World of Warcraft's. `npm run game:sim` runs a headless balance simulation.
+
+### Security
+
+- The session token that lets the page save and run code is no longer served by `/api/bootstrap`. The launcher opens the app with the token in the address fragment, the page keeps it, and it is stored in `data/session-token` (0600). Every `/api` route that returns personal data needs it. Other programs and other accounts on the computer can no longer get it.
+- The data folder is private to your account (files 0600, folders 0700). Backups are written 0600, and the newest 10 are kept.
+- Malformed requests get a 400 instead of a dropped connection, and stalled connections close after 15 seconds.
+- Book imports are bounded: at most 2,000 sections, 8 MB per section and 64 MB of text, with repeated sections dropped. Chapters are stored one file each. Book pages can no longer imitate the app's own screens.
+- Release archives are built by a read-only job and published with build provenance. `SECURITY.md` shows how to check them with `gh attestation verify`. The installers pin uv and Node.js by SHA-256, and Python packages are installed from hash-locked files.
+- Book files (covers, figures and the original PDF or EPUB) need the session token, like the rest of the API. Only `/api/health` is public.
+- On macOS and Linux, cleanup after an exercise also ends processes that left its process group with `setsid()`. Exercises have a process limit (the user's count plus 256), and on Linux a 4 GB memory limit. Temporary files go in the exercise folder.
+- An EPUB may hold at most 2,000 images and 150 MB of image data.
 
 ### Fixed
 
+- Error messages show only your code and the line that failed, without the app's own files or install path.
+- foundations-4 says to return a tuple, modern-1's hint names `Tokenizer(WordLevel(...))`, and four lessons have clearer wording. Hint 2 shows `raise` on a different example in every lesson whose checks expect a `ValueError`.
+- A new learner's **Continue learning** opens Python from zero lesson 1.
+- Battles use less GPU memory, closed 3D views are freed, and a page reload transfers about 1 kB instead of 800 kB.
+- One damaged `book.json` no longer hides the whole library. That book shows as **Could not open this book** with **Remove book**.
+- **Export progress and notes** works after removing a book you had read.
+- A tab that opened before the app had a session loads when another tab connects. A new launch token works when the browser's storage is full.
+- The launcher restarts a running server from another version, when no exercise is running, instead of reusing it after an update.
+- `server.py --help` no longer creates the data folder.
+- Two backups in the same microsecond no longer fail.
+- On Windows, a slow process query no longer makes the stop command fail, and an exercise result held by antivirus is read again.
+- `THIRD_PARTY_NOTICES.md` names the Liberation fonts' GPLv2 license and links their source. `THIRD_PARTY_LICENSES.txt` lists beautiful-ui.
 - Text and button colors meet WCAG AA contrast, the focus ring is darker, and text is at least 12px.
 - A locked **Next lesson** says why in visible text.
+- Checks in 20 lessons reject the wrong answers that used to pass, and learner code that reuses a name such as `abs` or `raises` no longer breaks grading. A far-future draft revision no longer blocks later saves, results are marked out of date after the code changes, and a draft the server refuses shows the reason.
 - The editor shows "Esc, then Tab, leaves the editor". Key hints are hidden on touch screens.
 - Keyboard use: a skip link, `aria-current` on the active page, page titles, focus that stays in place after stage changes and returns after dialogs close, and Escape to close the lesson list.
+- Checks in 10 more lessons reject wrong answers that used to pass, such as an MSE that fails on perfect predictions, a CUDA wrapper that never launches its kernel, and TensorFlow 2 without `GradientTape`. PyTorch 2 accepts `backward` called through another name. **Test connection** and the assistant report an empty or HTML answer as not from an AI provider. A refunded skill tree build no longer comes back when the points do. ⌘↩ (Ctrl+Enter) in the editor no longer adds a blank line, a link with a wrong `#session=` token no longer disconnects open tabs, and keyboard focus stays on the page after opening a project, a book, a chest or a hero screen. **Open all** opens every waiting chest at once and lists what dropped. New learners start at Python from zero lesson 1.
 
 ## [1.1.2] - 2026-10-06
 
@@ -104,6 +143,7 @@ First public release.
 - Setup and launch scripts for Apple silicon Macs, and an optional launcher in your Applications folder.
 - CI that runs every lesson on macOS and the API tests on Linux.
 
+[1.2.0]: https://github.com/ShmalexM/ml-workshop/compare/v1.1.2...v1.2.0
 [1.1.2]: https://github.com/ShmalexM/ml-workshop/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/ShmalexM/ml-workshop/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/ShmalexM/ml-workshop/compare/a493fba...v1.1.0

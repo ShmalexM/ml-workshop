@@ -7,6 +7,7 @@ import re
 import secrets
 
 from courses import COURSES, LESSONS
+import game_tree
 
 
 RACES = [
@@ -21,33 +22,35 @@ RACES = [
         ('pandaren', 'Pandaren', 'neutral'),
     ]
 ]
+# Class colors: close to the familiar ones, but our own values, and readable on the dark game panels
+# (at least 4.5:1 contrast).
 CLASSES = [
     dict(id=cid, name=name, armor=armor, primary=primary, role=role,
          color=color, mainhand=main.split(), offhand=off.split())
     for cid, name, armor, primary, role, color, main, off in [
-        ('warrior', 'Warrior', 'plate', 'str', 'melee', '#C69B6D',
+        ('warrior', 'Warrior', 'plate', 'str', 'melee', '#C9A27E',
          'sword axe mace greatsword greataxe warhammer polearm', 'shield sword axe mace'),
-        ('paladin', 'Paladin', 'plate', 'str', 'melee', '#F48CBA',
+        ('paladin', 'Paladin', 'plate', 'str', 'melee', '#F29AC4',
          'sword mace axe greatsword warhammer polearm', 'shield tome'),
-        ('deathknight', 'Death Knight', 'plate', 'str', 'melee', '#C41E3A',
+        ('deathknight', 'Death Knight', 'plate', 'str', 'melee', '#F0667A',
          'sword axe mace greatsword greataxe warhammer polearm', 'sword axe mace'),
-        ('hunter', 'Hunter', 'mail', 'agi', 'ranged', '#AAD372',
+        ('hunter', 'Hunter', 'mail', 'agi', 'ranged', '#A8D47E',
          'bow crossbow gun polearm', ''),
-        ('shaman', 'Shaman', 'mail', 'int', 'caster', '#0070DD',
+        ('shaman', 'Shaman', 'mail', 'int', 'caster', '#4F9BF2',
          'mace axe fist staff dagger', 'shield mace axe fist orb'),
-        ('rogue', 'Rogue', 'leather', 'agi', 'melee', '#FFF468',
+        ('rogue', 'Rogue', 'leather', 'agi', 'melee', '#F7EB72',
          'dagger sword fist axe mace', 'dagger sword fist'),
-        ('monk', 'Monk', 'leather', 'agi', 'melee', '#00FF98',
+        ('monk', 'Monk', 'leather', 'agi', 'melee', '#33EBA2',
          'staff polearm fist sword mace axe', 'fist sword mace axe'),
-        ('druid', 'Druid', 'leather', 'int', 'caster', '#FF7C0A',
+        ('druid', 'Druid', 'leather', 'int', 'caster', '#F98B2E',
          'staff polearm mace dagger fist', 'tome orb'),
-        ('demonhunter', 'Demon Hunter', 'leather', 'agi', 'melee', '#A330C9',
+        ('demonhunter', 'Demon Hunter', 'leather', 'agi', 'melee', '#C873E6',
          'warglaive fist sword axe', 'warglaive fist'),
-        ('priest', 'Priest', 'cloth', 'int', 'caster', '#FFFFFF',
+        ('priest', 'Priest', 'cloth', 'int', 'caster', '#F2F0EA',
          'staff wand mace dagger', 'tome orb'),
-        ('mage', 'Mage', 'cloth', 'int', 'caster', '#3FC7EB',
+        ('mage', 'Mage', 'cloth', 'int', 'caster', '#5CCDEA',
          'staff wand sword dagger', 'tome orb'),
-        ('warlock', 'Warlock', 'cloth', 'int', 'caster', '#8788EE',
+        ('warlock', 'Warlock', 'cloth', 'int', 'caster', '#9A9BF0',
          'staff wand dagger sword', 'tome orb'),
     ]
 ]
@@ -60,7 +63,7 @@ RARITIES = [
     dict(id=rid, name=name, color=color, index=index)
     for index, (rid, name, color) in enumerate([
         ('basic', 'Basic', '#FFFFFF'), ('common', 'Common', '#1EFF00'),
-        ('rare', 'Rare', '#0070DD'), ('epic', 'Epic', '#E8343A'),
+        ('rare', 'Rare', '#0070DD'), ('epic', 'Epic', '#A64DF0'),
         ('legendary', 'Legendary', '#FF8000'),
     ])
 ]
@@ -198,9 +201,15 @@ STARTER_WEAPONS = dict(
     hunter=['bow'], shaman=['mace', 'shield'], rogue=['dagger', 'dagger'], monk=['staff'],
     druid=['staff'], demonhunter=['warglaive', 'warglaive'], priest=['staff'],
     mage=['staff'], warlock=['staff'])
-BOSS_HP_BASE = 3000
-BOSS_HP_GROWTH = 1.7
+# Expected Power and Health of a hero who reaches each stage at the planned pace, measured
+# with `npm run game:sim`. Enemies scale with these targets, so a hero at the target finds each
+# stage about as hard as the first, and a hero above it wins sooner. Boss health is the number of
+# seconds a hero at the target needs to bring the boss down, times Power.
+STAGE_TARGETS = [(36, 480), (55, 670), (100, 1030), (180, 1700), (240, 2160),
+                 (320, 2800), (360, 2950), (410, 3300), (450, 3600), (490, 3900)]
+BOSS_HP_PER_POWER = [125, 170, 185, 200, 215, 200, 210, 220, 225, 230]
 ABYSS_GROWTH = 1.25
+ABYSS_TARGET_GROWTH = (1.12, 1.08)
 MAX_BATTLE_DAMAGE = 2**53 - 1
 CAMPAIGN_STAGES = [
     dict(stage=stage, name=name, boss=boss)
@@ -219,13 +228,15 @@ CAMPAIGN_STAGES = [
 ]
 ABYSS_BOSSES = ('Tyrant', 'Behemoth', 'Herald', 'Warden', 'Devourer')
 BATTLE_COLUMNS = ('id', 'stage', 'started', 'finished', 'outcome', 'damage', 'kills', 'seconds')
-NEXT_BATTLE = 'Finish a lesson, project walkthrough or reading to earn your next battle.'
+NEXT_BATTLE = 'Finish a lesson, a project or a reading guide to earn your next battle.'
+# A fight started this recently blocks passive changes; an older one was left without a result.
+BATTLE_LOCK = timedelta(minutes=15)
 
 
 def catalog():
     return dict(races=RACES, classes=CLASSES, slots=SLOTS, rarities=RARITIES,
                 chestTiers=CHEST_TIERS, lessonTiers=LESSON_TIERS, pathTiers=PATH_TIERS,
-                effects=EFFECTS, twoHand=TWO_HAND)
+                effects=EFFECTS, twoHand=TWO_HAND, tree=game_tree.catalog())
 
 
 def utc_now():
@@ -240,18 +251,42 @@ def stage_names(stage):
             'Abyssal ' + ABYSS_BOSSES[(stage - 11) % len(ABYSS_BOSSES)])
 
 
+def stage_target(stage):
+    """Expected (Power, Health) on reaching a stage; the Abyss keeps rising past the curriculum."""
+    if stage <= 10:
+        return STAGE_TARGETS[stage - 1]
+    power, health = STAGE_TARGETS[-1]
+    return (round(power * ABYSS_TARGET_GROWTH[0]**(stage - 10)),
+            round(health * ABYSS_TARGET_GROWTH[1]**(stage - 10)))
+
+
 def boss_hp(stage):
     if stage <= 10:
-        return round(BOSS_HP_BASE * BOSS_HP_GROWTH**(stage - 1))
+        return int(round(BOSS_HP_PER_POWER[stage - 1] * STAGE_TARGETS[stage - 1][0], -2))
     return round(boss_hp(10) * ABYSS_GROWTH**(stage - 10))
 
 
 def campaign(meta):
-    stage, damage = meta['stage'], meta['bossDamage']
+    stage = meta['stage']
     name, boss = stage_names(stage)
     hp = boss_hp(stage)
+    # Damage saved before a boss health change can exceed the new total; the boss keeps 1 health.
+    damage = min(meta['bossDamage'], hp - 1)
+    power, health = stage_target(stage)
+    first_power, first_health = STAGE_TARGETS[0]
     return dict(stage=stage, stageName=name, bossName=boss, bossHp=hp,
-                bossDamage=damage, bossRemaining=hp - damage)
+                bossDamage=damage, bossRemaining=hp - damage,
+                targetPower=power, targetHealth=health,
+                enemyHealth=power / first_power, enemyDamage=health / first_health)
+
+
+def practice_stages(reached):
+    """Enemy strength for the practice arena at each stage reached so far; nothing here is saved."""
+    out = []
+    for stage in range(1, reached + 1):
+        entry = campaign(dict(stage=stage, bossDamage=0))
+        out.append({k: entry[k] for k in ('stage', 'stageName', 'bossHp', 'enemyHealth', 'enemyDamage')})
+    return out
 
 
 def boss_chest(stage, finished):
@@ -281,10 +316,41 @@ def chest(source, kind, tier, title, subtitle, earned_at):
                 openedAt=None, itemIds=[])
 
 
+PROJECT_TIERS = {'Start small': 2, 'Build next': 3, 'Capstone': 4}
+
+
+def project_chest(project, saved):
+    """A project is finished when every task (or walkthrough step) is ticked; the stretch task
+    does not count. The level sets the tier, and one more tier, up to 5, needs a recorded
+    passing check on every task that has a check."""
+    tasks = project.get('tasks') or []
+    count = len(tasks) or len(project.get('steps', []))
+    if not count or not set(range(count)).issubset(saved.get('reviewed', [])):
+        return None
+    tier = PROJECT_TIERS.get(project.get('level'), 3)
+    checked = [t['id'] for t in tasks if t.get('verify', {}).get('check')]
+    passed = saved.get('tasks') or {}
+    bonus = bool(checked) and all((passed.get(tid) or {}).get('verifiedAt') for tid in checked)
+    subtitle = ('Project · every check passed' if bonus else 'Project') if tasks else 'Project walkthrough'
+    return chest('project:' + project['id'], 'project', min(5, tier + bonus), project['title'],
+                 subtitle, from_millis(saved.get('updatedAt', 0)))
+
+
+def solution_first(shown, passed):
+    """True when a lesson's solution was shown before the lesson was first passed."""
+    if not shown:
+        return False
+    try:
+        return datetime.fromisoformat(shown) <= datetime.fromisoformat(passed)
+    except (TypeError, ValueError):
+        return False
+
+
 def earned_chests(progress, hero=None):
     """Derive eligibility afresh; the database only remembers opened sources."""
     result = []
     completed = progress.get('completed', {})
+    revealed = progress.get('revealed', {})
     if hero:
         result.append(chest('welcome', 'welcome', 1, 'A gift for new heroes', '',
                             hero['createdAt']))
@@ -292,9 +358,12 @@ def earned_chests(progress, hero=None):
         lessons = LESSONS_BY_COURSE[course['id']]
         for lesson in lessons:
             if lesson['id'] in completed:
-                result.append(chest('lesson:' + lesson['id'], 'lesson',
-                                    LESSON_TIERS[lesson['id']], lesson['title'],
-                                    course['title'], completed[lesson['id']]['at']))
+                at = completed[lesson['id']]['at']
+                tier, subtitle = LESSON_TIERS[lesson['id']], course['title']
+                if solution_first(revealed.get(lesson['id']), at):
+                    tier, subtitle = max(1, tier - 1), subtitle + ' · solution shown first'
+                result.append(chest('lesson:' + lesson['id'], 'lesson', tier, lesson['title'],
+                                    subtitle, at))
         if lessons and all(lesson['id'] in completed for lesson in lessons):
             latest = max((completed[lesson['id']]['at'] for lesson in lessons),
                          key=lambda at: datetime.fromisoformat(at))
@@ -302,13 +371,15 @@ def earned_chests(progress, hero=None):
                                 course['title'] + ' mastered', 'Learning path complete', latest))
     for project in progress.get('projects', []):
         saved = progress.get('projectState', {}).get(project['id'], {})
-        reviewed = set(saved.get('reviewed', []))
-        steps = project.get('steps', [])
-        if steps and set(range(len(steps))).issubset(reviewed):
-            tier = dict(beginner=2, intermediate=3, advanced=4).get(project.get('difficulty'), 3)
-            result.append(chest('project:' + project['id'], 'project', tier,
-                                project['title'], 'Project walkthrough',
-                                from_millis(saved.get('updatedAt', 0))))
+        reward = project_chest(project, saved)
+        if reward:
+            result.append(reward)
+    for old in progress.get('retiredProjects', []):
+        # A replaced catalog entry keeps the chest it earned: three steps, tier 3, as before.
+        saved = progress.get('projectState', {}).get(old['id'], {})
+        if old['steps'] and set(range(old['steps'])).issubset(saved.get('reviewed', [])):
+            result.append(chest('project:' + old['id'], 'project', 3, old['title'],
+                                'Retired project', from_millis(saved.get('updatedAt', 0))))
     for guide in progress.get('guides', []):
         saved = progress.get('readingState', {}).get(guide['bookId'], {})
         if guide['id'] in saved.get('completed', []):
@@ -483,7 +554,8 @@ def ensure_schema(db):
 
 
 def metadata(db):
-    defaults = dict(sinceEpic=0, sinceLegendary=0, enabled=True, stage=1, bossDamage=0)
+    defaults = dict(sinceEpic=0, sinceLegendary=0, enabled=True, stage=1, bossDamage=0,
+                    passives={'v': 1, 'nodes': []})
     placeholders = ','.join('?' for _ in defaults)
     saved = {key: json.loads(value) for key, value in db.execute(
         f'SELECT key,value FROM game_meta WHERE key IN ({placeholders})', tuple(defaults))}
@@ -530,6 +602,79 @@ def export(db):
                     chests=chests, meta=metadata(db), battles=battles)
 
 
+def hero_level(progress):
+    xp = sum(c['xp'] for c in progress.get('completed', {}).values())
+    return xp, min(60, 1 + xp // 100)
+
+
+def paths_mastered(progress):
+    completed = progress.get('completed', {})
+    return sum(1 for lessons in LESSONS_BY_COURSE.values()
+               if lessons and all(lesson['id'] in completed for lesson in lessons))
+
+
+def passive_points(progress):
+    """One point per level after the first, and one per mastered learning path."""
+    return hero_level(progress)[1] - 1 + paths_mastered(progress)
+
+
+def saved_passives(meta):
+    """The stored node ids, or None when the stored value is not a version 1 allocation."""
+    value = meta.get('passives')
+    if (not isinstance(value, dict) or value.get('v') != 1 or not isinstance(value.get('nodes'), list)
+            or not all(isinstance(nid, str) for nid in value['nodes'])):
+        return None
+    return value['nodes']
+
+
+def passives(meta, hero, progress):
+    """The allocation in effect. One that no longer fits the tree or the points is refunded whole.
+    settle_passives stores the refund, and `refunded` stays until the next allocation is saved."""
+    if not hero:
+        return None
+    earned = passive_points(progress)
+    start = game_tree.START_BY_CLASS[hero['class']]
+    nodes = saved_passives(meta)
+    reason = 'changed' if nodes is None else None
+    if nodes:
+        nodes = list(dict.fromkeys([start, *nodes]))
+        problem = game_tree.problem(hero['class'], nodes, earned)
+        reason = problem and ('points' if problem == 'points' else 'changed')
+    elif nodes == [] and meta['passives'].get('refunded') in ('changed', 'points'):
+        reason = meta['passives']['refunded']
+    allocated = [start] if reason or not nodes else sorted(nodes)
+    spent = len(allocated) - 1
+    return dict(allocated=allocated, points=dict(earned=earned, spent=spent, available=earned - spent),
+                refunded=reason)
+
+
+def settle_passives(db, hero, progress):
+    """Store the refund of a saved build that no longer fits, so that it stays refunded when the points come back.
+    Points fall only when an update changes the curriculum or the tree, so the server calls this at startup.
+    Each game action calls it too, before it runs."""
+    if not hero:
+        return
+    meta = metadata(db)
+    reason = passives(meta, hero, progress)['refunded']
+    refund = {'v': 1, 'nodes': [], 'refunded': reason}
+    if reason and meta['passives'] != refund:
+        put_meta(db, 'passives', refund)
+
+
+def set_passives(db, hero, body, progress):
+    allocated = game_tree.validate(hero['class'], body.get('allocated'), passive_points(progress))
+    cutoff = datetime.now(timezone.utc) - BATTLE_LOCK
+    for (started,) in db.execute("SELECT started FROM game_battles WHERE outcome='active'"):
+        try:
+            recent = datetime.fromisoformat(started) >= cutoff
+        except (TypeError, ValueError):
+            recent = False
+        if recent:
+            raise ValueError('Finish or retreat from your fight before changing passives.')
+    start = game_tree.START_BY_CLASS[hero['class']]
+    put_meta(db, 'passives', {'v': 1, 'nodes': [nid for nid in allocated if nid != start]})
+
+
 def battle_counts(db, earned):
     used = db.execute('SELECT COUNT(*) FROM game_battles').fetchone()[0]
     count = len({c['source'] for c in earned})
@@ -570,8 +715,7 @@ def state(db, progress):
         items, equipment = inventory(db)
         meta = metadata(db)
         if hero:
-            xp = sum(c['xp'] for c in progress.get('completed', {}).values())
-            level = min(60, 1 + xp // 100)
+            xp, level = hero_level(progress)
             hero = {**hero, 'xp': xp, 'level': level,
                     'levelProgress': 1. if level == 60 else (xp % 100) / 100}
         opened = {source: json.loads(data) for source, data in db.execute(
@@ -586,8 +730,9 @@ def state(db, progress):
                     luck={k: meta[k] for k in ('sinceEpic', 'sinceLegendary')},
                     battles=battle_counts(db, earned),
                     campaign={**campaign(meta), 'stagesCleared': meta['stage'] - 1,
-                              'stages': CAMPAIGN_STAGES},
-                    lifetime=lifetime, history=battle_history, catalog=catalog())
+                              'stages': CAMPAIGN_STAGES, 'practice': practice_stages(meta['stage'])},
+                    lifetime=lifetime, history=battle_history,
+                    passives=passives(meta, hero, progress), catalog=catalog())
 
 
 def store_item(db, item):
@@ -632,6 +777,18 @@ def equip(db, hero, item):
             db.execute("DELETE FROM game_equipment WHERE slot='mainhand'")
     db.execute('INSERT INTO game_equipment VALUES (?,?) '
                'ON CONFLICT(slot) DO UPDATE SET item=excluded.item', (item['slot'], item['id']))
+
+
+def equip_many(db, hero, ids):
+    """Equip up to one item per slot, in order, all or nothing."""
+    if (not isinstance(ids, list) or not 1 <= len(ids) <= len(SLOTS) or
+            any(type(iid) is not int or not 1 <= iid <= 2**63 - 1 for iid in ids)):
+        raise ValueError(f'Choose 1–{len(SLOTS)} items to equip.')
+    items = [owned_item(db, iid) for iid in ids]
+    if len({item['slot'] for item in items}) != len(items):
+        raise ValueError('Choose at most one item for each slot.')
+    for item in items:
+        equip(db, hero, item)
 
 
 def create_hero(db, body, rng):
@@ -682,6 +839,17 @@ def open_chest(db, hero, body, progress, rng):
     for key, value in luck.items():
         put_meta(db, key, value)
     return dict(chest=opened, items=new_items)
+
+
+def open_all_chests(db, hero, progress, rng):
+    """Open every unopened chest in one transaction, oldest first. Each one is rolled as if it were opened on its
+    own, so the luck counters and the gear that a roll compares against carry from one chest to the next."""
+    opened = {row[0] for row in db.execute('SELECT source FROM game_chests')}
+    waiting = {c['source']: c for c in earned_chests(progress, hero) + boss_chests(db) if c['source'] not in opened}
+    if not waiting:
+        raise ValueError('There are no chests to open.')
+    order = sorted(waiting.values(), key=lambda c: (datetime.fromisoformat(c['earnedAt']), c['source']))
+    return dict(opened=[open_chest(db, hero, dict(source=c['source']), progress, rng) for c in order])
 
 
 def start_battle(db, hero, progress):
@@ -735,8 +903,8 @@ def handle(db, action, body, progress, rng=None):
     """Serialize every mutation, including eligibility checks and the response snapshot."""
     if not isinstance(body, dict):
         raise ValueError('Expected an object.')
-    if action not in ('hero', 'open', 'equip', 'unequip', 'discard', 'settings',
-                      'battle/start', 'battle/finish', 'retire'):
+    if action not in ('hero', 'open', 'open-all', 'equip', 'equip-many', 'unequip', 'discard', 'settings',
+                      'battle/start', 'battle/finish', 'retire', 'passives'):
         raise ValueError('Unknown game action.')
     if rng is None:
         rng = random.Random(secrets.randbits(64))
@@ -744,6 +912,7 @@ def handle(db, action, body, progress, rng=None):
         db.execute('BEGIN IMMEDIATE')
         extra = {}
         hero = saved_hero(db)
+        settle_passives(db, hero, progress)
         if action == 'hero':
             create_hero(db, body, rng)
         elif action == 'settings':
@@ -763,8 +932,12 @@ def handle(db, action, body, progress, rng=None):
                 raise ValueError('Create a hero first.')
             if action == 'open':
                 extra = open_chest(db, hero, body, progress, rng)
+            elif action == 'open-all':
+                extra = open_all_chests(db, hero, progress, rng)
             elif action == 'equip':
                 equip(db, hero, owned_item(db, body.get('itemId')))
+            elif action == 'equip-many':
+                equip_many(db, hero, body.get('itemIds'))
             elif action == 'unequip':
                 slot = body.get('slot')
                 if slot not in SLOTS:
@@ -783,4 +956,6 @@ def handle(db, action, body, progress, rng=None):
                 db.executemany('DELETE FROM game_items WHERE id=?', [(iid,) for iid in set(ids)])
             elif action == 'battle/finish':
                 extra = finish_battle(db, body)
+            elif action == 'passives':
+                set_passives(db, hero, body, progress)
         return dict(game=state(db, progress), **extra)

@@ -21,12 +21,13 @@ from book_import import import_upload, sweep_staging
 from book_study import study_guides, INFERENCE_GUIDE_EDITION
 from library import Library
 from book_fixture import make_custom_epub, make_epub
+from server_fixture import server_token
 
 
 class UploadTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.tmp = tempfile.TemporaryDirectory(prefix='book-upload-test-')
+        cls.tmp = tempfile.TemporaryDirectory(prefix='book-upload-test-', ignore_cleanup_errors=True)
         cls.root = Path(cls.tmp.name)
         cls.data = cls.root/'data'
         with socket.socket() as sock:
@@ -35,15 +36,18 @@ class UploadTests(unittest.TestCase):
         cls.proc = subprocess.Popen([sys.executable, str(ROOT/'backend/server.py'), '--port', str(cls.port)],
                                    env={**os.environ, 'ML_WORKSHOP_DATA_DIR': str(cls.data)},
                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        for _ in range(60):
-            try:
-                cls.token = json.load(urllib.request.urlopen(cls.url+'/api/bootstrap'))['token']; break
-            except OSError: time.sleep(.1)
-        else: raise RuntimeError('Test server unavailable')
+        cls.token = server_token(cls.url, cls.data, cls.proc)
 
     @classmethod
     def tearDownClass(cls):
-        cls.proc.terminate(); cls.proc.wait(); cls.tmp.cleanup()
+        # Windows keeps workshop.sqlite3 locked until the server has exited.
+        cls.proc.terminate()
+        try:
+            cls.proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            cls.proc.kill()
+            cls.proc.wait()
+        cls.tmp.cleanup()
 
     def upload(self, raw, filename='book.epub', book='', headers=None):
         connection = http.client.HTTPConnection('127.0.0.1', self.port, timeout=10)
@@ -53,6 +57,9 @@ class UploadTests(unittest.TestCase):
             response = connection.getresponse()
             return response.status, json.loads(response.read())
         finally: connection.close()
+
+    def get(self, path):
+        return urllib.request.urlopen(urllib.request.Request(self.url+path, headers={'X-Workshop-Token': self.token}), timeout=10)
 
     def post_json(self, path, payload, headers=None):
         connection = http.client.HTTPConnection('127.0.0.1', self.port, timeout=10)
@@ -79,14 +86,31 @@ class UploadTests(unittest.TestCase):
         self.assertTrue((self.data/'library'/book_id/'source.epub').is_file())
         self.assertEqual(self.post_json('/api/library/remove', {'bookId': book_id}), (200, {'ok': True}))
         self.assertFalse((self.data/'library'/book_id).exists())
-        library = json.load(urllib.request.urlopen(self.url+'/api/library'))
+        with self.get('/api/library') as response: library = json.load(response)
         self.assertNotIn(book_id, [book['id'] for book in library['books']])
         self.assertEqual(library['readingState'][book_id]['notes'], 'Keep these notes')
-        with self.assertRaises(urllib.error.HTTPError) as error: urllib.request.urlopen(self.url+f'/api/library/{book_id}/chapter/1')
+        with self.assertRaises(urllib.error.HTTPError) as error: self.get(f'/api/library/{book_id}/chapter/1')
         self.assertEqual(error.exception.code, 404)
         # Importing the same file again brings back the saved notes.
         status, result = self.upload(source.read_bytes(), 'remove.epub')
         self.assertEqual(status, 200, result); self.assertEqual(result['readingState']['notes'], 'Keep these notes')
+
+    def test_damaged_book_is_listed_separately_and_can_be_removed(self):
+        source = make_custom_epub(self.root/'damaged.epub', {'one.xhtml': '<html><body><h1>Damaged later</h1></body></html>'})
+        status, result = self.upload(source.read_bytes(), 'damaged.epub')
+        self.assertEqual(status, 200, result); book_id = result['book']['id']
+        (self.data/'library'/book_id/'book.json').write_text('{"title": "cut off')
+        with self.get('/api/library') as response:library = json.load(response)
+        self.assertNotIn(book_id, [book['id'] for book in library['books']])
+        self.assertIn(book_id, library['unreadable'])
+        # Importing the same file again asks for removal first instead of failing with a server error.
+        status, result = self.upload(source.read_bytes(), 'damaged.epub')
+        self.assertEqual(status, 409, result)
+        self.assertIn('Remove it in Books', result['error'])
+        self.assertEqual(self.post_json('/api/library/remove', {'bookId': book_id}), (200, {'ok': True}))
+        with self.get('/api/library') as response:self.assertNotIn(book_id, json.load(response)['unreadable'])
+        status, result = self.upload(source.read_bytes(), 'damaged.epub')
+        self.assertEqual((status, result['book']['id']), (200, book_id))
 
     def test_over_limit_epub_returns_plain_error_and_leaves_nothing(self):
         before = Library(self.data).catalog()
@@ -123,8 +147,10 @@ class UploadTests(unittest.TestCase):
         self.assertEqual(status, 200, result)
         self.assertEqual(result['book']['title'], 'Diagrams – 日本語')
         self.assertEqual(result['book']['format'], 'pdf')
-        url = self.url+'/api/library/'+result['book']['id']+'/asset/source.pdf'
-        with urllib.request.urlopen(url) as response: self.assertEqual(response.read(), source.read_bytes())
+        path = '/api/library/'+result['book']['id']+'/asset/source.pdf'
+        with self.get(path) as response: self.assertEqual(response.read(), source.read_bytes())
+        with self.assertRaises(urllib.error.HTTPError) as error: urllib.request.urlopen(self.url+path)
+        self.assertEqual(error.exception.code, 403)
         writer.encrypt('test-only'); writer.write(source)
         status, result = self.upload(source.read_bytes(), 'locked.pdf')
         self.assertEqual(status, 400); self.assertIn('Encrypted', result['error'])

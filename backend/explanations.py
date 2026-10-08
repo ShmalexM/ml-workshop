@@ -15,7 +15,7 @@ EXPLANATIONS = {
         (r'SyntaxError',
          'Python could not read this code. Look on the line shown, and the line above it, for a missing bracket, quote, colon or comma.'),
         (r'NameError: .*not defined',
-         'Python does not know this name. It is often misspelled: compare it with the def line or the line that sets it.'),
+         'Python does not know this name. It is often misspelled: check the spelling against where the name was first set.'),
         (r"(TypeError|AttributeError): .*'NoneType'",
          'A value is None. Often a function has no return statement, or still has the starter code’s return None.'),
         (r'TypeError: .*(positional arguments? but \d+ (were|was) given|missing \d+ required positional argument)',

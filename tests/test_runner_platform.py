@@ -23,12 +23,39 @@ class RunnerPlatformTests(unittest.TestCase):
         with patch.object(runner, 'resource', None):runner.apply_limits()
 
     @unittest.skipIf(os.name == 'nt', 'POSIX resource limits')
-    def test_posix_limits_unchanged(self):
+    def test_posix_limits(self):
         import resource
-        with patch.object(resource, 'setrlimit') as limit:
-            runner.apply_limits()
-        self.assertEqual(limit.call_args_list[0].args, (resource.RLIMIT_CPU, (40, 45)))
-        self.assertEqual(limit.call_args_list[1].args, (resource.RLIMIT_FSIZE, (1024 * 1024, 1024 * 1024)))
+        infinity = resource.RLIM_INFINITY
+        for count, current, expected in [(100, (infinity, infinity), 356), (100, (300, infinity), 300), (100, (infinity, 200), 200), (None, (infinity, infinity), None)]:
+            with self.subTest(count=count, current=current), patch.object(resource, 'setrlimit') as limit, \
+                    patch.object(runner, 'user_process_count', return_value=count), patch.object(resource, 'getrlimit', return_value=current):
+                runner.apply_limits()
+            self.assertEqual(limit.call_args_list[0].args, (resource.RLIMIT_CPU, (40, 45)))
+            self.assertEqual(limit.call_args_list[1].args, (resource.RLIMIT_FSIZE, (1024 * 1024, 1024 * 1024)))
+            nproc = [call.args[1] for call in limit.call_args_list if call.args[0] == resource.RLIMIT_NPROC]
+            self.assertEqual(nproc, [] if expected is None else [(expected, expected)])
+
+    @unittest.skipIf(os.name == 'nt', 'POSIX resource limits')
+    def test_memory_limit_on_linux_only(self):
+        import resource
+        infinity = resource.RLIM_INFINITY
+        for platform, current, expected in [('linux', infinity, [(4 << 30, 4 << 30)]), ('linux', 1 << 30, [(1 << 30, 1 << 30)]), ('darwin', infinity, [])]:
+            with self.subTest(platform=platform, current=current), patch.object(sys, 'platform', platform), patch.object(resource, 'setrlimit') as limit, \
+                    patch.object(runner, 'user_process_count', return_value=None), patch.object(resource, 'getrlimit', return_value=(current, current)):
+                runner.apply_limits()
+            self.assertEqual([call.args[1] for call in limit.call_args_list if call.args[0] == resource.RLIMIT_DATA], expected)
+
+    @unittest.skipUnless(sys.platform == 'darwin' or sys.platform.startswith('linux'), 'process count on macOS and Linux')
+    def test_process_limit_is_above_the_users_current_count(self):
+        import resource
+        count = runner.user_process_count()
+        self.assertGreater(count, 1)
+        result = runner.execute('import resource; print(*resource.getrlimit(resource.RLIMIT_NPROC))', [])
+        soft, hard = map(int, result['stdout'].split())
+        self.assertEqual(soft, hard)
+        system = resource.getrlimit(resource.RLIMIT_NPROC)[0]
+        self.assertGreaterEqual(soft, min(count + 100, system if system != resource.RLIM_INFINITY else soft))
+        self.assertLessEqual(soft, count + runner.EXTRA_PROCESSES + 100)
 
     def test_windows_direct_node_and_minimal_environment(self):
         for language in ('python', 'javascript'):
@@ -60,7 +87,11 @@ class RunnerPlatformTests(unittest.TestCase):
                     self.assertNotIn(name, options['env'])
                 for name in ('SYSTEMROOT', 'TEMP', 'TMP', 'PATHEXT', 'WINDIR', 'USERPROFILE'):
                     self.assertIn(name, options['env'])
-                cleanup.assert_called_once_with(process)
+                cleanup.assert_called_once()
+                self.assertIs(cleanup.call_args.args[0], process)
+                # Temporary files go in the exercise folder.
+                for name in ('TEMP', 'TMP', 'TMPDIR'):
+                    self.assertEqual(options['env'][name], str(options['cwd']))
 
     def test_windows_cleanup_command_and_kill_fallback(self):
         process = Mock(pid=123)
@@ -70,6 +101,35 @@ class RunnerPlatformTests(unittest.TestCase):
         self.assertEqual(run.call_args.args[0], ['taskkill', '/T', '/F', '/PID', '123'])
         process.kill.assert_called_once()
         process.wait.assert_called_once()
+
+    def test_windows_result_read_waits_for_a_locked_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result = Path(directory) / 'result.json'
+            result.write_text('{"passed": true}')
+            read = Path.read_text
+            attempts = []
+            def locked(path, *args, **kwargs):
+                attempts.append(path)
+                if len(attempts) < 3:raise PermissionError(13, 'Permission denied', str(path))
+                return read(path, *args, **kwargs)
+            with patch.object(sys, 'platform', 'win32'), patch.object(Path, 'read_text', autospec=True, side_effect=locked), patch.object(time, 'sleep'):
+                self.assertEqual(runner.read_result(result), {'passed': True})
+            self.assertEqual(len(attempts), 3)
+            # Elsewhere, and after 1 second on Windows, the error is raised.
+            with patch.object(sys, 'platform', 'linux'), patch.object(Path, 'read_text', side_effect=PermissionError(13, 'denied')):
+                with self.assertRaises(PermissionError):runner.read_result(result)
+            with patch.object(sys, 'platform', 'win32'), patch.object(Path, 'read_text', side_effect=PermissionError(13, 'denied')), \
+                    patch.object(time, 'monotonic', side_effect=[0, 0.5, 1.1]), patch.object(time, 'sleep'):
+                with self.assertRaises(PermissionError):runner.read_result(result)
+
+    @unittest.skipUnless(sys.platform.startswith('linux'), 'memory limit on Linux')
+    def test_runaway_allocation_raises_memory_error_on_linux(self):
+        result = runner.execute('data = bytearray(6 << 30)', [])
+        self.assertIn('MemoryError', result['error'] or '', result)
+
+    def test_temporary_files_go_in_the_exercise_folder(self):
+        result = runner.execute('import os, tempfile; print(os.path.realpath(tempfile.gettempdir()) == os.path.realpath(os.getcwd()))', [])
+        self.assertEqual(result['stdout'].strip(), 'True', result)
 
     def test_windows_wall_timeout(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -129,6 +189,59 @@ class RunnerPlatformTests(unittest.TestCase):
                     else:self.assertIsNone(result['error'], result)
                     time.sleep(2.1)
                     self.assertFalse(survived.exists(), 'An exercise child survived cleanup')
+
+
+def alive(pid):
+    """True while the process exists and is not a zombie."""
+    if sys.platform.startswith('linux'):
+        try:return Path(f'/proc/{pid}/stat').read_text().split(') ', 1)[1][0] != 'Z'
+        except OSError:return False
+    state = subprocess.run(['ps', '-o', 'stat=', '-p', str(pid)], capture_output=True, text=True).stdout.strip()
+    return bool(state) and not state.startswith('Z')
+
+
+@unittest.skipIf(os.name == 'nt', 'Windows ends the process tree with taskkill /T')
+class SessionLeaverTests(unittest.TestCase):
+    """Children that call setsid() leave the exercise's process group. Cleanup still finds them."""
+    def gone(self, pids):
+        deadline = time.monotonic() + 3
+        while time.monotonic() < deadline and any(alive(pid) for pid in pids):time.sleep(.05)
+        return [pid for pid in pids if alive(pid)]
+
+    def test_grandchildren_in_new_sessions_are_killed_after_finish_and_timeout(self):
+        python = (f'import os, subprocess, sys, time\n'
+                  # A new session in the exercise folder, one that leaves the folder, and a system shell that does both.
+                  f'children = [subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"], start_new_session=True),\n'
+                  f'            subprocess.Popen([sys.executable, "-c", "import os, time; os.chdir(os.sep); time.sleep(60)"], start_new_session=True,\n'
+                  f'                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL),\n'
+                  f'            subprocess.Popen(["/bin/sh", "-c", "cd /; sleep 60 & echo $!; wait"], start_new_session=True, stdout=subprocess.PIPE)]\n'
+                  f'print(*[child.pid for child in children], children[2].stdout.readline().decode().strip(), flush=True)\n')
+        javascript = ('const {spawn} = require("node:child_process");'
+                      'const child = spawn(process.execPath, ["-e", "setTimeout(() => {}, 60000)"], {detached: true, stdio: "inherit"}); child.unref();'
+                      'console.log(child.pid);')
+        for language, code in [('python', python), ('javascript', javascript)]:
+            for timeout in (False, True):
+                with self.subTest(language=language, timeout=timeout):
+                    if timeout:code += 'time.sleep(30)\n' if language == 'python' else 'while(true){}'
+                    result = runner.execute(code, [], timeout=3 if timeout else 20, language=language)
+                    pids = [int(pid) for pid in result['stdout'].split()]
+                    self.assertEqual(len(pids), 4 if language == 'python' else 1, result)
+                    if timeout:self.assertIn('Execution stopped', result['error'])
+                    else:self.assertIsNone(result['error'], result)
+                    self.assertEqual(self.gone(pids), [], 'An exercise process survived cleanup')
+
+    def test_process_limit_stops_a_fork_loop_and_cleanup_ends_every_process(self):
+        code = ('import subprocess\nstarted = []\n'
+                'try:\n'
+                '    for _ in range(5000):started.append(subprocess.Popen(["sleep", "60"], start_new_session=True))\n'
+                'except OSError:pass\n'
+                'print(*[process.pid for process in started])\n')
+        result = runner.execute(code, [])
+        pids = [int(pid) for pid in result['stdout'].split()]
+        self.assertIsNone(result['error'], result)
+        self.assertGreater(len(pids), 10)
+        self.assertLess(len(pids), runner.EXTRA_PROCESSES + 100)
+        self.assertEqual(self.gone(pids), [], 'An exercise process survived cleanup')
 
 
 if __name__ == '__main__':unittest.main()

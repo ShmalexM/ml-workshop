@@ -1,6 +1,5 @@
 """Install Engineering Workshop for macOS, Linux, or Windows."""
 import argparse
-import platform
 import re
 import shutil
 import subprocess
@@ -10,15 +9,27 @@ from platform_paths import ROOT, venv_python
 
 ML_PACKAGES = {'torch', 'tensorflow', 'transformers', 'tokenizers',
                'langchain-core', 'llama-index-core', 'numba'}
+# The lock files take PyTorch from its CPU index: the lessons never use a GPU, and the
+# CUDA builds on PyPI add several GB on Linux.
+TORCH_CPU_INDEX = 'https://download.pytorch.org/whl/cpu'
 
 
-def requirements_file():
-    # requirements.lock is a macOS arm64 snapshot, not a portable lockfile.
-    name = 'requirements.lock' if sys.platform == 'darwin' and platform.machine() == 'arm64' else 'requirements.txt'
-    return ROOT / name
+def requirements_file(ml=True):
+    # Both files pin every package with its SHA-256 hashes for macOS, Linux and Windows.
+    # scripts/lock_requirements.py makes them from requirements.txt.
+    return ROOT / ('requirements.lock' if ml else 'requirements-light.lock')
+
+
+def install_options(ml, uv):
+    """Options for a hash-checked `uv pip install` or `pip install` of a lock file."""
+    options = ['--require-hashes', '-r', str(requirements_file(ml))]
+    if ml:
+        options += ['--torch-backend', 'cpu'] if uv else ['--extra-index-url', TORCH_CPU_INDEX]
+    return options
 
 
 def light_requirements():
+    """The lines of requirements.txt for the light install, without the ML packages."""
     return [line.strip() for line in (ROOT / 'requirements.txt').read_text().splitlines()
             if line.strip() and not line.lstrip().startswith('#')
             and re.split(r'[<>=!~;\[]', line.strip(), maxsplit=1)[0].lower() not in ML_PACKAGES]
@@ -61,13 +72,13 @@ def main(argv=None):
         else:
             run([sys.executable, '-m', 'venv', ROOT / '.venv'])
     run([python, '-c', 'import sys; sys.exit(0 if sys.version_info >= (3, 12) else "The existing .venv needs Python 3.12 or newer.")'])
-    packages = light_requirements() if args.no_ml else ['-r', str(requirements_file())]
+    options = install_options(ml=not args.no_ml, uv=bool(uv))
     if uv:
-        run([uv, 'pip', 'install', '--python', python, *packages])
+        run([uv, 'pip', 'install', '--python', python, *options])
     else:
         # An existing uv-created environment may not contain pip.
         run([python, '-m', 'ensurepip', '--upgrade'])
-        run([python, '-m', 'pip', 'install', *packages])
+        run([python, '-m', 'pip', 'install', *options])
     if not args.no_build:
         run([npm, 'ci'])
         run([npm, 'run', 'build'])

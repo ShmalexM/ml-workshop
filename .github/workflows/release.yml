@@ -5,6 +5,8 @@ name: Release
 # - Bump "version" in package.json and merge to main. The first push to main with a
 #   version that has no release yet publishes v<version>. Later pushes do nothing.
 # - Push a tag such as v1.2.0 (a hyphen, as in v2.0.0-beta.1, makes a prerelease).
+# The build job runs npm and the build with a read-only token. The publish job gets the
+# write token, runs no npm or pip code, attests the archives and creates the release.
 # After publishing, the verify job installs from the public one-line command on macOS,
 # Linux and Windows, exactly as a new user would.
 on:
@@ -13,18 +15,19 @@ on:
     tags: ['v*']
   workflow_dispatch:
 
-permissions:
-  contents: write
+permissions: {}
 
 concurrency:
   group: release
   cancel-in-progress: false
 
 jobs:
-  release:
-    name: Build and publish installer archives
+  build:
+    name: Build installer archives
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
     outputs:
       tag: ${{ steps.plan.outputs.tag }}
       publish: ${{ steps.plan.outputs.publish }}
@@ -60,11 +63,44 @@ jobs:
         run: npm run build
       - if: steps.plan.outputs.publish == 'true'
         run: python3 scripts/package_release.py
-      - name: Publish the release
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: steps.plan.outputs.publish == 'true'
+        with:
+          name: release
+          path: |
+            release/engineering-workshop.tar.gz
+            release/engineering-workshop.zip
+            release/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Attest and publish installer archives
+    needs: build
+    if: needs.build.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release
+          path: release
+      - name: Check the archives against SHA256SUMS
+        working-directory: release
+        run: sha256sum --check --strict SHA256SUMS
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            release/engineering-workshop.tar.gz
+            release/engineering-workshop.zip
+      - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.plan.outputs.tag }}
+          TAG: ${{ needs.build.outputs.tag }}
         run: |
           prerelease=
           case "$TAG" in *-*) prerelease=--prerelease ;; esac
@@ -76,14 +112,16 @@ jobs:
 
   verify:
     name: ${{ matrix.os }} install from the public command
-    needs: release
-    if: needs.release.outputs.publish == 'true' && !contains(needs.release.outputs.tag, '-')
+    needs: [build, publish]
+    if: needs.build.outputs.publish == 'true' && !contains(needs.build.outputs.tag, '-')
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
+    permissions:
+      contents: read
     steps:
       - name: Install with the one-line command (macOS and Linux)
         if: runner.os != 'Windows'

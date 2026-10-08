@@ -2,7 +2,46 @@
 
 Engineering Workshop is a **trusted local Python and JavaScript runner** for one person. Exercise code runs with that person's filesystem and network permissions. Time/output limits and a temporary directory do not make it a sandbox. Do not expose the server publicly, run it as an administrator, or execute code you do not trust.
 
-The server binds to loopback, validates Host and Origin, rejects cross-site requests, and requires a per-session token for writes. No account or API key is needed. Framework packages are installed during setup; exercise code and learner state stay local unless you explicitly share them.
+The server binds to loopback, validates Host and Origin, and rejects cross-site requests. No account or API key is needed. Framework packages are installed during setup; exercise code and learner state stay local unless you explicitly share them.
+
+## Session token
+
+Every API request must send the session token, except `/api/health`. This covers reading and changing progress, drafts, notes, project state, reading state, game state, backups and book files, and running exercise code.
+
+- The server keeps the token in the `session-token` file in the data folder. The token stays the same when the server restarts. The server makes a new one only when the file is missing.
+- The launcher, the app shortcuts, the installers and the native Mac window open `http://127.0.0.1:7318/#session=<token>`. The browser does not send the part after `#` to the server. The page saves the token in the browser's local storage and removes it from the address bar.
+- No endpoint returns the token. A browser without it shows "Open Engineering Workshop from its shortcut or start command to connect this browser".
+- Only the app's page files and `/api/health` work without the token. The Books page fetches covers, figures and the original PDF or EPUB with it, and the PDF reader sends it as a request header.
+- Another program that runs as your user account can read the token file. The token protects against other accounts on the computer and against web pages, not against software you run yourself.
+
+## File permissions
+
+On macOS and Linux, the server and the install command create the data folder as `0700` and its files as `0600`, so other accounts on the computer cannot read your progress, notes, backups or the token. They also set the data folder of an older install to `0700`. On Windows, the install folder is in `%LOCALAPPDATA%`, which other standard accounts cannot read. In a Windows clone, the `data` folder has the same permissions as the clone folder.
+
+## Verify a download
+
+The install commands check every download before they use it:
+
+- The app archive must match the `SHA256SUMS` file published with the same release.
+- uv and Node.js must match SHA-256 hashes written into `install.sh` and `install.ps1`.
+- Python packages come from `requirements.lock` or `requirements-light.lock`, which list a SHA-256 hash for every file. Setup installs them with `--require-hashes`.
+
+Releases made by the current release workflow also carry a GitHub build provenance attestation. It shows that this repository's release workflow built the archive from a specific commit. To check an archive you downloaded from the release page, install the [GitHub CLI](https://cli.github.com/) and run:
+
+```sh
+gh attestation verify engineering-workshop.tar.gz --repo ShmalexM/ml-workshop
+```
+
+Use `engineering-workshop.zip` for the Windows archive. Releases published before the workflow added attestations have none, so the command fails for them.
+
+## Optional AI assistant
+
+The assistant is off by default. When it is on, the browser still connects only to the local server. The server sends your question, recent messages and the context chips you leave on to the provider you saved, and streams the answer back. The assistant has no tools: it cannot run code or change files or progress. Lesson text and your code go to the model as data, so text in them can change an answer but cannot do anything else.
+
+- **Provider address.** `https://` to any host. Plain `http://` only to `127.0.0.1`, `localhost` or `::1`, for Ollama and LM Studio. The server refuses a user name or password in the address, link-local and cloud metadata addresses, multicast and unspecified addresses, and the workshop's own port. It checks the address each time it connects, connects only to the address it checked, and does not follow redirects.
+- **Access and limits.** Every assistant endpoint needs the session token. One answer or connection test runs at a time, with at most 30 in 10 minutes; one model list at a time, with at most 20 in 10 minutes. Stop, or closing the tab or Settings, ends the request to the provider. Each provider call has a wall-clock deadline (3 minutes for an answer, 60 s for Test connection, 30 s for a model list; 10 s to connect, 90 s for the headers, 10 s for an error body), so a provider that sends one byte at a time cannot hold it open. A line or event over 256 KB, or more than 4 MB from the provider for one answer, ends the answer with an error.
+- **API key.** The key is saved in `data/assistant.json` with the same `0600` permissions as the other data files. No endpoint returns it; Settings shows its last 4 characters. It is not in progress exports or the server log. When a provider refuses the key (HTTP 401 or 403), only the status is shown. Other provider messages are shown as a short excerpt without the key, simple changes of it (reversed, base64, URL-encoded, split by spaces or dots) or other token-like strings. Settings warns when a key is saved for an `http://` address, because it then travels unencrypted to whatever program listens on that port. A key is sent only to the address it was saved for: changing the address removes it. Uninstall deletes the file, and `--purge` deletes the whole data folder. Use a separate key with a spending limit.
+- **Answers.** Answers are rendered as text, never as HTML. Only `http` and `https` links work, and each shows its real host. Bidirectional controls and zero-width characters are removed from links and shown as ⟨U+202E⟩ in code, and Copy leaves them out.
 
 ## Report a vulnerability
 
@@ -12,4 +51,4 @@ For a bug that is not a security problem, use the [bug report form](https://gith
 
 ## Personal data
 
-Project catalogs, local paths and notes are personal data. The application does not scan referenced repositories, and `data/` is ignored by Git. Progress exports include project metadata and should be reviewed before sharing. Node VM contexts do not isolate untrusted code from the host.
+Project catalogs, local paths and notes are personal data. The application does not scan referenced repositories, and `data/` is ignored by Git. Progress exports include project metadata and should be reviewed before sharing. The app keeps the 10 newest exports in `data/backups` and deletes older ones that it made; it does not delete other files in that folder. Node VM contexts do not isolate untrusted code from the host.

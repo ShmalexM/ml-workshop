@@ -5,13 +5,18 @@ const {inspect,isDeepStrictEqual} = require('node:util');
 const LEARNER_FILE='exercise.js';
 const MISMATCH='The result did not match this requirement. Try a hint or inspect your output.';
 const RETURNED_UNDEFINED='Your function returned undefined. `console.log` shows a value but does not return it. Use `return`.';
+const IS_UNDEFINED='This value is undefined. Set it to the value that the task asks for.';
 const request=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
 const result={error:null,summary:null,checks:[],passed:false};
 // Values a simple check compared, so a failure can show them.
 let values={};
-const context=vm.createContext({console,require,process,Buffer,setTimeout,clearTimeout,
+const context=vm.createContext({console,require,process,Buffer,setTimeout,clearTimeout});
+// Checks receive their helpers as parameters, so learner code that declares equal cannot change them.
+const HELPERS='__workshopCheckHelpers';
+Object.defineProperty(context,HELPERS,{value:Object.freeze({
   equal:(a,b)=>{values={got:a,expected:b};return isDeepStrictEqual(JSON.parse(JSON.stringify(a)),JSON.parse(JSON.stringify(b)))},
-  _workshopValue:(key,value)=>{values[key]=value;return value}});
+  value:(key,value)=>{values[key]=value;return value}})});
+const withHelpers=code=>`((equal,_workshopValue)=>(${code}))(${HELPERS}.equal,${HELPERS}.value)`;
 
 const shown=value=>{const text=inspect(value,{depth:4,breakLength:Infinity});return text.length>200?text.slice(0,199)+'…':text};
 // Keep the message and the learner's frames; drop runner and Node internals, which include install paths.
@@ -52,7 +57,8 @@ function compared(plan){
   if(!plan||!('got' in values)||!('expected' in values))return {};
   const fields={call:plan.call.slice(0,200),expected:shown(values.expected),got:shown(values.got)};
   fields.detail=`Got ${fields.got}, expected ${fields.expected}.`;
-  if(values.got===undefined&&values.expected!==undefined)fields.explanation=RETURNED_UNDEFINED;
+  // Return advice fits a function call only, such as counter(s, a); not counter(s, a).count or a variable.
+  if(values.got===undefined&&values.expected!==undefined)fields.explanation=/^[\w$.\s]+\(\s*\)$/.test(topLevel(plan.call)||'')?RETURNED_UNDEFINED:IS_UNDEFINED;
   return fields;
 }
 
@@ -62,7 +68,7 @@ try {
     const plan=comparison(check.expr);
     let passed=false,detail='',fields={};
     values={};
-    try { passed=Boolean(vm.runInContext(plan?plan.code:check.expr,context,{timeout:5000})); if(!passed){detail=MISMATCH;fields=compared(plan)} }
+    try { passed=Boolean(vm.runInContext(withHelpers(plan?plan.code:check.expr),context,{timeout:5000})); if(!passed){detail=MISMATCH;fields=compared(plan)} }
     catch(e){detail=errorLine(e).slice(0,1200);if(values.got===undefined)fields=compared(plan)}
     result.checks.push({label:check.label,passed,detail,...fields});
   }

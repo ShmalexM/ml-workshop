@@ -93,8 +93,43 @@ final class WorkshopApp: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     @objc private func about() {
         NSApp.orderFrontStandardAboutPanel(options: [.applicationName: "Engineering Workshop", .applicationVersion: "1.0", .credits: NSAttributedString(string: "ML and software engineering lessons that run on this Mac.\nLessons, books and progress stay on this Mac.")])
     }
-    @objc private func openInBrowser() { NSWorkspace.shared.open(webView.url.flatMap { isLocal($0) ? $0 : nil } ?? home) }
+    @objc private func openInBrowser() { NSWorkspace.shared.open(sessionURL(webView.url.flatMap { isLocal($0) ? $0 : nil })) }
     private func isLocal(_ url: URL) -> Bool { url.scheme == "http" && url.host == "127.0.0.1" && url.port == 7318 }
+    private var workshopRoot: URL? {
+        (Bundle.main.object(forInfoDictionaryKey: "WorkshopRoot") as? String).map { URL(fileURLWithPath: $0) }
+    }
+
+    // Same rule as scripts/platform_paths.py: data/ in a clone, the data folder next to app/ in an installed copy.
+    private func dataFolder(_ root: URL) -> URL {
+        if let custom = ProcessInfo.processInfo.environment["ML_WORKSHOP_DATA_DIR"], !custom.isEmpty {
+            return URL(fileURLWithPath: custom, relativeTo: root).standardizedFileURL
+        }
+        let parent = root.deletingLastPathComponent()
+        if root.lastPathComponent == "app" && FileManager.default.fileExists(atPath: parent.appendingPathComponent(".engineering-workshop").path) {
+            return parent.appendingPathComponent("data")
+        }
+        return root.appendingPathComponent("data")
+    }
+
+    // The server keeps its session token in data/session-token. The page reads it from the URL fragment.
+    private func sessionToken() -> String? {
+        guard let root = workshopRoot,
+              let text = try? String(contentsOf: dataFolder(root).appendingPathComponent("session-token"), encoding: .ascii) else { return nil }
+        let token = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let allowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-")
+        guard (32...128).contains(token.count), token.unicodeScalars.allSatisfy(allowed.contains) else { return nil }
+        return token
+    }
+
+    // http://127.0.0.1:7318/#session=<token>, followed by &<route> to keep the page that is open.
+    private func sessionURL(_ current: URL?) -> URL {
+        guard let token = sessionToken() else { return current ?? home }
+        var route = ""
+        if let current, current.path.isEmpty || current.path == "/", let fragment = current.fragment, !fragment.isEmpty, !fragment.hasPrefix("session=") {
+            route = "&" + fragment
+        }
+        return URL(string: home.absoluteString + "#session=" + token + route) ?? URL(string: home.absoluteString + "#session=" + token) ?? home
+    }
 
     @objc private func startWorkshop() {
         guard !starting else { return }
@@ -116,8 +151,8 @@ final class WorkshopApp: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                 guard let self else { return }
                 self.starting = false
                 if task.terminationStatus == 0 {
-                    let target = self.webView.url.flatMap { self.isLocal($0) ? $0 : nil } ?? self.home
-                    self.webView.load(URLRequest(url: target))
+                    // An open page that gets a new fragment stores the token and reloads itself.
+                    self.webView.load(URLRequest(url: self.sessionURL(self.webView.url.flatMap { self.isLocal($0) ? $0 : nil })))
                 } else {
                     self.showError("Could not start Engineering Workshop. Run Setup ML Workshop.command in the project folder, then try again.\n\n" + String((String(data: data, encoding: .utf8) ?? "").suffix(800)))
                 }
@@ -133,6 +168,9 @@ final class WorkshopApp: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         guard let url = action.request.url else { decisionHandler(.cancel); return }
         if isLocal(url) {
             decisionHandler(action.shouldPerformDownload ? .download : .allow)
+        } else if url.scheme == "blob" && url.absoluteString.hasPrefix("blob:" + home.absoluteString) {
+            // The page fetches backups with the session token and saves them from a blob: URL.
+            decisionHandler(action.shouldPerformDownload ? .download : .cancel)
         } else if action.targetFrame?.isMainFrame == false && url.scheme == "about" {
             decisionHandler(.allow)
         } else {

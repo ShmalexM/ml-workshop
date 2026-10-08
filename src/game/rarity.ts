@@ -8,7 +8,7 @@ export const RARITY_COLOR:Record<Rarity,{text:string;glow:string;deep:string}>={
  basic:{text:'#f1f1f1',glow:'#d9dde3',deep:'#5b6170'},
  common:{text:'#3ee03e',glow:'#1eff00',deep:'#1d5c1d'},
  rare:{text:'#4ea7ff',glow:'#2f8cff',deep:'#123d78'},
- epic:{text:'#ff5252',glow:'#ff2b3a',deep:'#6e0f18'},
+ epic:{text:'#c77dff',glow:'#a64df0',deep:'#3d1466'},
  legendary:{text:'#ffa233',glow:'#ff8a00',deep:'#7a3600'},
 }
 
@@ -24,10 +24,10 @@ const FABRICS:Record<Rarity,string[]>={
  basic:['#8b7d6b','#7d7468','#6f6a62'],
  common:['#4d6a8a','#5d7a4a','#7a4a46','#6a5a8a','#7a6a46'],
  rare:['#2f4f9f','#4b2f8f','#1f5f74','#6b1f3f','#2d5d3d'],
- epic:['#3a0f18','#2a0c1e','#1b1022','#3d1410'],
+ epic:['#2a1238','#1f0f2e','#1b1022','#301440'],
  legendary:['#f1e3bd','#3b1d5e','#5e1a12','#13233f'],
 }
-const LEATHERS:Record<Rarity,string>={basic:'#6b4a2f',common:'#7b5534',rare:'#4a3326',epic:'#2b1716',legendary:'#5a3416'}
+const LEATHERS:Record<Rarity,string>={basic:'#6b4a2f',common:'#7b5534',rare:'#4a3326',epic:'#26172e',legendary:'#5a3416'}
 
 /** Materials get better with rarity: dull iron → steel → polished silver → dreadsteel with runes → radiant gold. */
 export function palette(rarity:Rarity,seed:number):Palette{
@@ -36,10 +36,10 @@ export function palette(rarity:Rarity,seed:number):Palette{
   basic:{metal:'#7f848b',metalDark:'#4f535a',metalLight:'#a7abb1',trim:'#6b4a2f',gem:'#9aa0a6',glow:'#d9dde3',emissive:0},
   common:{metal:'#aab3bd',metalDark:'#5e6772',metalLight:'#dfe5ea',trim:'#b08d57',gem:'#38d838',glow:'#1eff00',emissive:.15},
   rare:{metal:'#c8d7e8',metalDark:'#5a6f8e',metalLight:'#f4f8ff',trim:'#9fc4ff',gem:'#2f8cff',glow:'#2f8cff',emissive:.55},
-  epic:{metal:'#4b3a46',metalDark:'#1d141b',metalLight:'#8c7280',trim:'#ff3b3b',gem:'#ff2b3a',glow:'#ff2b3a',emissive:1.4},
+  epic:{metal:'#463a52',metalDark:'#1a1420',metalLight:'#857296',trim:'#b45cff',gem:'#a64df0',glow:'#a64df0',emissive:1.4},
   legendary:{metal:'#f2c45a',metalDark:'#9a6417',metalLight:'#fff1c2',trim:'#ff9a1f',gem:'#ffb340',glow:'#ff8a00',emissive:2.2},
  }[rarity]
- return {...base,fabric,fabricDark:shade(fabric,-.35),leather:LEATHERS[rarity],wood:rarity==='basic'?'#6b4b2e':rarity==='legendary'?'#4a2a10':rarity==='epic'?'#2b1a1a':'#7a5532'}
+ return {...base,fabric,fabricDark:shade(fabric,-.35),leather:LEATHERS[rarity],wood:rarity==='basic'?'#6b4b2e':rarity==='legendary'?'#4a2a10':rarity==='epic'?'#241a2b':'#7a5532'}
 }
 
 export function shade(hex:string,amount:number){
@@ -47,5 +47,5 @@ export function shade(hex:string,amount:number){
  return '#'+[n>>16&255,n>>8&255,n&255].map(c=>f(c).toString(16).padStart(2,'0')).join('')
 }
 
-export const TIER_COLOR=['#9b7a52','#9b7a52','#8c97a6','#4ea7ff','#ff4a4a','#ffb340']
+export const TIER_COLOR=['#9b7a52','#9b7a52','#8c97a6','#4ea7ff','#b46bff','#ffb340']
 export const TIER_LABEL=['','Novice','Apprentice','Adept','Expert','Master']

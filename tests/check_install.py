@@ -12,6 +12,7 @@ from pathlib import Path
 import socket
 import subprocess
 import sys
+import urllib.error
 import urllib.request
 
 
@@ -30,7 +31,8 @@ def call(url, data=None, token=None):
 def main(install):
     install = Path(install).resolve()
     licenses = install / 'app' / 'dist' / 'THIRD_PARTY_LICENSES.txt'
-    check(licenses.is_file() and 'react' in licenses.read_text(encoding='utf-8'), f'{licenses} is missing or does not list react')
+    listed = licenses.read_text(encoding='utf-8') if licenses.is_file() else ''
+    check('react' in listed and 'beautiful-ui' in listed, f'{licenses} is missing or does not list react and beautiful-ui')
     profiles = install / 'app' / 'dist' / 'pdfjs' / 'iccs'
     check((profiles / 'CGATS001Compat-v2-micro.icc').is_file() and (profiles / 'LICENSE').is_file(), 'PDF color profile or its license is missing')
     python = install / 'app' / '.venv' / ('Scripts/python.exe' if os.name == 'nt' else 'bin/python')
@@ -43,11 +45,21 @@ def main(install):
     try:
         started = subprocess.run(command + ['--no-open'], env=env, capture_output=True, text=True, timeout=120)
         check(started.returncode == 0, f'the app did not start: {started.stderr}')
-        check(started.stdout.strip() == url, f'unexpected launcher output: {started.stdout!r}')
+        # The server keeps its session token in the data folder; the launcher passes it in the URL fragment.
+        token = (install / 'data' / 'session-token').read_text(encoding='ascii').strip()
+        check(started.stdout.strip() == f'{url}/#session={token}', f'unexpected launcher output: {started.stdout!r}')
+        if os.name != 'nt':
+            for path, mode in [(install, 0o700), (install / 'data', 0o700), (install / 'data' / 'session-token', 0o600)]:
+                actual = path.stat().st_mode & 0o777
+                check(actual == mode, f'{path} has mode {actual:o}; expected {mode:o}')
         health = call(url + '/api/health')
         check(health.get('app') == 'ml-workshop', f'unexpected /api/health response: {health}')
         print(f'{url}/api/health -> {health}')
-        token = call(url + '/api/bootstrap')['token']
+        try:
+            call(url + '/api/state')
+            check(False, '/api/state answered without the session token')
+        except urllib.error.HTTPError as error:
+            check(error.code == 403, f'/api/state without the token returned {error.code}')
         for lesson, code in [('foundations-1', 'print("python works")'), ('web-1', 'console.log("javascript works")')]:
             result = call(url + '/api/run', dict(lessonId=lesson, code=code, mode='run'), token)
             check(result.get('error') is None and 'works' in result.get('stdout', ''), f'{lesson}: {result}')

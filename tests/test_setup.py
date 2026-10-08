@@ -2,6 +2,7 @@
 import importlib.util
 import os
 from pathlib import Path
+import re
 import sys
 import tempfile
 import unittest
@@ -17,11 +18,20 @@ from test_curriculum import missing_lesson_modules, require_lesson_modules
 
 
 class SetupTests(unittest.TestCase):
-    def test_lock_only_on_macos_arm64(self):
-        for platform, machine, expected in [('darwin', 'arm64', 'requirements.lock'), ('darwin', 'x86_64', 'requirements.txt'), ('linux', 'aarch64', 'requirements.txt'), ('win32', 'AMD64', 'requirements.txt')]:
-            with self.subTest(platform=platform, machine=machine), patch.object(sys, 'platform', platform), patch.object(setup.platform, 'machine', return_value=machine):
-                self.assertEqual(setup.requirements_file().name, expected)
+    def test_locks_pin_every_requirement_with_hashes(self):
         self.assertEqual(setup.light_requirements(), ['pypdf>=6.19,<7'])
+        def name(line):
+            return re.split(r'[<>=!~;\[ ]', line, maxsplit=1)[0].lower()
+        for ml, required in [(True, (ROOT / 'requirements.txt').read_text().split()), (False, setup.light_requirements())]:
+            text = setup.requirements_file(ml).read_text()
+            entries = re.split(r'\n(?=[a-z0-9])', text.split('\n', 2)[2].strip())
+            with self.subTest(lock=setup.requirements_file(ml).name):
+                self.assertTrue(entries)
+                for entry in entries:
+                    self.assertRegex(entry, r'^[a-z0-9._-]+==\S+.*\n    --hash=sha256:[0-9a-f]{64}', entry.split('\n')[0])
+                # Run `python scripts/lock_requirements.py` after changing requirements.txt.
+                self.assertLessEqual({name(line) for line in required}, {name(entry) for entry in entries})
+        self.assertNotIn('nvidia', setup.requirements_file().read_text())
 
     def test_python_and_node_minimum_versions(self):
         with patch.object(sys, 'version_info', (3, 11)), self.assertRaisesRegex(RuntimeError, 'Python 3.12'):
@@ -44,13 +54,14 @@ class SetupTests(unittest.TestCase):
                 self.assertIn(['npm', 'ci'], commands)
                 self.assertIn(['npm', 'run', 'build'], commands)
                 self.assertFalse(any('launch.py' in str(arg) for command in commands for arg in command))
+                light = ['--require-hashes', '-r', str(ROOT / 'requirements-light.lock')]
                 if uv:
                     self.assertEqual(commands[0][:2], ['uv', 'venv'])
-                    self.assertIn(['uv', 'pip', 'install', '--python', python, 'pypdf>=6.19,<7'], commands)
+                    self.assertIn(['uv', 'pip', 'install', '--python', python, *light], commands)
                 else:
                     self.assertEqual(commands[0][:3], [sys.executable, '-m', 'venv'])
                     self.assertIn([python, '-m', 'ensurepip', '--upgrade'], commands)
-                    self.assertIn([python, '-m', 'pip', 'install', 'pypdf>=6.19,<7'], commands)
+                    self.assertIn([python, '-m', 'pip', 'install', *light], commands)
 
     def test_no_build_uses_release_dist_without_node(self):
         # The one-line installers run setup from a release archive that already has dist/.
@@ -65,7 +76,7 @@ class SetupTests(unittest.TestCase):
                 setup.main(['--no-build', '--no-launch', '--no-ml'])
             commands = [call.args[0] for call in run.call_args_list]
             self.assertEqual(commands[0][:2], ['uv', 'venv'])
-            self.assertIn(['uv', 'pip', 'install', '--python', python, 'pypdf>=6.19,<7'], commands)
+            self.assertIn(['uv', 'pip', 'install', '--python', python, '--require-hashes', '-r', str(root / 'requirements-light.lock')], commands)
             self.assertFalse(any('npm' in str(arg) for command in commands for arg in command))
             (root / 'dist/index.html').unlink()
             with patch.object(setup, 'ROOT', root), patch.object(setup, 'run') as run, self.assertRaisesRegex(RuntimeError, 'dist/index.html'):
@@ -76,9 +87,12 @@ class SetupTests(unittest.TestCase):
         with patch.object(setup, 'check_prerequisites', return_value='npm'), patch.object(setup.shutil, 'which', return_value='uv'), patch.object(setup, 'run') as run:
             setup.main([])
         commands = [call.args[0] for call in run.call_args_list]
-        self.assertIn(['uv', 'pip', 'install', '--python', setup.venv_python(), '-r', str(setup.requirements_file())], commands)
+        lock = str(ROOT / 'requirements.lock')
+        self.assertIn(['uv', 'pip', 'install', '--python', setup.venv_python(), '--require-hashes', '-r', lock, '--torch-backend', 'cpu'], commands)
         self.assertEqual(commands[-2], ['npm', 'run', 'build'])
         self.assertEqual(commands[-1], [setup.venv_python(), ROOT / 'scripts/launch.py'])
+        # Without uv, pip finds the CPU build of PyTorch in its own index.
+        self.assertEqual(setup.install_options(ml=True, uv=False), ['--require-hashes', '-r', lock, '--extra-index-url', 'https://download.pytorch.org/whl/cpu'])
 
     def test_missing_imports_skip_only_dependent_lessons(self):
         lesson = dict(id='fixture', starter='import torch', solution='from transformers import BertModel', example={'code': 'print(1)'})

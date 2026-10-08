@@ -1,9 +1,10 @@
-import {lazy,Suspense,useCallback,useEffect,useRef,useState,type CSSProperties,type MouseEvent} from 'react'
+import {lazy,Suspense,useCallback,useEffect,useMemo,useRef,useState,type CSSProperties,type MouseEvent} from 'react'
 import {CodeXml,Settings as SettingsIcon,LoaderCircle,X} from 'lucide-react'
-import {api,bootstrap,serverReachable} from './api'
-import type {Course,Lesson,State,Runtime,RunResult,LearningStage,EditorPrefs} from './types'
-import type {Portfolio,ProjectState} from './portfolioTypes'
-import Curriculum from './components/Curriculum'
+import {api,connectMessage,serverReachable,unreachable} from './api'
+import type {Course,GlossaryEntry,Lesson,State,Runtime,RunResult,LearningStage,EditorPrefs} from './types'
+import {lessonLabel} from './glossary'
+import type {Portfolio,ProjectState,TaskProgress} from './portfolioTypes'
+import Curriculum,{type DrawerView} from './components/Curriculum'
 import LessonReader from './components/LessonReader'
 import Workspace from './components/Workspace'
 import Overview from './components/Overview'
@@ -13,11 +14,13 @@ import GuidedExample from './components/GuidedExample'
 import PanelDivider,{clampReaderWidth} from './components/PanelDivider'
 import Paths from './components/Paths'
 import Projects from './components/Projects'
+import SessionBanner from './components/SessionBanner'
 import LootToast,{type LootNotice} from './game/LootToast'
 import {gameApi,summarize} from './game/gameApi'
 import type {GameSummary} from './game/types'
 import type {BookLocation,LibraryData} from './libraryTypes'
 import './components/learnLayout.css'
+import {AssistantButton,AssistantDock} from './assistant/Assistant'
 const BookLibrary=lazy(()=>import('./components/BookLibrary'))
 const HeroPage=lazy(()=>import('./game/HeroPage'))
 type Page='paths'|'learn'|'projects'|'practice'|'progress'|'books'|'hero'
@@ -27,13 +30,21 @@ function projectRoute(){return location.hash.match(/^#projects\/([a-z0-9-]+)$/)?
 function projectFilter(){return new URLSearchParams(location.hash.split('?')[1]||'').get('track')||'all'}
 const localKey='ml-workshop-drafts-v1',projectKey='ml-workshop-projects-v1'
 type Draft={code:string;notes:string;updatedAt:number}
-function readCache<T>(key:string):Record<string,T>{try{return JSON.parse(localStorage.getItem(key)||'{}')}catch{return {}}}
+// Browser storage can hold anything, including null or an old shape. Keep only well-formed entries.
+const isDraft=(value:unknown):value is Draft=>{const d=value as Partial<Draft>|null;return typeof d?.code==='string'&&typeof d.notes==='string'&&Number.isSafeInteger(d.updatedAt)}
+const isTaskProgress=(value:unknown)=>{const t=value as TaskProgress|null;return !!t&&typeof t==='object'&&(t.notes===undefined||typeof t.notes==='string')&&(t.verifiedAt===undefined||Number.isSafeInteger(t.verifiedAt))}
+const isProjectState=(value:unknown):value is ProjectState=>{const p=value as Partial<ProjectState>|null;return typeof p?.notes==='string'&&Array.isArray(p.reviewed)&&p.reviewed.every(Number.isInteger)&&Number.isSafeInteger(p.updatedAt)&&(p.tasks===undefined||(!!p.tasks&&typeof p.tasks==='object'&&!Array.isArray(p.tasks)&&Object.values(p.tasks).every(isTaskProgress)))}
+function readCache<T>(key:string,valid:(value:unknown)=>value is T):Record<string,T>{try{const data:unknown=JSON.parse(localStorage.getItem(key)||'{}');return data&&typeof data==='object'&&!Array.isArray(data)?Object.fromEntries(Object.entries(data).filter(([,value])=>valid(value))):{}}catch{return {}}}
 const lessonsPanelKey='ml-workshop-lessons-panel',readerWidthKey='ml-workshop-reader-width',editorKey='ml-workshop-editor-v1'
 // Editor options are kept per browser. Code suggestions and the dark code background are off unless turned on in Settings.
 function readEditorPrefs():EditorPrefs{try{const saved=JSON.parse(localStorage.getItem(editorKey)||'{}');return {suggestions:saved.suggestions===true,dark:saved.dark===true}}catch{return {suggestions:false,dark:false}}}
 function readPref(key:string){try{return localStorage.getItem(key)}catch{return null}}
 function savePref(key:string,value:string){try{localStorage.setItem(key,value)}catch{/* storage unavailable: the choice lasts until reload */}}
 function useMedia(query:string){const [matches,setMatches]=useState(()=>matchMedia(query).matches);useEffect(()=>{const list=matchMedia(query);const update=()=>setMatches(list.matches);update();list.addEventListener('change',update);return()=>list.removeEventListener('change',update)},[query]);return matches}
+// Ticked tasks and passed checks decide a project's chest, so either change refreshes the Hero badge.
+const rewardKey=(saved?:ProjectState)=>String(saved?.reviewed??[])+'|'+Object.entries(saved?.tasks??{}).filter(([,t])=>t.verifiedAt).map(([id])=>id).sort()
+// The only context the assistant gets outside lessons.
+const pageNames:Record<Page,string>={paths:'Paths',learn:'Learn',projects:'Projects',practice:'All lessons',progress:'Progress',books:'Books',hero:'Hero'}
 const emptyPortfolio:Portfolio={version:1,projects:[],coverage:'',updatedAt:'',projectState:{}}
 export default function App(){
  const [library,setLibrary]=useState<LibraryData>({books:[],guides:[],readingState:{}})
@@ -42,13 +53,16 @@ export default function App(){
  const [projectId,setProjectId]=useState(projectRoute);const [projectTrack,setProjectTrack]=useState(projectFilter)
  const [projectSave,setProjectSave]=useState('Saved on this computer');const projectTimers=useRef<Record<string,ReturnType<typeof setTimeout>>>({})
  const [courses,setCourses]=useState<Course[]>([]);const [lessons,setLessons]=useState<Lesson[]>([])
+ const [glossary,setGlossary]=useState<GlossaryEntry[]>([]);const glossaryById=useMemo(()=>new Map(glossary.map(entry=>[entry.id,entry])),[glossary])
+ // The lesson drawer shows the lesson list or the glossary.
+ const [drawerView,setDrawerView]=useState<DrawerView>('lessons');const [glossaryQuery,setGlossaryQuery]=useState('')
  const [state,setState]=useState<State|null>(null);const [runtime,setRuntime]=useState<Runtime|null>(null)
  const [stage,setStage]=useState<LearningStage>('understand');const [exampleResults,setExampleResults]=useState<Record<string,RunResult>>({})
  const [id,setId]=useState('foundations-1');const [page,setPage]=useState<Page>(routePage)
  const [drawer,setDrawer]=useState(false);const [settings,setSettings]=useState(false);const [error,setError]=useState('')
  // From 1440px the lesson list sits beside the lesson and stays open unless closed. Narrower screens open it over the lesson.
  const wide=useMedia('(min-width:1440px)');const [docked,setDocked]=useState(()=>readPref(lessonsPanelKey)!=='closed')
- const closeLessons=useCallback(()=>{if(wide){setDocked(false);savePref(lessonsPanelKey,'closed')}else setDrawer(false);requestAnimationFrame(()=>document.getElementById('lessons-toggle')?.focus())},[wide])
+ const closeLessons=useCallback(()=>{if(wide){setDocked(false);savePref(lessonsPanelKey,'closed')}else setDrawer(false);requestAnimationFrame(()=>document.getElementById(drawerView==='glossary'?'glossary-toggle':'lessons-toggle')?.focus())},[wide,drawerView])
  const [readerWidth,setReaderWidth]=useState(()=>clampReaderWidth(Number(readPref(readerWidthKey))))
  const [editorPrefs,setEditorPrefs]=useState(readEditorPrefs)
  useEffect(()=>{
@@ -56,11 +70,11 @@ export default function App(){
   document.title=names[page]?`${names[page]} · Engineering Workshop`:'Engineering Workshop'
  },[page,id,lessons,projectId,portfolio,bookSelection,library])
  // After picking a lesson, focus its title unless focus is still on a visible control, such as the lesson list beside the lesson.
- const focusLesson=useRef(false)
- useEffect(()=>{if(!focusLesson.current)return;focusLesson.current=false;const active=document.activeElement;if(active&&active!==document.body&&!(active.closest('.curriculum')&&!wide))return;document.querySelector<HTMLElement>('.lesson-reader h1')?.focus()},[id,page,wide])
+ const focusLesson=useRef(false);const [selection,setSelection]=useState(0)
+ useEffect(()=>{if(!focusLesson.current)return;focusLesson.current=false;const active=document.activeElement;if(active&&active!==document.body&&!(active.closest('.curriculum')&&!wide))return;document.querySelector<HTMLElement>('.lesson-reader h1')?.focus()},[id,page,wide,selection])
  const [busy,setBusy]=useState(false);const [results,setResults]=useState<Record<string,RunResult>>({})
  const [saveStatus,setSaveStatus]=useState('Saved on this computer');const [solution,setSolution]=useState<string|null>(null)
- const [cache,setCache]=useState(()=>readCache<Draft>(localKey));const cacheRef=useRef(cache)
+ const [cache,setCache]=useState(()=>readCache(localKey,isDraft));const cacheRef=useRef(cache)
  const timers=useRef<Record<string,ReturnType<typeof setTimeout>>>({});const [loaded,setLoaded]=useState(false)
  // Hero game: a summary drives the nav badge; the full state loads only on the Hero page.
  const [game,setGame]=useState<GameSummary|null>(null);const [loot,setLoot]=useState<(LootNotice&{lessonId:string})|null>(null);const closeLoot=useCallback(()=>setLoot(null),[])
@@ -71,20 +85,19 @@ export default function App(){
   const schedule=()=>{clearInterval(timer);if(document.visibilityState==='visible'){check();timer=setInterval(check,15000)}}
   schedule();document.addEventListener('visibilitychange',schedule)
   return()=>{clearInterval(timer);document.removeEventListener('visibilitychange',schedule)}},[])
- // Finished project walkthroughs and reading guides earn chests too, so the Hero badge is refreshed after they are saved.
+ // Finished projects and reading guides earn chests too, so the Hero badge is refreshed after they are saved.
  const refreshGame=useCallback(()=>{gameApi.summary().then(setGame).catch(()=>{})},[]);const reviewChanged=useRef(new Set<string>())
  useEffect(()=>{if(page==='hero')setLoot(null)},[page])
  const saveProject=useCallback(async(projectId:string,value:ProjectState)=>{try{await api('/project/state',{projectId,...value});setProjectSave('Saved on this computer');if(reviewChanged.current.delete(projectId))refreshGame()}catch{setProjectSave('Saved in this browser · server not reachable')}},[refreshGame])
  useEffect(()=>{let active=true;(async()=>{try{
-   await bootstrap()
-   const [curriculum,s,r,books,projects]=await Promise.all([api<{courses:Course[];lessons:Lesson[]}>('/curriculum'),api<State>('/state'),api<Runtime>('/runtime'),api<LibraryData>('/library'),api<Portfolio>('/portfolio')])
+   const [curriculum,s,r,books,projects]=await Promise.all([api<{courses:Course[];lessons:Lesson[];glossary:GlossaryEntry[]}>('/curriculum'),api<State>('/state'),api<Runtime>('/runtime'),api<LibraryData>('/library'),api<Portfolio>('/portfolio')])
    if(!active)return
    const recovered=Object.fromEntries(Object.entries(cacheRef.current).filter(([key,draft])=>curriculum.lessons.some(l=>l.id===key)&&draft.updatedAt >= (s.draftUpdated?.[key]??0)))
    cacheRef.current=recovered;setCache(recovered);try{localStorage.setItem(localKey,JSON.stringify(recovered))}catch{}
-   const projectCache=readCache<ProjectState>(projectKey)
-   for(const [key,value] of Object.entries(projectCache))if(projects.projects.some(p=>p.id===key)&&value.updatedAt>=(projects.projectState[key]?.updatedAt||0)){projects.projectState[key]=value;void saveProject(key,value)}
+   const projectCache=readCache(projectKey,isProjectState)
+   for(const [key,cached] of Object.entries(projectCache))if(projects.projects.some(p=>p.id===key)&&cached.updatedAt>=(projects.projectState[key]?.updatedAt||0)){const value={...cached,tasks:cached.tasks??projects.projectState[key]?.tasks??{}};projects.projectState[key]=value;void saveProject(key,value)}
    setPortfolio(projects);portfolioRef.current=projects
-   setCourses(curriculum.courses);setLessons(curriculum.lessons);setState(s)
+   setCourses(curriculum.courses);setLessons(curriculum.lessons);setGlossary(curriculum.glossary);setState(s)
    const requested=location.hash.match(/^#learn\/([a-z0-9-]+)$/)?.[1]
    setId(requested&&curriculum.lessons.some(l=>l.id===requested)?requested:s.currentLesson)
    setRuntime(r);setLibrary(books);setLoaded(true)
@@ -94,14 +107,23 @@ export default function App(){
  function showPage(next:Page){setPage(next);setDrawer(false);if(next==='books')setBookSelection(null);location.hash=next==='learn'?`learn/${id}`:next}
  function showProjects(track?:string){setPage('projects');setProjectId('');setProjectTrack(track||'all');location.hash='projects'+(track?'?track='+track:'')}
  function selectProject(next:string){setProjectId(next);location.hash='projects'+(next?'/'+next:projectTrack!=='all'?'?track='+projectTrack:'')}
- const save=useCallback(async(lessonId:string,draft:Draft)=>{try{await api('/draft',{lessonId,...draft});setSaveStatus('Saved on this computer')}catch{setSaveStatus('Saved in this browser · server not reachable')}},[])
+ // applied is false when this computer already has a newer copy, for example from another tab.
+ const save=useCallback(async(lessonId:string,draft:Draft)=>{try{const result=await api<{applied?:boolean}>('/draft',{lessonId,...draft});setSaveStatus(result.applied===false?'A newer copy is saved on this computer':'Saved on this computer')}catch(e){const message=(e as Error).message;setSaveStatus(message===unreachable?'Saved in this browser · server not reachable':'Saved in this browser only · '+message)}},[])
  useEffect(()=>{if(loaded)Object.entries(cacheRef.current).forEach(([lessonId,draft])=>{void save(lessonId,draft)})},[loaded,save])
- function updateDraft(lessonId:string,code:string,notes:string){const draft={code,notes,updatedAt:Date.now()};const next={...cacheRef.current,[lessonId]:draft};cacheRef.current=next;setCache(next);try{localStorage.setItem(localKey,JSON.stringify(next));setSaveStatus('Saving…')}catch{setSaveStatus('Browser storage unavailable · saving to server')};clearTimeout(timers.current[lessonId]);timers.current[lessonId]=setTimeout(()=>void save(lessonId,draft),350)}
- function updateProject(projectId:string,value:ProjectState){if(String(portfolioRef.current.projectState[projectId]?.reviewed??[])!==String(value.reviewed))reviewChanged.current.add(projectId);const next={...portfolioRef.current,projectState:{...portfolioRef.current.projectState,[projectId]:value}};portfolioRef.current=next;setPortfolio(next);try{localStorage.setItem(projectKey,JSON.stringify(next.projectState));setProjectSave('Saving…')}catch{setProjectSave('Browser storage unavailable · saving to server')};clearTimeout(projectTimers.current[projectId]);projectTimers.current[projectId]=setTimeout(()=>void saveProject(projectId,value),350)}
- function selectLesson(next:string){if(busy)return;focusLesson.current=true;setId(next);setStage('understand');setPage('learn');setDrawer(false);setSolution(null);setError('');setLoot(null);location.hash='learn/'+next;setState(old=>old?{...old,currentLesson:next}:old);void api('/current',{lessonId:next}).catch(()=>setSaveStatus('Could not save your place · server not reachable'))}
- if(!state||!lessons.length)return <main className="loading-screen"><CodeXml size={44}/><h1>{error?'Could not load Engineering Workshop':'Loading Engineering Workshop…'}</h1>{error?<><p>{error}</p><button className="primary-button" onClick={()=>location.reload()}>Reload</button></>:<LoaderCircle size={23} className="spin"/>}</main>
+ function updateDraft(lessonId:string,code:string,notes:string){
+  // Results describe the code that ran. Once the code changes they are marked stale, not shown as current.
+  const before=cacheRef.current[lessonId]?.code??state?.drafts[lessonId]??lessons.find(l=>l.id===lessonId)?.starter
+  if(code!==before)setResults(old=>old[lessonId]&&!old[lessonId].stale?{...old,[lessonId]:{...old[lessonId],stale:true}}:old)
+  const draft={code,notes,updatedAt:Date.now()};const next={...cacheRef.current,[lessonId]:draft};cacheRef.current=next;setCache(next);try{localStorage.setItem(localKey,JSON.stringify(next));setSaveStatus('Saving…')}catch{setSaveStatus('Browser storage unavailable · saving to server')};clearTimeout(timers.current[lessonId]);timers.current[lessonId]=setTimeout(()=>void save(lessonId,draft),350)}
+ function updateProject(projectId:string,value:ProjectState){if(rewardKey(portfolioRef.current.projectState[projectId])!==rewardKey(value))reviewChanged.current.add(projectId);const next={...portfolioRef.current,projectState:{...portfolioRef.current.projectState,[projectId]:value}};portfolioRef.current=next;setPortfolio(next);try{localStorage.setItem(projectKey,JSON.stringify(next.projectState));setProjectSave('Saving…')}catch{setProjectSave('Browser storage unavailable · saving to server')};clearTimeout(projectTimers.current[projectId]);projectTimers.current[projectId]=setTimeout(()=>void saveProject(projectId,value),350)}
+ function selectLesson(next:string){if(busy)return;focusLesson.current=true;setSelection(n=>n+1);setId(next);setStage('understand');setPage('learn');setDrawer(false);setSolution(null);setError('');setLoot(null);location.hash='learn/'+next;setState(old=>old?{...old,currentLesson:next}:old);void api('/current',{lessonId:next}).catch(()=>setSaveStatus('Could not save your place · server not reachable'))}
+ if(!state||!lessons.length)return <main className="loading-screen"><SessionBanner/><CodeXml size={44}/><h1>{error?'Could not load Engineering Workshop':'Loading Engineering Workshop…'}</h1>{error?<>{error!==connectMessage&&<p>{error}</p>}<button className="primary-button" onClick={()=>location.reload()}>Reload</button></>:<LoaderCircle size={23} className="spin"/>}</main>
  const lessonsOpen=wide?docked:drawer
- function toggleLessons(){if(!wide){setDrawer(open=>!open);return}const next=!docked;setDocked(next);savePref(lessonsPanelKey,next?'open':'closed')}
+ function showDrawer(open:boolean){if(!wide){setDrawer(open);return}setDocked(open);savePref(lessonsPanelKey,open?'open':'closed')}
+ // Each button opens the drawer on its own view, switches an open drawer to it, or closes the drawer when it already shows that view.
+ function toggleDrawer(view:DrawerView){if(lessonsOpen&&drawerView===view){closeLessons();return}setDrawerView(view);showDrawer(true)}
+ function showTerm(term:string){setGlossaryQuery(term);setDrawerView('glossary');showDrawer(true)}
+ const label=(lessonId:string)=>lessonLabel(lessonId,lessons,courses)
  function resizeReader(value:number,done:boolean){setReaderWidth(value);if(done)savePref(readerWidthKey,String(value))}
  function changeEditorPrefs(next:EditorPrefs){setEditorPrefs(next);savePref(editorKey,JSON.stringify(next))}
  // All lessons is a view inside Progress, so the Progress tab stays marked on it.
@@ -109,18 +131,20 @@ export default function App(){
  function skipToContent(e:MouseEvent){e.preventDefault();const main=document.querySelector<HTMLElement>('main')||document.querySelector<HTMLElement>('.app-body');if(!main)return;main.tabIndex=-1;main.focus()}
  const lesson=lessons.find(l=>l.id===id)||lessons[0];const course=courses.find(c=>c.id===lesson.course)!;const inCourse=lessons.filter(l=>l.course===lesson.course);const position=lessons.indexOf(lesson)
  const code=cache[id]?.code??state.drafts[id]??lesson.starter;const notes=cache[id]?.notes??state.notes[id]??'';const completed=!!state.completed[id]
- async function run(mode:'run'|'check'){if(busy)return;setBusy(true);setError('');try{await save(id,{code,notes,updatedAt:Date.now()});const result=await api<RunResult>('/run',{lessonId:id,code,mode});setResults(old=>({...old,[id]:result}));if(result.state)setState(result.state);if(!completed&&result.state?.completed[id]&&game?.enabled)void notifyLoot(id,lesson.title)}catch(e){setError((e as Error).message)}finally{setBusy(false)}}
+ async function run(mode:'run'|'check'){if(busy)return;setBusy(true);setError('');try{
+  // Save now. The draft's pending save is older, and would come back with applied:false.
+  clearTimeout(timers.current[id]);await save(id,{code,notes,updatedAt:Date.now()});const result=await api<RunResult>('/run',{lessonId:id,code,mode});setResults(old=>({...old,[id]:result}));if(result.state)setState(result.state);if(!completed&&result.state?.completed[id]&&game?.enabled)void notifyLoot(id,lesson.title)}catch(e){setError((e as Error).message)}finally{setBusy(false)}}
  async function runExample(){if(busy)return;setStage('example');setBusy(true);try{const result=await api<RunResult>('/example',{lessonId:id});setExampleResults(old=>({...old,[id]:result}))}catch(e){setError((e as Error).message)}finally{setBusy(false)}}
  async function notifyLoot(lessonId:string,title:string){try{const g=await gameApi.state();setGame(summarize(g));if(g.enabled)setLoot({lessonId,lesson:title,chest:g.chests.unopened.find(c=>c.source==='lesson:'+lessonId)||null,battles:g.battles.available})}catch{/* rewards are derived from progress, so a missed toast loses nothing */}}
  async function showSolution(){try{const r=await api<{solution:string}>('/solution/'+id);setSolution(r.solution)}catch(e){setError((e as Error).message)}}
- async function backup(){await Promise.all([...Object.entries(cacheRef.current).map(([lessonId,draft])=>api('/draft',{lessonId,...draft})),...Object.entries(library.readingState).map(([bookId,reading])=>api('/library/state',{bookId,...reading})),...Object.entries(portfolioRef.current.projectState).filter(([projectId])=>portfolioRef.current.projects.some(p=>p.id===projectId)).map(([projectId,value])=>api('/project/state',{projectId,...value}))]);return api<{url:string;filename:string}>('/backup',{})}
- return <div className={'app'+(editorPrefs.dark?' code-dark':'')}><a className="skip-link" href="#main-content" onClick={skipToContent}>Skip to main content</a><header className="app-header"><div className="brand-area"><button className="brand" onClick={()=>showPage('paths')}><CodeXml size={29}/><span>Engineering Workshop</span></button></div><nav aria-label="Main navigation">{(game?.enabled?['paths','learn','projects','books','progress','hero'] as const:['paths','learn','projects','books','progress'] as const).map(p=><button key={p} className={navPage===p?'active':''} aria-current={navPage===p?'page':undefined} onClick={()=>showPage(p)}>{p[0].toUpperCase()+p.slice(1)}{p==='hero'&&game&&game.unopened>0&&<span className="nav-badge" aria-label={`${game.unopened} unopened chests`}>{game.unopened}</span>}</button>)}</nav><div className="header-right"><p className={'runtime-status'+(online?'':' offline')} role="status" title={online?'Code runs on this computer':'Server not reachable'}><span aria-hidden="true"/>{online?'Code runs on this computer':'Server not reachable'}</p><button className="icon-button" aria-label="Open settings" onClick={()=>setSettings(true)}><SettingsIcon size={20}/></button></div></header>
+ async function backup(){await Promise.all([...Object.entries(cacheRef.current).map(([lessonId,draft])=>api('/draft',{lessonId,...draft})),...Object.entries(library.readingState).filter(([bookId])=>library.books.some(book=>book.id===bookId)).map(([bookId,reading])=>api('/library/state',{bookId,...reading})),...Object.entries(portfolioRef.current.projectState).filter(([projectId])=>portfolioRef.current.projects.some(p=>p.id===projectId)).map(([projectId,value])=>api('/project/state',{projectId,...value}))]);return api<{url:string;filename:string}>('/backup',{})}
+ return <div className={'app'+(editorPrefs.dark?' code-dark':'')}><a className="skip-link" href="#main-content" onClick={skipToContent}>Skip to main content</a><header className="app-header"><div className="brand-area"><button className="brand" onClick={()=>showPage('paths')}><CodeXml size={29}/><span>Engineering Workshop</span></button></div><nav aria-label="Main navigation">{(game?.enabled?['paths','learn','projects','books','progress','hero'] as const:['paths','learn','projects','books','progress'] as const).map(p=><button key={p} className={navPage===p?'active':''} aria-current={navPage===p?'page':undefined} onClick={()=>showPage(p)}>{p[0].toUpperCase()+p.slice(1)}{p==='hero'&&game&&game.unopened>0&&<span className="nav-badge" aria-label={`${game.unopened} unopened chests`}>{game.unopened}</span>}</button>)}</nav><div className="header-right"><p className={'runtime-status'+(online?'':' offline')} role="status" title={online?'Code runs on this computer':'Server not reachable'}><span aria-hidden="true"/>{online?'Code runs on this computer':'Server not reachable'}</p><AssistantButton/><button className="icon-button" aria-label="Open settings" onClick={()=>setSettings(true)}><SettingsIcon size={20}/></button></div></header><SessionBanner/>
  {loot&&page!=='hero'&&page!=='learn'&&<LootToast notice={loot} onClose={closeLoot}/>}
   {error&&<div role="alert" className="error-toast"><span>{error}</span><button aria-label="Dismiss error" onClick={()=>setError('')}><X size={17}/></button></div>}
- <div className="app-body">{page==='learn'&&<Curriculum courses={courses} lessons={lessons} state={state} current={lesson} onSelect={selectLesson} open={lessonsOpen} overlay={!wide} onClose={closeLessons}/>}
- {page==='paths'?<Paths courses={courses} lessons={lessons} state={state} portfolio={portfolio} onSelect={selectLesson} onProjects={showProjects} onPractice={()=>showPage('practice')}/>:page==='projects'?<Projects key={projectTrack} data={portfolio} courses={courses} lessons={lessons} state={state} selected={projectId} initialFilter={projectTrack} onSelectProject={selectProject} onLesson={selectLesson} onChange={updateProject} saveStatus={projectSave}/>:page==='books'?<Suspense fallback={<p className="book-hint">Loading books…</p>}><BookLibrary data={library} selection={bookSelection} onLesson={selectLesson} onGuidesSaved={refreshGame} onImported={result=>setLibrary(old=>{
+ <div className="app-body">{page==='learn'&&<Curriculum courses={courses} lessons={lessons} state={state} current={lesson} onSelect={selectLesson} open={lessonsOpen} overlay={!wide} onClose={closeLessons} view={drawerView} onView={setDrawerView} glossary={glossary} query={glossaryQuery} onQuery={setGlossaryQuery} label={label}/>}
+ {page==='paths'?<Paths courses={courses} lessons={lessons} state={state} portfolio={portfolio} onSelect={selectLesson} onProjects={showProjects} onPractice={()=>showPage('practice')}/>:page==='projects'?<Projects key={projectTrack} data={portfolio} gameEnabled={!!game?.enabled} courses={courses} lessons={lessons} state={state} selected={projectId} initialFilter={projectTrack} onSelectProject={selectProject} onLesson={selectLesson} onChange={updateProject} saveStatus={projectSave}/>:page==='books'?<Suspense fallback={<p className="book-hint">Loading books…</p>}><BookLibrary data={library} selection={bookSelection} onLesson={selectLesson} onGuidesSaved={refreshGame} onImported={result=>setLibrary(old=>{
       const id=result.book.id, current=old.readingState[id], incoming=result.readingState
       return {...old,books:[...old.books.filter(book=>book.id!==id),result.book],guides:[...old.guides.filter(guide=>guide.bookId!==id),...result.guides],readingState:{...old.readingState,...(incoming&&(!current||incoming.updatedAt>current.updatedAt)?{[id]:incoming}:{})}}
-    })} onRemoved={id=>setLibrary(old=>({...old,books:old.books.filter(book=>book.id!==id),guides:old.guides.filter(guide=>guide.bookId!==id)}))} onState={(bookId,value)=>setLibrary(old=>({...old,readingState:{...old.readingState,[bookId]:value}}))}/></Suspense>:page==='hero'?<Suspense fallback={<p className="book-hint">Opening the armory…</p>}><HeroPage onSummary={setGame}/></Suspense>:page==='learn'?<main className={'learning-layout stage-'+stage} inert={!wide&&drawer} style={{'--reader-width':readerWidth+'%'} as CSSProperties}><LessonReader key={'reader-'+id} lessonsOpen={lessonsOpen} onToggleLessons={toggleLessons} readings={library.guides.filter(g=>g.lessons.includes(lesson.id))} stage={stage} onStage={setStage} onLesson={selectLesson} allCourses={courses} lesson={lesson} course={course} index={inCourse.indexOf(lesson)} count={inCourse.length} notes={notes} onNotes={s=>updateDraft(id,code,s)} onSolution={showSolution} onPath={()=>showPage('paths')}/>{stage==='example'&&<GuidedExample lesson={lesson} result={exampleResults[id]||null} busy={busy} onRun={runExample} onPractice={()=>setStage('practice')}/>}{stage==='practice'&&<><PanelDivider value={readerWidth} onChange={resizeReader}/><Workspace key={'workspace-'+id} lesson={lesson} code={code} onCode={s=>updateDraft(id,s,notes)} onRun={run} busy={busy} result={results[id]||null} done={completed} onPrevious={()=>selectLesson(lessons[position-1].id)} onNext={()=>selectLesson(lessons[position+1].id)} hasPrevious={position>0} hasNext={position<lessons.length-1} saveStatus={saveStatus} reward={loot?.lessonId===id?loot:null} editor={editorPrefs}/></>}</main>:<Overview page={page} courses={courses} lessons={lessons} state={state} drafts={cache} onSelect={selectLesson}/>}</div>
+    })} onRemoved={id=>setLibrary(old=>({...old,books:old.books.filter(book=>book.id!==id),guides:old.guides.filter(guide=>guide.bookId!==id)}))} onState={(bookId,value)=>setLibrary(old=>({...old,readingState:{...old.readingState,[bookId]:value}}))}/></Suspense>:page==='hero'?<Suspense fallback={<p className="book-hint">Opening the armory…</p>}><HeroPage onSummary={setGame}/></Suspense>:page==='learn'?<main className={'learning-layout stage-'+stage} inert={!wide&&drawer} style={{'--reader-width':readerWidth+'%'} as CSSProperties}><LessonReader key={'reader-'+id} lessonsOpen={lessonsOpen&&drawerView==='lessons'} onToggleLessons={()=>toggleDrawer('lessons')} glossaryOpen={lessonsOpen&&drawerView==='glossary'} onToggleGlossary={()=>toggleDrawer('glossary')} glossary={glossaryById} onTerm={showTerm} label={label} completed={state.completed} readings={library.guides.filter(g=>g.lessons.includes(lesson.id))} stage={stage} onStage={setStage} onLesson={selectLesson} allCourses={courses} lesson={lesson} course={course} index={inCourse.indexOf(lesson)} count={inCourse.length} notes={notes} onNotes={s=>updateDraft(id,code,s)} onSolution={showSolution} onPath={()=>showPage('paths')}/>{stage==='example'&&<GuidedExample lesson={lesson} result={exampleResults[id]||null} busy={busy} onRun={runExample} onPractice={()=>setStage('practice')}/>}{stage==='practice'&&<><PanelDivider value={readerWidth} onChange={resizeReader}/><Workspace key={'workspace-'+id} lesson={lesson} code={code} onCode={s=>updateDraft(id,s,notes)} onRun={run} busy={busy} result={results[id]||null} done={completed} onPrevious={()=>selectLesson(lessons[position-1].id)} onNext={()=>selectLesson(lessons[position+1].id)} hasPrevious={position>0} hasNext={position<lessons.length-1} saveStatus={saveStatus} reward={loot?.lessonId===id?loot:null} editor={editorPrefs}/></>}</main>:<Overview page={page} courses={courses} lessons={lessons} state={state} drafts={cache} onSelect={selectLesson}/>}<AssistantDock context={page==='learn'?{kind:'lesson',lesson,course,stage,code,notes,result:results[id]||null,exampleResult:exampleResults[id]||null}:{kind:'page',name:pageNames[page]}}/></div>
  {settings&&<Settings editor={editorPrefs} onEditor={changeEditorPrefs} runtime={runtime} onBackup={backup} onClose={()=>setSettings(false)} game={game} onGameToggle={async enabled=>{const {game:g}=await gameApi.settings(enabled);setGame(summarize(g));if(!enabled){setLoot(null);if(page==='hero')showPage('paths')}}}/>} {solution&&<Solution lesson={lesson} code={solution} draft={code} onClose={()=>setSolution(null)} onLoad={()=>{updateDraft(id,solution,notes);setStage('practice');setSolution(null)}}/>}</div>
 }

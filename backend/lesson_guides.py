@@ -1,32 +1,25 @@
 """Original small examples and orientation, taught before the independent tasks."""
 from textwrap import dedent
+from glossary import orientation_terms
 
 ORIENTATION = {'python': {'welcome': 'This path teaches the Python that the other paths use. It starts '
                        'with the first line of a program and needs no coding experience.',
             'goal': 'Write and fix the small functions, lists and loops that ML foundations '
                     'starts with.',
             'prerequisites': [],
-            'terms': [['Program', 'A list of instructions that Python runs from top to bottom.'],
-                      ['Variable', 'A name that holds a value, such as items = 3.'],
-                      ['Output', 'What print shows when the program runs.']]},
+            'terms': orientation_terms('program', 'variable', 'output')},
  'foundations': {'welcome': 'Machine learning adjusts a function’s parameters using examples. '
                             'Begin with a line whose weight and bias you can inspect.',
                  'goal': 'Explain how a prediction changes, then learn its parameters from '
                          'data.',
                  'prerequisites': ['python'],
-                 'terms': [['Model', 'A function that turns an input into a prediction.'],
-                           ['Parameter',
-                            'An adjustable number inside the model, such as weight or bias.'],
-                           ['Training',
-                            'Repeatedly changing parameters to reduce error on examples.']]},
+                 'terms': orientation_terms('model', 'parameter-ml', 'training')},
  'pytorch': {'welcome': 'PyTorch stores numbers in tensors and records the operations needed '
                         'to calculate gradients. Use it to build the training loop from '
                         'Foundations.',
              'goal': 'Train a small model using automatic gradients and an optimizer.',
              'prerequisites': ['python', 'foundations'],
-             'terms': [['Tensor', 'An array of numbers with a shape, data type, and device.'],
-                       ['Gradient', 'How much a small parameter change affects the loss.'],
-                       ['Autograd', 'PyTorch’s automatic gradient calculation.']]},
+             'terms': orientation_terms('tensor', 'gradient', 'autograd')},
  'tensorflow': {'welcome': 'TensorFlow records gradients and provides Keras layers for '
                            'building models. This path uses the Foundations training loop. '
                            'PyTorch is optional. Matrix multiplication follows NumPy’s shape '
@@ -34,19 +27,14 @@ ORIENTATION = {'python': {'welcome': 'This path teaches the Python that the othe
                            'outputs], so the inner sizes must match.',
                 'goal': 'Train a Keras model and explain each training step.',
                 'prerequisites': ['python', 'foundations'],
-                'terms': [['Variable', 'A tensor whose value can be updated during training.'],
-                          ['GradientTape',
-                           'A context that records operations for differentiation.'],
-                          ['Keras', 'A layer and training API used with TensorFlow here.']]},
+                'terms': orientation_terms('tf-variable', 'gradienttape', 'keras')},
  'modern': {'welcome': 'An AI app is a chain of steps. A tokenizer turns text into IDs, a '
                        'transformer produces vectors, and retrieval finds relevant text. '
                        'Everything runs locally without downloads or a model service. Prompt '
                        'and retrieval lessons do not generate answers.',
             'goal': 'Build and inspect the inputs and data used by an AI application.',
             'prerequisites': ['python', 'pytorch'],
-            'terms': [['Token', 'A text piece represented by an integer ID.'],
-                      ['Checkpoint', 'Saved model parameters learned during training.'],
-                      ['Retrieval', 'Selecting relevant source material for a query.']]},
+            'terms': orientation_terms('token', 'checkpoint', 'retrieval')},
  'cuda': {'welcome': 'A GPU launches many threads, each assigned part of an array. This path '
                      'uses NumPy arrays and Numba’s CUDA API, so you need ML foundations and basic '
                      'NumPy first: creating an array, its shape and dtype, and indexing. Kernels '
@@ -55,17 +43,13 @@ ORIENTATION = {'python': {'welcome': 'This path teaches the Python that the othe
                      'hardware.',
           'goal': 'Write kernels with correct indices, bounds checks, and memory transfers.',
           'prerequisites': ['python', 'foundations'],
-          'terms': [['Kernel', 'A function run by every thread in a launch.'],
-                    ['Block', 'A group of threads that can cooperate.'],
-                    ['Global index', 'A thread’s position across the whole launch.']]},
+          'terms': orientation_terms('kernel', 'block', 'global-index')},
  'harness': {'welcome': 'An agent harness is the software that runs a model’s proposed '
                         'actions. Here you build and test its rules with recorded data. No '
                         'language model or external tool runs.',
              'goal': 'Control which actions a run can take and check whether it succeeded.',
              'prerequisites': ['python'],
-             'terms': [['State', 'A named phase of a run, such as running or waiting.'],
-                       ['Tool call', 'A proposed tool name and its arguments.'],
-                       ['Trace', 'A recorded sequence of what happened during a run.']]},
+             'terms': orientation_terms('state-run', 'tool-call', 'trace')},
  'backend': {'welcome': 'A backend receives requests from a client and returns results. '
                         'Practice the functions that validate and track those requests using '
                         'in-memory data. A deployed service also needs storage, '
@@ -73,39 +57,27 @@ ORIENTATION = {'python': {'welcome': 'This path teaches the Python that the othe
                         'Python: functions, dictionaries, sets, isinstance and raise.',
              'goal': 'Handle invalid requests and retries without losing track of the result.',
              'prerequisites': ['python'],
-             'terms': [['Validation', 'Checking input types and values before using them.'],
-                       ['Idempotency',
-                        'Repeated requests have the effect of a single accepted request.'],
-                       ['Cursor', 'A stable position from which to continue a result list.']]},
+             'terms': orientation_terms('validation', 'idempotency', 'cursor')},
  'web': {'welcome': 'UI state is the data that determines what an interface displays. Practice '
                     'changing it with small JavaScript functions. The exercises run in '
-                    'Node.js. Projects show how the functions fit into a browser app.',
+                    'Node.js. Projects show how the functions fit into a browser app. The '
+                    'first lesson shows the JavaScript forms of the Python from zero basics.',
          'goal': 'Keep the displayed state correct when requests or saved data change.',
-         'prerequisites': [],
-         'terms': [['State', 'The data that determines what the UI displays.'],
-                   ['Reducer',
-                    'A function that maps previous state and an action to next state.'],
-                   ['Immutable update',
-                    'Creating a changed copy instead of modifying the original.']]},
+         'prerequisites': ['python'],
+         'terms': orientation_terms('state-ui', 'reducer', 'immutable-update')},
  'rl': {'welcome': 'In reinforcement learning, an agent chooses actions and learns from '
                    'rewards. Follow one episode through its steps, then calculate what those '
                    'rewards teach. These exercises use a small corridor and action-value '
                    'lists. They do not train a game agent.',
         'goal': 'Explain how rewards and ending signals affect an action-value update.',
         'prerequisites': ['python', 'foundations'],
-        'terms': [['Observation', 'The information an environment gives the agent.'],
-                  ['Reward', 'A numerical feedback signal after an action.'],
-                  ['Episode',
-                   'A sequence of actions and rewards ending at a goal or cutoff.']]},
+        'terms': orientation_terms('observation', 'reward', 'episode')},
  'data': {'welcome': 'Data can arrive twice, arrive out of order, or be too large to search as '
                      'one piece. Start with small inputs whose expected results you can work '
                      'out by hand.',
           'goal': 'Prepare text for retrieval and measure how many relevant results it finds.',
           'prerequisites': ['python'],
-          'terms': [['Revision', 'A source-defined version of a record.'],
-                    ['Chunk', 'A bounded piece of a larger document.'],
-                    ['Recall',
-                     'The fraction of expected relevant items that were retrieved.']]},
+          'terms': orientation_terms('revision', 'chunk', 'recall')},
  'reliability': {'welcome': 'Before you run a service, decide what should happen when its '
                             'work fails. These exercises calculate retry schedules, redact log '
                             'fields, and check measurements. They do not call services or '
@@ -114,13 +86,7 @@ ORIENTATION = {'python': {'welcome': 'This path teaches the Python that the othe
                  'goal': 'Use failure cases and measurements to decide when to retry or '
                          'release.',
                  'prerequisites': ['python', 'backend'],
-                 'terms': [['Retry budget',
-                            'A limit on how long or how often an operation may retry.'],
-                           ['Desired state',
-                            'The configuration a system is intended to reach.'],
-                           ['Percentile',
-                            'A value below which a specified proportion of measurements '
-                            'fall.']]},
+                 'terms': orientation_terms('retry-budget', 'desired-state', 'percentile')},
  'interactive': {'welcome': 'Interactive apps combine state changes with elapsed time and '
                             'geometry. Practice those calculations as functions, then use the '
                             'project steps to find them in an app. The exercises are plain '
@@ -128,12 +94,7 @@ ORIENTATION = {'python': {'welcome': 'This path teaches the Python that the othe
                  'goal': 'Keep app state and motion predictable across pauses and repeated '
                          'events.',
                  'prerequisites': ['python'],
-                 'terms': [['Lifecycle',
-                            'The states an app moves through, such as active, paused, and '
-                            'stopped.'],
-                           ['Delta time', 'Elapsed time since the previous update.'],
-                           ['Aspect ratio',
-                            'Width divided by height; keeping it fixed avoids stretching.']]}}
+                 'terms': orientation_terms('lifecycle', 'delta-time', 'aspect-ratio')}}
 GUIDES={}
 def add(id,code,output,steps,question,choices,answer,feedback):
  GUIDES[id]=dict(code=dedent(code).strip()+'\n',output=output,steps=steps,question=question,choices=choices,answer=answer,feedback=feedback)
@@ -249,7 +210,7 @@ def loss(w):
 
 for step in [1, 0.1, 0.001]:
     print(round((loss(0 + step) - loss(0)) / step, 3))
-''','-5.0\n-5.9\n-5.999',['loss(w) works out (w − 3)². ML calls a function that measures error a loss. Each pass prints the slope between w = 0 and w = step, rounded to 3 decimal places.',
+''','-5.0\n-5.9\n-5.999',['loss(w) works out (w − 3)². ML calls a function that measures error a loss. Each pass prints the slope between w = 0 and w = step, rounded: round(number, 3) gives the number rounded to 3 decimal places, so round(-5.9994, 3) is -5.999.',
  'As step shrinks, the slope gets closer to −6, the derivative at w = 0. ML foundations lesson 3 calls it the gradient.'],'If loss(0 + step) - loss(0) becomes loss(3 + step) - loss(3), what is the last line printed?',['-5.999', '6.0', '0.001'],2,'At w = 3 the curve is at its lowest point, where it is flat. The slopes are 1.0, 0.1 and 0.001, shrinking towards 0.')
 add('python-13','''
 def count_above(values, limit):
@@ -274,10 +235,13 @@ print(prediction)
 add('foundations-2','''
 predictions = [3, 5]
 targets = [1, 5]
-squared_errors = [(p - t) ** 2 for p, t in zip(predictions, targets)]
+pairs = list(zip(predictions, targets))
+print(pairs)
+squared_errors = [(p - t) ** 2 for p, t in pairs]
 print(squared_errors)
 print(sum(squared_errors) / len(squared_errors))
-''','[4, 0]\n2.0',['Subtract each correct target from its prediction, then square the difference.','Average the squared errors: (4 + 0) / 2.'], 'If predictions becomes [3, 7], what mean squared error is printed?', ['4.0', '2.0', '8.0'],0,'Both errors are 2, so both squares are 4. Their mean is 4.')
+''','[(3, 1), (5, 5)]\n[4, 0]\n2.0',['The first step pairs the lists. zip(predictions, targets) matches items by position: 3 with 1, then 5 with 5. list(...) collects those pairs into a list of tuples, so print can show them.',
+ 'The second step squares each error. for p, t in pairs unpacks each pair into two names, p and t. (p - t) ** 2 squares the difference: (3 - 1) ** 2 = 4 and (5 - 5) ** 2 = 0. The square brackets around the line collect the results into a new list; this form is a list comprehension. The last line averages them: (4 + 0) / 2 = 2.0.'], 'If predictions becomes [3, 7], what mean squared error is printed?', ['4.0', '2.0', '8.0'],0,'The pairs become (3, 1) and (7, 5). Both errors are 2, so both squares are 4. Their mean is 4.0.')
 add('foundations-3','''
 weight = 0.0
 target = 3.0
@@ -564,6 +528,19 @@ remaining = [item_id for item_id in ids if item_id > after]
 print(remaining[:1])
 ''','[9]',['A cursor names an ordering position rather than a page number.','Select IDs after that position, then apply the page size.'],'If after becomes 9, what is printed?',['[12]', '[9]', '[9, 12]'],0,'Only ID 12 is greater than 9. The one-item slice contains [12].')
 add('backend-4',"required_health = [True, False]\nprint(all(required_health))",'False',['A process can be alive while a required dependency is unhealthy.','Readiness is false when any required dependency cannot serve work.'],'If required_health becomes [], what does all(required_health) print?',['True', 'False', 'It raises ValueError'],0,'all([]) is True: no required dependency is failing.')
+add('web-0','''
+const prices = [2, 5, 3];
+let total = 0;
+for (const price of prices) {
+  total += price;
+}
+console.log(total);
+const item = {name: "tea", price: 2};
+console.log(item.name, item.price === 2);
+console.log(prices.map(price => price * 2));
+console.log(prices.filter(price => price > 2));
+''','10\ntea true\n[ 4, 10, 6 ]\n[ 5, 3 ]',['let total = 0 makes a name that can change; const makes one that cannot. for (const price of prices) visits 2, 5 and 3 in turn, like for price in prices:, so total ends at 10.',
+ 'item.name reads the name field of the object, and item.price === 2 is true because the value and the type match. map makes a new array with each price doubled. filter keeps only the prices above 2. console.log shows arrays with spaces inside the brackets.'],'If price > 2 becomes price > 3, what is the last line printed?',['[ 5, 3 ]', '[ 5 ]', '[ 2, 3 ]'],1,'Only 5 is greater than 3. filter keeps the items for which the function returns true, so the new array holds just 5.')
 add('web-1',"const before = {count: 1, label: 'runs'};\nconst after = {...before, count: before.count + 2};\nconsole.log(before.count, after.count);",'1 3',['Object spread creates a new object containing the previous fields.','Overriding count on the copy leaves the original count unchanged.'],'What is before.count after the update?',['3', '1', 'undefined'],1,'The original count stays 1. The exercise puts this update in a reducer function.')
 add('web-2',"const currentRequest = 3;\nconst responseRequest = 2;\nconsole.log(currentRequest === responseRequest);",'false',['Each request receives an identity.','An old response must not replace the currently requested result.'],'If responseRequest becomes 3, what comparison result is printed?',['false', 'true', '3'],1,'Both IDs are 3, so strict equality returns true.')
 add('web-3',"const source = ['GPU notes', 'API notes'];\nconst query = ' gpu '.trim().toLowerCase();\nconsole.log(JSON.stringify(source.filter(title => title.toLowerCase().includes(query))));",'["GPU notes"]',['Normalize both the query and the candidate text for a case-insensitive comparison.','filter returns a new array, leaving source intact.'],'If the query text becomes " notes ", what list is printed?',['["API notes"]', '["GPU notes","API notes"]', '["GPU notes"]'],1,'After trimming and lowercasing, notes appears in both titles.')

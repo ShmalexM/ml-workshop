@@ -24,8 +24,18 @@ param([switch]$Uninstall, [switch]$Purge)
     # The progress bar makes downloads very slow in Windows PowerShell 5.1.
     $ProgressPreference = 'SilentlyContinue'
     $ReleaseUrl = 'https://github.com/ShmalexM/ml-workshop/releases/latest/download'
-    $UvVersion = '0.12.23'  # Keep in step with install.sh.
-    $NodeMajor = 24  # Same major version as .nvmrc.
+    # uv and Node.js versions and their SHA-256 hashes are pinned here and in install.sh.
+    # CONTRIBUTING.md explains how to update them.
+    $UvVersion = '0.12.23'
+    $NodeVersion = '24.21.0'  # Node.js 24 LTS, the major version in .nvmrc.
+    # The SHA-256 hash of each uv and Node.js download, from the uv release and the signed
+    # SHASUMS256.txt of the Node.js release.
+    $Pinned = @{
+        '0.12.23/uv-x86_64-pc-windows-msvc.zip' = '75d05de6762778c31ee183398de7dd15093fad0ed90b1f236d8205ea5ec00c90'
+        '0.12.23/uv-aarch64-pc-windows-msvc.zip' = '13294e232ececbe709c06b74e6ced06f2a225ea5591476685362f22be56a50d5'
+        'node-v24.21.0-win-x64.zip' = '158f7685b44de51f6c0df1d153526cbcd3e1bc739a8dfc607721cef75de9e541'
+        'node-v24.21.0-win-arm64.zip' = '8779b1bde1d39f8d420e3b57aa657b39891af434d3de44a919044cec06785921'
+    }
     $MlNote = 'The PyTorch, TensorFlow, Modern AI stack and CUDA lessons need them; all other lessons work.'
     $S = @{ SavedEnv = @{}; Log = $null; Shortcuts = $false; NodePlan = 'keep' }
 
@@ -90,19 +100,24 @@ param([switch]$Uninstall, [switch]$Purge)
         return $false
     }
 
+    # Check that $File, the download named $Name, has the SHA-256 hash $Expected.
+    function Test-Sha256([string]$File, [string]$Name, [string]$Expected) {
+        $actual = (Get-FileHash -LiteralPath $File -Algorithm SHA256).Hash.ToLowerInvariant()
+        Write-Log "sha256 ${Name}: expected $Expected, got $actual"
+        return [bool]($Expected -and $Expected.ToLowerInvariant() -eq $actual)
+    }
+
     # Check $File against the checksum listed for $Name in $SumsFile.
     function Test-Checksum([string]$File, [string]$Name, [string]$SumsFile) {
         $expected = $null
         foreach ($line in Get-Content -LiteralPath $SumsFile) {
             $parts = $line.Trim() -split '\s+', 2
             if ($parts.Count -eq 2 -and $parts[1].TrimStart('*') -eq $Name) {
-                $expected = $parts[0].ToLowerInvariant()
+                $expected = $parts[0]
                 break
             }
         }
-        $actual = (Get-FileHash -LiteralPath $File -Algorithm SHA256).Hash.ToLowerInvariant()
-        Write-Log "sha256 ${Name}: expected $expected, got $actual"
-        return [bool]($expected -and $expected -eq $actual)
+        return Test-Sha256 $File $Name $expected
     }
 
     function Expand-Zip([string]$Zip, [string]$Destination) {
@@ -118,17 +133,22 @@ param([switch]$Uninstall, [switch]$Purge)
     }
 
     # Delete a folder. Returns $true when it is gone.
+    # Directory.Delete does not follow junctions or symbolic links; it removes the link only.
     function Remove-Tree([string]$Path) {
         if (-not (Test-Path -LiteralPath $Path)) { return $true }
         try {
             [System.IO.Directory]::Delete($Path, $true)
         } catch {
             Write-Log "  delete ${Path}: $($_.Exception.Message)"
+            if (-not (Test-Path -LiteralPath $Path)) { return $true }
+            # robocopy would empty the folder that a link points to, so use it on real folders only.
+            if ([System.IO.File]::GetAttributes($Path) -band [System.IO.FileAttributes]::ReparsePoint) { return $false }
             # robocopy can empty folders whose paths exceed 260 characters, as some Python packages do.
+            # /XJ skips junctions and symbolic links inside $Path, so nothing outside it is deleted.
             $empty = Join-Path ([System.IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString())
             New-Folder $empty
             $ErrorActionPreference = 'Continue'
-            & (Join-Path $env:SystemRoot 'System32\robocopy.exe') $empty $Path /MIR /R:1 /W:1 /NFL /NDL /NJH /NJS /NP 2>&1 |
+            & (Join-Path $env:SystemRoot 'System32\robocopy.exe') $empty $Path /MIR /XJ /R:1 /W:1 /NFL /NDL /NJH /NJS /NP 2>&1 |
                 ForEach-Object { "$_" } | Out-File -LiteralPath $S.Log -Append -Encoding UTF8
             $ErrorActionPreference = 'Stop'
             [System.IO.Directory]::Delete($empty)
@@ -230,10 +250,10 @@ param([switch]$Uninstall, [switch]$Purge)
         $name = "uv-$($S.UvTarget).zip"
         $zip = Join-Path $S.Work $name
         $url = "https://github.com/astral-sh/uv/releases/download/$UvVersion/$name"
-        if (-not (Save-Url $url $zip) -or -not (Save-Url "$url.sha256" "$zip.sha256")) {
+        if (-not (Save-Url $url $zip)) {
             Fail 'Could not download uv, which installs Python. Check your internet connection and try again.'
         }
-        if (-not (Test-Checksum $zip $name "$zip.sha256")) { Fail 'The uv download is damaged. Run the command again.' }
+        if (-not (Test-Sha256 $zip $name $Pinned["$UvVersion/$name"])) { Fail 'The uv download is damaged. Run the command again.' }
         $folder = Join-Path $S.Work 'uv'
         if (-not (Expand-Zip $zip $folder)) { Fail 'Could not unpack uv.' }
         New-Folder (Split-Path -Parent $uv)
@@ -264,7 +284,8 @@ param([switch]$Uninstall, [switch]$Purge)
         if (-not $S.Python) { Fail 'Could not find the Python 3.12 that was just installed.' }
     }
 
-    # scripts\setup.py creates app\.venv with this Python and installs the requirements with uv.
+    # scripts\setup.py creates app\.venv with this Python and installs the hash-locked
+    # requirements with uv.
     function Install-Requirements([string[]]$Extra) {
         return Invoke-Logged $S.Python (@((Join-Path $S.Stage 'scripts\setup.py'), '--no-build', '--no-launch') + $Extra)
     }
@@ -311,24 +332,16 @@ param([switch]$Uninstall, [switch]$Purge)
         }
         $current = Join-Path $S.Runtime 'node\node.exe'
         if (-not (Test-Node $current)) { $current = $null }
-        $base = "https://nodejs.org/dist/latest-v$NodeMajor.x"
-        $sums = Join-Path $S.Work 'SHASUMS256.txt'
-        $name = $null
-        if (Save-Url "$base/SHASUMS256.txt" $sums) {
-            $name = Get-Content -LiteralPath $sums | ForEach-Object { ($_.Trim() -split '\s+')[-1] } |
-                Where-Object { $_ -match "^node-v[\d.]+-$($S.NodeTarget)\.zip$" } | Select-Object -First 1
-        }
-        if ($name) {
-            if ($current -and (Get-Output $current @('--version')) -eq ($name -split '-')[1]) { return }
-            Say 'Installing Node.js for the JavaScript lessons...'
-            $zip = Join-Path $S.Work $name
-            $folder = Join-Path $S.Work 'node'
-            $S.NodeNew = Join-Path $folder ($name -replace '\.zip$', '')
-            if ((Save-Url "$base/$name" $zip) -and (Test-Checksum $zip $name $sums) -and (Expand-Zip $zip $folder) -and
-                (Test-Node (Join-Path $S.NodeNew 'node.exe'))) {
-                $S.NodePlan = 'replace'
-                return
-            }
+        if ($current -and (Get-Output $current @('--version')) -eq "v$NodeVersion") { return }
+        Say 'Installing Node.js for the JavaScript lessons...'
+        $name = "node-v$NodeVersion-$($S.NodeTarget).zip"
+        $zip = Join-Path $S.Work $name
+        $folder = Join-Path $S.Work 'node'
+        $S.NodeNew = Join-Path $folder ($name -replace '\.zip$', '')
+        if ((Save-Url "https://nodejs.org/dist/v$NodeVersion/$name" $zip) -and (Test-Sha256 $zip $name $Pinned[$name]) -and
+            (Expand-Zip $zip $folder) -and (Test-Node (Join-Path $S.NodeNew 'node.exe'))) {
+            $S.NodePlan = 'replace'
+            return
         }
         if ($current) {
             Write-Log "Kept Node.js $(Get-Output $current @('--version'))."
@@ -419,7 +432,8 @@ param([switch]$Uninstall, [switch]$Purge)
                 Write-Log ($errors -join [Environment]::NewLine)
                 Fail ('Engineering Workshop is installed but did not start.' + [Environment]::NewLine + ($errors -join ' '))
             }
-            Say "Done. Engineering Workshop is open in your browser at $url"
+            # The launcher prints the address with the session token after #. Show only the address.
+            Say "Done. Engineering Workshop is open in your browser at $("$url".Split('#')[0])"
         }
         Say "Your progress is saved in $($S.Data)."
         if ($S.Shortcuts) {
@@ -463,6 +477,12 @@ param([switch]$Uninstall, [switch]$Purge)
             Say 'Removed Engineering Workshop and your progress.'
         } else {
             Remove-Item -LiteralPath $S.Log -Force
+            # The AI assistant file can hold an API key, which is a billing credential. Progress stays.
+            $assistantFile = Join-Path $S.Data 'assistant.json'
+            if (Test-Path -LiteralPath $assistantFile) {
+                Remove-Item -LiteralPath $assistantFile -Force
+                Say 'Removed the AI assistant settings and API key.'
+            }
             Say "Removed Engineering Workshop. Your progress is still in $($S.Data)."
             Say 'To delete it too, run the uninstall command again with -Purge at the end.'
         }

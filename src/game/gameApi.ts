@@ -11,11 +11,17 @@ export const gameApi={
  summary:()=>api<GameSummary>('/game/summary'),
  create:(name:string,race:string,cls:string)=>api<WithGame>('/game/hero',{name,race,class:cls}),
  open:(source:string)=>api<WithGame<{chest:Chest;items:Item[]}>>('/game/open',{source}),
+ /** Opens every unopened chest in one step, oldest first, as if each were opened in turn. */
+ openAll:()=>api<WithGame<{opened:{chest:Chest;items:Item[]}[]}>>('/game/open-all',{}),
  equip:(itemId:number)=>api<WithGame>('/game/equip',{itemId}),
+ /** Equips several items in one step; the server checks each one like a single equip. */
+ equipMany:(itemIds:number[])=>api<WithGame>('/game/equip-many',{itemIds}),
  unequip:(slot:Slot)=>api<WithGame>('/game/unequip',{slot}),
  discard:(itemIds:number[])=>api<WithGame>('/game/discard',{itemIds}),
  settings:(enabled:boolean)=>api<WithGame>('/game/settings',{enabled}),
  retire:()=>api<WithGame>('/game/retire',{confirm:'RETIRE'}),
+ /** Replaces the whole passive allocation; the server checks ids, the class start, connection, points and that no fight is running. */
+ passives:(allocated:string[])=>api<WithGame>('/game/passives',{allocated}),
  startBattle:()=>api<WithGame<{battle:Battle}>>('/game/battle/start',{}),
  finishBattle:(body:{battleId:number;outcome:'victory'|'defeat'|'retreat';bossDamage:number;kills:number;seconds:number},options?:{keepalive?:boolean})=>api<WithGame<{result:BattleResult}>>('/game/battle/finish',body,options),
 }
