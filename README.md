@@ -4,7 +4,7 @@
 [![Latest release](https://img.shields.io/github/v/release/ShmalexM/ml-workshop)](https://github.com/ShmalexM/ml-workshop/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-Engineering Workshop is an app for learning machine learning and software engineering by writing code. It has 71 short lessons in 13 paths, from Python and ML basics, PyTorch, TensorFlow and CUDA to agent harnesses, backends and web apps. Each lesson explains one idea, shows a small example, and then runs checks on your own code. If you have never written code, start with Python from zero. It teaches the Python that the other paths use, from the first line of a program. Everything runs on your computer and works offline after the install, without an account, an API key or a GPU. It is free and open source under the MIT license.
+Engineering Workshop is an app for learning machine learning and software engineering by writing code. It has 72 short lessons in 13 paths, from Python and ML basics, PyTorch, TensorFlow and CUDA to agent harnesses, backends and web apps. Each lesson explains one idea, shows a small example, and then runs checks on your own code. If you have never written code, start with Python from zero. It teaches the Python that the other paths use, from the first line of a program. Everything runs on your computer and works offline after the install, without an account, an API key or a GPU. It is free and open source under the MIT license.
 
 ![A lesson in the See an example stage: a worked example, its output and a prediction question](docs/guided-lesson-screenshot.jpg)
 
@@ -50,13 +50,13 @@ Everything goes into one folder: `~/.local/share/engineering-workshop` on macOS 
 | CUDA & GPU programming | 6 | Thread/block indexing, bounds, transfers, 2D kernels, and shared memory |
 | Agent harness engineering | 4 | State machines, tool contracts, budgets, and trace evaluation |
 | Backend & API engineering | 4 | Input validation, idempotency, pagination, and readiness |
-| Web app engineering | 4 | JavaScript reducers, stale responses, derived views, and saved-state migration |
+| Web app engineering | 5 | JavaScript for Python learners, reducers, stale responses, derived views, and saved-state migration |
 | Reinforcement learning | 4 | Environment contracts, returns, exploration, and terminal/truncated targets |
 | Data & retrieval engineering | 4 | Revision deduplication, chunking, bounded graph walks, and recall |
 | Shipping & reliability | 4 | Retry budgets, structured redaction, change plans, and release gates |
 | Interactive & native systems | 4 | Lifecycle, frame time, aspect ratios, and event replay |
 
-The exercises are in Python, except the Web app engineering lessons, which use JavaScript. A lesson takes about 8 to 20 minutes.
+The exercises are in Python, except the Web app engineering lessons, which use JavaScript. The first Web lesson shows the JavaScript forms of the Python from zero basics. A lesson takes about 8 to 20 minutes.
 
 Each lesson has three stages: **Understand**, **See an example** and **Try it yourself**. You read a short explanation, run a small example and answer a question about it. Then you write your own code. **Run code** (⌘ Enter, or Ctrl Enter on Linux and Windows) shows the output. **Check answer** (⌘ Shift Enter, or Ctrl Shift Enter) runs the checks and gives you XP the first time they all pass. Hints open one at a time, and the last step after them is **Show solution**. **Show solution** is also at the end of the exercise, so it works at any time, and **Compare with my code** marks the lines that differ from your draft. To leave the editor with the keyboard, press Esc, then Tab. Code suggestions are off unless you turn them on in **Settings**.
 

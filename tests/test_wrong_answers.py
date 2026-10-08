@@ -173,6 +173,14 @@ WRONG_ANSWERS["foundations-5"] = [("accepts missing training statistics", change
 WRONG_ANSWERS["reliability-2"] = [("unimplemented redaction", "def redact(value):\n    return None")]
 WRONG_ANSWERS["interactive-4"] = [("unimplemented progress merge", "def merge_progress(state, events):\n    return None")]
 WRONG_ANSWERS["web-3"] = [("always returns an empty view", "function visibleRows(rows, query) { return []; }")]
+# The JavaScript bridge lesson: the Python habits that JavaScript treats differently.
+WRONG_ANSWERS["web-0"] = [
+    ("compares with == instead of ===", changed("web-0", "result.name === name", "result.name == name")),
+    ("matches part of a name", changed("web-0", "result.name === name", "result.name.includes(name)")),
+    ("returns the matching results instead of their scores", changed(
+        "web-0", ".map(result => result.score)", "")),
+    ("restarts the sum on each pass", changed("web-0", "    sum += score;", "    sum = score;")),
+]
 # The task asks for `return train, validation, test`; a list of the three lists is a different value.
 WRONG_ANSWERS["foundations-4"] = [("returns a list instead of a tuple", changed(
     "foundations-4", "return (rows[:train_end], rows[train_end:val_end], rows[val_end:])",

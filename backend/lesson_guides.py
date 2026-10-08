@@ -79,9 +79,10 @@ ORIENTATION = {'python': {'welcome': 'This path teaches the Python that the othe
                        ['Cursor', 'A stable position from which to continue a result list.']]},
  'web': {'welcome': 'UI state is the data that determines what an interface displays. Practice '
                     'changing it with small JavaScript functions. The exercises run in '
-                    'Node.js. Projects show how the functions fit into a browser app.',
+                    'Node.js. Projects show how the functions fit into a browser app. The '
+                    'first lesson shows the JavaScript forms of the Python from zero basics.',
          'goal': 'Keep the displayed state correct when requests or saved data change.',
-         'prerequisites': [],
+         'prerequisites': ['python'],
          'terms': [['State', 'The data that determines what the UI displays.'],
                    ['Reducer',
                     'A function that maps previous state and an action to next state.'],
@@ -567,6 +568,19 @@ remaining = [item_id for item_id in ids if item_id > after]
 print(remaining[:1])
 ''','[9]',['A cursor names an ordering position rather than a page number.','Select IDs after that position, then apply the page size.'],'If after becomes 9, what is printed?',['[12]', '[9]', '[9, 12]'],0,'Only ID 12 is greater than 9. The one-item slice contains [12].')
 add('backend-4',"required_health = [True, False]\nprint(all(required_health))",'False',['A process can be alive while a required dependency is unhealthy.','Readiness is false when any required dependency cannot serve work.'],'If required_health becomes [], what does all(required_health) print?',['True', 'False', 'It raises ValueError'],0,'all([]) is True: no required dependency is failing.')
+add('web-0','''
+const prices = [2, 5, 3];
+let total = 0;
+for (const price of prices) {
+  total += price;
+}
+console.log(total);
+const item = {name: "tea", price: 2};
+console.log(item.name, item.price === 2);
+console.log(prices.map(price => price * 2));
+console.log(prices.filter(price => price > 2));
+''','10\ntea true\n[ 4, 10, 6 ]\n[ 5, 3 ]',['let total = 0 makes a name that can change; const makes one that cannot. for (const price of prices) visits 2, 5 and 3 in turn, like for price in prices:, so total ends at 10.',
+ 'item.name reads the name field of the object, and item.price === 2 is true because the value and the type match. map makes a new array with each price doubled. filter keeps only the prices above 2. console.log shows arrays with spaces inside the brackets.'],'If price > 2 becomes price > 3, what is the last line printed?',['[ 5, 3 ]', '[ 5 ]', '[ 2, 3 ]'],1,'Only 5 is greater than 3. filter keeps the items for which the function returns true, so the new array holds just 5.')
 add('web-1',"const before = {count: 1, label: 'runs'};\nconst after = {...before, count: before.count + 2};\nconsole.log(before.count, after.count);",'1 3',['Object spread creates a new object containing the previous fields.','Overriding count on the copy leaves the original count unchanged.'],'What is before.count after the update?',['3', '1', 'undefined'],1,'The original count stays 1. The exercise puts this update in a reducer function.')
 add('web-2',"const currentRequest = 3;\nconst responseRequest = 2;\nconsole.log(currentRequest === responseRequest);",'false',['Each request receives an identity.','An old response must not replace the currently requested result.'],'If responseRequest becomes 3, what comparison result is printed?',['false', 'true', '3'],1,'Both IDs are 3, so strict equality returns true.')
 add('web-3',"const source = ['GPU notes', 'API notes'];\nconst query = ' gpu '.trim().toLowerCase();\nconsole.log(JSON.stringify(source.filter(title => title.toLowerCase().includes(query))));",'["GPU notes"]',['Normalize both the query and the candidate text for a case-insensitive comparison.','filter returns a new array, leaving source intact.'],'If the query text becomes " notes ", what list is printed?',['["API notes"]', '["GPU notes","API notes"]', '["GPU notes"]'],1,'After trimming and lowercasing, notes appears in both titles.')

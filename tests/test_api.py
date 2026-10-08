@@ -146,7 +146,7 @@ class ApiTests(unittest.TestCase):
         self.assertNotIn('foundations-2',self.request('/api/state')['completed'])
     def test_curriculum_does_not_leak_answers(self):
         lessons=self.request('/api/curriculum')['lessons']
-        self.assertEqual(len(lessons),71)
+        self.assertEqual(len(lessons),72)
         for lesson in lessons:
             self.assertNotIn('solution',lesson);self.assertNotIn('checks',lesson)
     def test_javascript_lesson_api(self):

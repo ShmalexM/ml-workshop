@@ -223,7 +223,7 @@ class LootTests(unittest.TestCase):
                          game.roll_chest(*args, random.Random(14)))
 
     def test_curriculum_monte_carlo(self):
-        self.assertEqual((len(LESSONS), len(COURSES)), (71, 13))
+        self.assertEqual((len(LESSONS), len(COURSES)), (72, 13))
         # Welcome, then each path's lessons followed by the path chest.
         tiers = [1]
         for course in COURSES:

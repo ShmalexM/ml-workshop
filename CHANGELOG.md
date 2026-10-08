@@ -6,7 +6,8 @@ This file lists the notable changes in each release. The format follows [Keep a 
 
 ### Added
 
-- Python from zero, a new first path of 13 lessons for people who have never written code. It starts with `print` and variables, then covers arithmetic, functions, `if`, lists and slices, `for` loops, `zip` and list comprehensions, tuples, dictionaries, tracebacks and `raise ValueError`, f-strings and `import`, the slope between two points, and fixing a broken function. It ends where ML foundations lesson 1 begins. The app now has 71 lessons in 13 paths.
+- Python from zero, a new first path of 13 lessons for people who have never written code. It starts with `print` and variables, then covers arithmetic, functions, `if`, lists and slices, `for` loops, `zip` and list comprehensions, tuples, dictionaries, tracebacks and `raise ValueError`, f-strings and `import`, the slope between two points, and fixing a broken function. It ends where ML foundations lesson 1 begins.
+- From Python to JavaScript, a new first lesson in Web app engineering. It shows the JavaScript forms of the Python from zero basics: `let` and `const`, functions and arrow functions, arrays, objects, `===`, `map` and `filter`, and `console.log`. Web app engineering now lists Python from zero as its suggested first path. The app now has 72 lessons in 13 paths.
 - A question on the Paths page for new learners: "Have you written Python before?" **No** opens Python from zero, and **Yes** hides the question. The answer is saved in the browser. It shows only when you have no saved work.
 
 ### Changed

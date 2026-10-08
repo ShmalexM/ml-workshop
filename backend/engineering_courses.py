@@ -375,6 +375,89 @@ def readiness(dependencies):
 ('Build the failure-name list from all dependencies. Filtering to required dependencies '
  'would hide optional failures.'),18)
 
+# Lesson 0 keeps the IDs of the existing web lessons, and with them saved progress, unchanged.
+add('web',0,'From Python to JavaScript',
+('The Web app engineering lessons use JavaScript, the language that runs in web browsers. '
+ 'The exercises run it in Node.js, which runs JavaScript outside a browser.\n\nJavaScript '
+ 'has the same ideas as Python from zero: names, functions, lists, dictionaries, loops and '
+ 'comparisons. They are written with different symbols. This lesson maps each Python form '
+ 'to its JavaScript form.'),
+('Python            JavaScript\n'
+ 'total = 0         let total = 0;\n'
+ 'def f(n): ...     function f(n) { ... }\n'
+ 'lambda n: n * 2   n => n * 2\n'
+ 'len(xs)           xs.length\n'
+ 'a == b            a === b\n'
+ 'print(total)      console.log(total);'),
+('const total = 0; stores a value under a name that cannot be given a new value later. let '
+ 'count = 0; makes a name that can: count += 1; works as in Python. Lines end with a '
+ 'semicolon, and the lines of a block sit inside curly brackets { } instead of under an '
+ 'indented line. function double(n) { return n * 2; } does what def double(n): return n * '
+ '2 does. The short form n => n * 2 is an arrow function: a function with no name, usually '
+ 'passed to another function.\n\n'
+ 'An array such as [7, 9] is a Python list, and xs.length is len(xs). An object such as '
+ '{name: "ana", score: 7} is like a dictionary; result.name reads its name field. '
+ 'for (const x of xs) { ... } visits each item, like for x in xs:. Compare with ===, which '
+ 'is true only when both the value and the type match, so 1 === "1" is false. The older == '
+ 'converts types first, so 1 == "1" is true. xs.filter(x => x > 2) keeps the items for which '
+ 'the function returns true, and xs.map(x => x * 2) makes a new array from the result for '
+ 'each item. console.log is print. true, false and null are True, False and None.'),
+['In scoresFor(results, name), keep the results whose name is === name, using filter.',
+ 'Turn each kept result into its score with map, and return the new array.',
+ 'In total(scores), add up the scores with let and a for...of loop, and return the sum.'],
+['filter keeps the results whose name matches. map then turns each kept result into its '
+ 'score.',
+ 'For example, words.filter(word => word.length === 3) keeps the three-letter words, and '
+ 'words.map(word => word.length) gives the length of each word.',
+ 'Return results.filter(result => result.name === name).map(result => result.score). In '
+ 'total, add each score to sum inside for (const score of scores) { ... }.'],
+'''
+// A result is an object such as {name: "ana", score: 7}.
+function scoresFor(results, name) {
+  // Return an array of this name's scores, in order.
+  return [];
+}
+
+function total(scores) {
+  // Add up the scores with a for...of loop.
+  let sum = 0;
+  return sum;
+}
+
+const results = [{name: "ana", score: 7}, {name: "ben", score: 4}, {name: "ana", score: 9}];
+console.log(scoresFor(results, "ana"));
+console.log(total(scoresFor(results, "ana")));
+''',
+'''
+function scoresFor(results, name) {
+  return results.filter(result => result.name === name).map(result => result.score);
+}
+
+function total(scores) {
+  let sum = 0;
+  for (const score of scores) {
+    sum += score;
+  }
+  return sum;
+}
+
+const results = [{name: "ana", score: 7}, {name: "ben", score: 4}, {name: "ana", score: 9}];
+console.log(scoresFor(results, "ana"));
+console.log(total(scoresFor(results, "ana")));
+''',
+[('Finds both of ana\'s scores in order',
+  'equal(scoresFor([{name:"ana",score:7},{name:"ben",score:4},{name:"ana",score:9}],"ana"),[7,9])'),
+ ('Matches the whole name and its type with ===',
+  'scoresFor([{name:"anna",score:1},{name:"1",score:3}],"ana").length===0 && '
+  'scoresFor([{name:"1",score:3}],1).length===0'),
+ ('Leaves the results array unchanged',
+  '(()=>{const r=Object.freeze([Object.freeze({name:"a",score:2}),Object.freeze({name:"b",score:5})]);'
+  'return equal(scoresFor(r,"b"),[5])&&r.length===2})()'),
+ ('Adds up the scores', 'total([7,9])===16 && total([2,-1,4])===5'),
+ ('Gives 0 for no scores', 'total([])===0 && equal(scoresFor([],"ana"),[])')],
+['Python you know','JavaScript form','Same result'],
+('Use === to compare. == turns "1" into 1 before comparing, so a name stored as text can '
+ 'match a number.'),12)
 add('web',1,'Update UI state without mutation',
 ('A reducer takes the current state and an action, then returns the next state. A pure '
  'function produces the same result for the same inputs and leaves its inputs unchanged. '
