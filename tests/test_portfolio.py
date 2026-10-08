@@ -1,11 +1,14 @@
 import copy
 import json
 from pathlib import Path
+import re
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'backend'))
-from portfolio import load_portfolio, task_progress
+from portfolio import load_portfolio, task_progress, RETIRED
 
 SHA='a'*40
 TASK=dict(id='first',title='Run the test',minutes=10,lessons=['backend-1'],source=dict(path='app/main.py',lines=[3,9]),
@@ -26,6 +29,7 @@ class PortfolioTests(unittest.TestCase):
             projects=catalog['projects']
             self.assertNotIn('error',catalog)
             self.assertEqual(len({p['id'] for p in projects}),12)
+            self.assertEqual([p['level'] for p in projects],sorted((p['level'] for p in projects),key=['Start small','Build next','Capstone'].index))
             self.assertEqual({p['level'] for p in projects},{'Start small','Build next','Capstone'})
             for project in projects:
                 self.assertEqual(project['visibility'],'public')
@@ -33,8 +37,45 @@ class PortfolioTests(unittest.TestCase):
                 self.assertTrue(project['entryPoint']['url'].startswith('https://github.com/'))
                 self.assertTrue(project['firstLesson'] and project['requirements'])
                 if '/ShmalexM/' in project['repoUrl']:
-                    self.assertIn(project['repoUrl'].rsplit('/',1)[-1],['PokeRL','Vigil-at-Home'])
-            self.assertNotIn('/Users/',json.dumps(catalog))
+                    self.assertEqual(project['repoUrl'].rsplit('/',1)[-1],'Vigil-at-Home')
+            # Starter files use /Users/you/ as a placeholder; no real home folder may appear.
+            self.assertNotRegex(json.dumps(catalog),'/Users/(?!you/)')
+    def test_public_projects_are_pinned_and_hands_on(self):
+        with tempfile.TemporaryDirectory() as directory:
+            catalog=load_portfolio(directory)
+        by_id={p['id']:p for p in catalog['projects']}
+        self.assertFalse(any('PokeRL' in p['repoUrl'] or 'PokemonRed' in p['entryPoint']['url'] for p in catalog['projects']))
+        self.assertFalse(set(by_id)&set(RETIRED))
+        self.assertEqual({p['id'] for p in catalog['retired']},set(RETIRED))
+        self.assertEqual(by_id['public-fastapi-cursor-paging']['level'],'Capstone')
+        self.assertTrue(any('Docker' in tool for tool in by_id['public-fastapi-cursor-paging']['prerequisites']['tools']))
+        self.assertEqual(by_id['public-vigil-ai-authority']['platforms'],['macos','linux'])
+        self.assertEqual(by_id['public-vigil-ai-authority']['setup']['windows'],[])
+        self.assertIn('public-gymnasium-policy',by_id['public-sb3-capstone']['prerequisites']['projects'])
+        patterns=[]
+        for project in catalog['projects']:
+            with self.subTest(project=project['id']):
+                ref=project['pin']['ref']
+                self.assertRegex(ref,'^[0-9a-f]{40}$')
+                self.assertTrue(project['goal'] and project['run'] and project['stretch'] and project['troubleshooting'])
+                self.assertTrue(3<=len(project['tasks'])<=5)
+                self.assertEqual(project['steps'],[t['title'] for t in project['tasks']])
+                self.assertEqual(project['minutes']['tasks'],sum(t['minutes'] for t in project['tasks']))
+                self.assertTrue(project['entryPoint']['url'].startswith(f"{project['repoUrl']}/blob/{ref}/"))
+                self.assertTrue(project['setup']['unix'] and any(ref in command for command in project['setup']['unix']))
+                if 'windows' in project['platforms']:self.assertTrue(any(ref in command for command in project['setup']['windows']))
+                for task in project['tasks']+[project['stretch']]:
+                    a,b=task['source']['lines']
+                    self.assertEqual(task['source']['url'],f"{project['repoUrl']}/blob/{ref}/{task['source']['path']}#L{a}-L{b}")
+                    self.assertIn('check',task['verify'])
+                    if task['verify']['check']['type']=='regex':patterns.append(task['verify']['check']['pattern'])
+                if project['run'].get('check',{}).get('type')=='regex':patterns.append(project['run']['check']['pattern'])
+        node=shutil.which('node')
+        if node:
+            # The browser runs these checks, so every pattern must also compile in JavaScript.
+            script='const ps=JSON.parse(require("fs").readFileSync(0,"utf8"));for(const p of ps)new RegExp(p,"m");console.log(ps.length)'
+            result=subprocess.run([node,'-e',script],input=json.dumps(patterns),capture_output=True,text=True,timeout=30)
+            self.assertEqual(result.returncode,0,result.stderr)
     def test_optional_and_invalid_catalogs(self):
         with tempfile.TemporaryDirectory() as directory:
             path=Path(directory)/'portfolio.json'
