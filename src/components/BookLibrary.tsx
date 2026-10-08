@@ -104,7 +104,8 @@ export default function BookLibrary({ data, selection, onLesson, onState, onImpo
   }, [book?.id, position])
   useEffect(() => {
     if (!chapter || !selection?.anchor || book?.format !== 'epub') return
-    const target = Array.from(reader.current?.querySelectorAll('[id]') || []).find(element => element.id === selection.anchor)
+    // The importer prefixes every id from a book with bk-, so book ids never match the app's own.
+    const target = Array.from(reader.current?.querySelectorAll('.epub-page [id]') || []).find(element => element.id === 'bk-' + selection.anchor)
     target?.scrollIntoView({ block: 'start' })
   }, [chapter, selection?.anchor])
   useEffect(() => {

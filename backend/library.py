@@ -4,6 +4,7 @@ Each book folder holds book.json (the summary: metadata, contents and assets) an
 chapters/<n>.json (one page or section each). The server caches summaries only.
 """
 from html import escape
+from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
 from urllib.parse import urlsplit, unquote, quote
 from xml.etree import ElementTree as ET
@@ -21,7 +22,7 @@ import unicodedata
 import zipfile
 
 MAX_BOOK_BYTES = 100 * 1024 * 1024
-# Version 2: one file per chapter, repeated spine entries dropped.
+# Version 2: one file per chapter, repeated spine entries dropped, book class names and ids prefixed.
 IMPORT_VERSION = 2
 BOOK_ID = re.compile(r'^[a-z0-9][a-z0-9-]{0,79}$')
 TAGS = {'p','h1','h2','h3','h4','h5','h6','div','section','article','span','strong','em','b','i','u','s','small','sup','sub','blockquote','pre','code','ul','ol','li','dl','dt','dd','table','thead','tbody','tfoot','tr','th','td','caption','figure','figcaption','hr','br','a','img'}
@@ -39,6 +40,11 @@ MAX_OUTPUT_BYTES = 64 * 1024 * 1024
 MAX_TITLE = 300
 MAX_FIELD = 2000
 
+# Book class names and ids get this prefix, so book HTML can never use the app's own CSS classes.
+BOOK_PREFIX = 'bk-'
+CLASS_NAME = re.compile(r'^[A-Za-z0-9_-]{1,64}$')
+ATTRIBUTES = {'id','class','colspan','rowspan','src','alt','loading','tabindex','role','href','target','rel'}
+
 def normalized(text):
     return ' '.join(unicodedata.normalize('NFKC', text).replace('­','').split())
 
@@ -54,6 +60,17 @@ def megabytes(limit):
 
 def write_json(path, value):
     Path(path).write_text(json.dumps(value, ensure_ascii=False), encoding='utf-8')
+
+def web_url(value):
+    """Keep a source link only if it is an http(s) URL; dc:source can hold any text."""
+    value = (value or '').strip()
+    if not value or len(value) > MAX_FIELD or any(c.isspace() or ord(c) < 32 for c in value):
+        return ''
+    try:
+        parts = urlsplit(value)
+    except ValueError:
+        return ''
+    return value if parts.scheme in ('http','https') and parts.netloc else ''
 
 def local_name(tag):
     return tag.rsplit('}', 1)[-1].lower()
@@ -101,6 +118,30 @@ def parse_xml(raw):
         pass
     return ET.fromstring(raw)
 
+def book_classes(value):
+    return ' '.join(BOOK_PREFIX + name for name in value.split()[:16] if CLASS_NAME.fullmatch(name))
+
+def book_attributes(pairs):
+    """Prefix book ids and class names; keep only attributes the reader uses."""
+    attrs = {}
+    for key, value in pairs:
+        value = value or ''
+        if key not in ATTRIBUTES:
+            continue
+        if key == 'id':
+            if 0 < len(value) <= 200:
+                attrs['id'] = BOOK_PREFIX + value
+        elif key == 'class':
+            classes = book_classes(value)
+            if classes:
+                attrs['class'] = classes
+        else:
+            attrs[key] = value
+    return attrs
+
+def start_tag(tag, attrs):
+    return f'<{tag}' + ''.join(f' {key}="{escape(str(value), quote=True)}"' for key,value in attrs.items()) + '>'
+
 def sanitized_html(element, chapter_path, book_id, chapters, assets):
     """Whitelist book markup; never execute ebook scripts or retain remote media."""
     tag = local_name(element.tag)
@@ -112,12 +153,8 @@ def sanitized_html(element, chapter_path, book_id, chapters, assets):
     )
     if tag not in TAGS:
         return children
-    attrs = {}
-    if element.get('id'):
-        attrs['id'] = element.get('id')
-    # Keep semantic classes used by the source for figure captions, not source CSS.
-    if element.get('class'):
-        attrs['class'] = element.get('class')
+    # Source classes stay usable for captions (as bk-caption), not for app styles.
+    attrs = book_attributes((key, element.get(key)) for key in ('id','class'))
     for key in ('colspan','rowspan'):
         if element.get(key, '').isdigit():
             attrs[key] = element.get(key)
@@ -125,9 +162,9 @@ def sanitized_html(element, chapter_path, book_id, chapters, assets):
         try:
             name = archive_path(posixpath.dirname(chapter_path), element.get('src',''))
         except ValueError:
-            return '<p class="unavailable-media">Remote image omitted from this offline copy.</p>'
+            return f'<p class="{BOOK_PREFIX}unavailable-media">Remote image omitted from this offline copy.</p>'
         if name not in assets:
-            return '<p class="unavailable-media">Image was not included in the source EPUB.</p>'
+            return f'<p class="{BOOK_PREFIX}unavailable-media">Image was not included in the source EPUB.</p>'
         attrs.update(src=f'/api/library/{book_id}/asset/{quote(assets[name], safe="/")}',
                      alt=element.get('alt','Book illustration'), loading='lazy', tabindex='0', role='button')
     elif tag == 'a':
@@ -141,11 +178,32 @@ def sanitized_html(element, chapter_path, book_id, chapters, assets):
             except ValueError:
                 target = ''
             if target in chapters:
+                # The fragment stays unprefixed in the link; the reader adds the prefix when it scrolls.
                 attrs['href'] = f'#books/{book_id}/{chapters[target]}'
                 if parsed.fragment:
                     attrs['href'] += '/' + quote(unquote(parsed.fragment), safe='')
-    rendered = ''.join(f' {key}="{escape(str(value), quote=True)}"' for key,value in attrs.items())
-    return f'<{tag}{rendered}>' + ('' if tag in ('img','br','hr') else children + f'</{tag}>')
+    return start_tag(tag, attrs) + ('' if tag in ('img','br','hr') else children + f'</{tag}>')
+
+class _StoredHtml(HTMLParser):
+    """Rewrite HTML saved by import version 1 with the current id and class rules."""
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.parts = []
+    def handle_starttag(self, tag, attrs):
+        if tag in TAGS:
+            self.parts.append(start_tag(tag, book_attributes(attrs)))
+    handle_startendtag = handle_starttag
+    def handle_endtag(self, tag):
+        if tag in TAGS and tag not in ('img','br','hr'):
+            self.parts.append(f'</{tag}>')
+    def handle_data(self, data):
+        self.parts.append(escape(data))
+
+def prefix_stored_html(html):
+    parser = _StoredHtml()
+    parser.feed(html)
+    parser.close()
+    return ''.join(parser.parts)
 
 class ChapterWriter:
     """Write chapters/<n>.json one at a time, and stop when the book's output limit is reached."""
@@ -222,7 +280,7 @@ def import_epub(source, folder, book_id):
                         'html':sanitized_html(body,name,book_id,chapters,assets)})
             del root, body
         return dict(title=field('title',source.stem),author=field('creator'),format='epub',
-                    rights=field('rights','Rights remain with the source authors.',MAX_FIELD),sourceUrl=field('source',limit=MAX_FIELD),
+                    rights=field('rights','Rights remain with the source authors.',MAX_FIELD),sourceUrl=web_url(field('source',limit=MAX_FIELD)),
                     attribution='Original text, diagrams, captions, and attributions from the supplied EPUB. Reader layout adapted; image files unchanged.',
                     count=len(toc),toc=toc,assets=image_records,
                     cover=assets.get(next((archive_path(base,e.get('href')) for e in manifest.values() if 'cover-image' in e.get('properties','').split()),'')))
@@ -307,14 +365,17 @@ def import_book(source, data_dir, book_id):
 def split_legacy_book(folder, book):
     """Move the chapters of a version 1 book.json, which held the whole book, into chapter files.
 
-    Runs once per book, so later requests read one chapter at a time.
+    Runs once per book, so later requests read one chapter at a time. Stored HTML gets the
+    current id and class prefix, and sourceUrl keeps only web links, as for new imports.
     """
     staging = Path(tempfile.mkdtemp(prefix='.chapters-',dir=folder))
     try:
         for location,document in enumerate(book['documents'],1):
+            if 'html' in document:
+                document = {**document,'html':prefix_stored_html(document['html'])}
             write_json(staging/f'{location}.json',document)
         summary = {key:value for key,value in book.items() if key!='documents'}
-        summary['count'] = len(book['documents'])
+        summary.update(count=len(book['documents']),sourceUrl=web_url(summary.get('sourceUrl')))
         chapters = folder/'chapters'
         if chapters.exists():
             shutil.rmtree(chapters)
