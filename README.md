@@ -86,6 +86,7 @@ The race and class names are a nod to World of Warcraft. This project is not aff
 - The server listens only on `127.0.0.1`, so other computers cannot connect to it. The page in your browser can connect only to that server.
 - Your progress, drafts and notes are saved in `workshop.sqlite3` in the `data` folder. **Settings → Export progress and notes** saves a JSON copy. Review it before you share it, because it can contain your notes and project details. JSON import is planned. For a full restore, stop the app and copy back a `data` folder that you saved while the app was stopped.
 - The lessons work offline. The framework lessons use small local inputs. They do not download models or call an LLM API.
+- The installer checks the app, uv, Node.js and every Python package against SHA-256 hashes before it uses them. [SECURITY.md](SECURITY.md#verify-a-download) shows how to check a release yourself.
 - Your code runs with your own user account's permissions, as when you run a script yourself. Each exercise runs in a new process and a temporary folder, with a 50-second time limit and a limit on returned output. On macOS and Linux, CPU time and file size are limited too. These limits do not isolate your code from your files, so only run code you trust.
 
 See [SECURITY.md](SECURITY.md) and the [architecture notes](docs/architecture.md) for details.

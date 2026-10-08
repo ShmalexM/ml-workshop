@@ -172,6 +172,8 @@ CI runs on every pull request and every push to `main`. The macOS job builds the
 
 Raise `version` in `package.json`, add the changes to [CHANGELOG.md](CHANGELOG.md), and merge to `main`. The release workflow then publishes `v<version>` with the archives the install command downloads, and installs it on macOS, Linux and Windows with the public command as a final check. Pushing a tag such as `v1.2.0` also works; a tag with a hyphen makes a prerelease.
 
+The workflow builds the archives in a job with a read-only token. A separate job with write access downloads them, adds a build provenance attestation, and creates the release; it runs no npm or pip code. [SECURITY.md](SECURITY.md#verify-a-download) shows how to verify an archive.
+
 `docs/social-preview.png` (1280×640) is the image that link previews show. It is set in the repository's GitHub settings, so replace it there when it changes.
 
 ## Pull requests
