@@ -76,6 +76,19 @@ export async function downloadFile(url: string, filename: string) {
   setTimeout(() => URL.revokeObjectURL(link.href), 60_000)
 }
 
+/** A blob: URL for a book file, such as a cover or a figure, fetched with the session token. Revoke it when done. */
+export async function bookFileUrl(url: string) {
+  const response = await authorized(url, {})
+  if (!response.ok) throw new Error('Could not load this book file.')
+  return URL.createObjectURL(await response.blob())
+}
+
+/** The session header, for requests that another library makes, such as the PDF reader. */
+export function sessionHeaders(): Record<string, string> {
+  const token = currentToken()
+  return token ? {'X-Workshop-Token': token} : {}
+}
+
 /** Stream the file to the local server without base64 copies or a JSON body limit. */
 export async function importBook(file: File, bookId: string, onProgress: (percent: number) => void): Promise<BookImportResult> {
   const upload = (token: string) => new Promise<{status: number; data: BookImportResult & {error?: string; code?: string}}>((resolve, reject) => {

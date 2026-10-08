@@ -259,7 +259,7 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(self.request('/api/library/fixture/chapter/2')['title'],'Memory')
         media='/api/library/fixture/asset/'+self.book['assets'][0]['path']
         for requested,expected in [('bytes=0-7',PNG[:8]),('bytes=-8',PNG[-8:]),('bytes=8-',PNG[8:])]:
-            req=urllib.request.Request(self.url+media,headers={'Range':requested})
+            req=urllib.request.Request(self.url+media,headers={'Range':requested,'X-Workshop-Token':self.token})
             with urllib.request.urlopen(req) as response:
                 self.assertEqual(response.status,206)
                 self.assertEqual(response.read(),expected)

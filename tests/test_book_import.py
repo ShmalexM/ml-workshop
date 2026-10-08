@@ -140,8 +140,10 @@ class UploadTests(unittest.TestCase):
         self.assertEqual(status, 200, result)
         self.assertEqual(result['book']['title'], 'Diagrams – 日本語')
         self.assertEqual(result['book']['format'], 'pdf')
-        url = self.url+'/api/library/'+result['book']['id']+'/asset/source.pdf'
-        with urllib.request.urlopen(url) as response: self.assertEqual(response.read(), source.read_bytes())
+        path = '/api/library/'+result['book']['id']+'/asset/source.pdf'
+        with self.get(path) as response: self.assertEqual(response.read(), source.read_bytes())
+        with self.assertRaises(urllib.error.HTTPError) as error: urllib.request.urlopen(self.url+path)
+        self.assertEqual(error.exception.code, 403)
         writer.encrypt('test-only'); writer.write(source)
         status, result = self.upload(source.read_bytes(), 'locked.pdf')
         self.assertEqual(status, 400); self.assertIn('Encrypted', result['error'])

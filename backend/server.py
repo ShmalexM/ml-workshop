@@ -30,8 +30,9 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.append(str(ROOT/'scripts'))
 from platform_paths import data_dir, session_token
 SESSION_HELP='Open Engineering Workshop from its shortcut or start command to connect this browser.'
-# Health is polled by the launcher. Book files load by URL from <img> and the PDF viewer, which cannot send the header.
-PUBLIC_API=re.compile(r'/api/health|/api/library/[^/]+/asset/.+')
+# Health is polled by the launcher. Every other API route needs the token, book files included:
+# the Books page fetches covers, figures and originals with it, and the PDF reader sends it as a header.
+PUBLIC_API=re.compile(r'/api/health')
 BACKUP_NAME=re.compile(r'ml-workshop-\d{8}-\d{6}-\d{6}\.json')
 KEEP_BACKUPS=10
 RUN_LOCK=threading.Lock()

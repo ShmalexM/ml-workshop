@@ -1,6 +1,6 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, Bookmark, BookOpen, BookX, Check, ExternalLink, Search, X, ZoomIn } from 'lucide-react'
-import { api } from '../api'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { ArrowLeft, ArrowRight, Bookmark, BookOpen, BookX, Check, Download, Search, X, ZoomIn } from 'lucide-react'
+import { api, bookFileUrl, downloadFile } from '../api'
 import { bookLink, type BookImportResult, type BookLocation, type Chapter, type LibraryData, type ReadingState, type SearchHit, type StudyGuide } from '../libraryTypes'
 import BookImports, { RemoveBook } from './BookImports'
 const PdfPage = lazy(() => import('./PdfPage'))
@@ -18,7 +18,28 @@ function restoredState(data: LibraryData): Record<string, ReadingState> {
   } catch { return data.readingState }
 }
 
-function FigureViewer({ src, alt, onClose }: { src: string; alt: string; onClose: () => void }) {
+// Book files need the session token, so images load through fetch and show from blob: URLs.
+// Chapter HTML keeps each figure's address in data-book-src until it is loaded.
+const imageSource = / src="(\/api\/library\/[^"]*)"/g
+
+/** A blob: URL for one book file, or '' while it loads or if it fails. */
+function useBookFile(url: string | undefined) {
+  const [src, setSrc] = useState('')
+  useEffect(() => {
+    if (!url) return
+    let active = true, made = ''
+    bookFileUrl(url).then(value => { if (active) { made = value; setSrc(value) } else URL.revokeObjectURL(value) }).catch(() => {})
+    return () => { active = false; if (made) URL.revokeObjectURL(made); setSrc('') }
+  }, [url])
+  return src
+}
+
+function BookCover({ url, title }: { url?: string; title: string }) {
+  const src = useBookFile(url)
+  return <div className="book-cover">{src ? <img src={src} alt={`${title} cover`} /> : <BookOpen size={43} />}</div>
+}
+
+function FigureViewer({ src, alt, name, onClose }: { src: string; alt: string; name: string; onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null)
   const [zoom, setZoom] = useState(1)
   const [size, setSize] = useState('')
@@ -26,7 +47,7 @@ function FigureViewer({ src, alt, onClose }: { src: string; alt: string; onClose
   return <dialog ref={dialog} className="figure-dialog" onCancel={onClose} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
     <header><div><strong>Figure</strong><small>{size} · full resolution</small></div><div className="figure-tools">
       <label>Zoom <select aria-label="Figure zoom" value={zoom} onChange={e => setZoom(Number(e.target.value))}><option value={1}>Fit</option><option value={1.5}>150%</option><option value={2}>200%</option><option value={3}>300%</option></select></label>
-      <a href={src} target="_blank" rel="noreferrer">Open image <ExternalLink size={15} /></a>
+      <a href={src} download={name}>Save image <Download size={15} /></a>
       <button className="icon-button" aria-label="Close figure" onClick={onClose}><X size={20} /></button>
     </div></header>
     <div className="figure-pan"><img src={src} alt={alt} className={zoom === 1 ? 'figure-fit' : ''} style={{ width: `${zoom * 100}%`, maxWidth: 'none' }} onLoad={e => setSize(`${e.currentTarget.naturalWidth} × ${e.currentTarget.naturalHeight} pixels`)} /></div>
@@ -57,14 +78,42 @@ export default function BookLibrary({ data, selection, onLesson, onState, onImpo
   const [searchError, setSearchError] = useState('')
   const [section, setSection] = useState<'contents' | 'study' | 'saved'>('contents')
   const [zoom, setZoom] = useState(1)
-  const [figure, setFigure] = useState<{ src: string; alt: string } | null>(null)
+  const [figure, setFigure] = useState<{ src: string; alt: string; name: string } | null>(null)
+  const [downloadError, setDownloadError] = useState('')
   const [pageInput, setPageInput] = useState('1')
   const [unreadable, setUnreadable] = useState(data.unreadable || [])
   const reader = useRef<HTMLDivElement>(null)
   const book = data.books.find(item => item.id === selection?.bookId)
   const position = Math.max(1, Math.min(book?.count || 1, selection?.location || 1))
   const saved = book ? states[book.id] || emptyState() : emptyState()
-  useEffect(() => { setSection('contents'); setZoom(1); setFigure(null) }, [book?.id])
+  useEffect(() => { setSection('contents'); setZoom(1); setFigure(null); setDownloadError('') }, [book?.id])
+  const chapterHtml = useMemo(() => (chapter?.html || '').replace(imageSource, ' data-book-src="$1"'), [chapter])
+  // Load the chapter's figures with the token when they come near the screen. Their blob: URLs end with the chapter.
+  useEffect(() => {
+    const images = Array.from(reader.current?.querySelectorAll<HTMLImageElement>('.epub-page img[data-book-src]') || [])
+    if (!images.length) return
+    let active = true
+    const made: string[] = []
+    const load = (image: HTMLImageElement) => {
+      const url = image.dataset.bookSrc
+      if (!url || image.getAttribute('src')) return
+      bookFileUrl(url).then(value => { if (active) { made.push(value); image.src = value } else URL.revokeObjectURL(value) })
+        .catch(() => { if (active) image.alt = `${image.alt} (could not load this image)` })
+    }
+    let observer: IntersectionObserver | undefined
+    if ('IntersectionObserver' in window) {
+      observer = new IntersectionObserver(entries => entries.forEach(entry => { if (entry.isIntersecting) { observer?.unobserve(entry.target); load(entry.target as HTMLImageElement) } }), { root: reader.current, rootMargin: '600px' })
+      images.forEach(image => observer?.observe(image))
+    } else images.forEach(load)
+    return () => { active = false; observer?.disconnect(); made.forEach(url => URL.revokeObjectURL(url)) }
+  }, [chapterHtml])
+  function showFigure(image: HTMLImageElement | null) {
+    // A figure opens once its image has loaded.
+    const src = image?.getAttribute('src')
+    if (!image || !src) return false
+    setFigure({ src, alt: image.alt, name: (image.dataset.bookSrc || '').split('/').pop() || 'figure' })
+    return true
+  }
 
   // Books whose reviewed guides changed since the last save; finished guides can earn Hero game rewards.
   const guidesChanged = useRef(new Set<string>())
@@ -148,7 +197,7 @@ export default function BookLibrary({ data, selection, onLesson, onState, onImpo
     {selection && <p role="alert" className="book-error">This book is not imported on this computer.</p>}
     <BookImports books={data.books} states={states} onImported={imported} onOpen={open} onRemoved={removed}>
     {data.books.filter(item => !['gpu-glossary', 'inference-engineering'].includes(item.id)).map(item => { const state = states[item.id] || emptyState(); const guides = data.guides.filter(g => g.bookId === item.id); return <section className="book-shelf-entry" key={item.id}>
-      <div className="book-summary"><div className="book-cover">{item.cover ? <img src={`/api/library/${item.id}/asset/${item.cover}`} alt={`${item.title} cover`} /> : <BookOpen size={43} />}</div><div><h2>{item.title}</h2><p>{item.author}</p><small>{item.count} {item.format === 'pdf' ? 'pages · PDF' : `sections · ${item.assets.length} images`}</small><button className="primary-button" onClick={() => open(item.id, state.location)}>{state.updatedAt ? 'Continue reading' : 'Open book'}<ArrowRight size={16} /></button><RemoveBook book={item} onRemoved={removed} /></div></div>
+      <div className="book-summary"><BookCover url={item.cover ? `/api/library/${item.id}/asset/${item.cover}` : undefined} title={item.title} /><div><h2>{item.title}</h2><p>{item.author}</p><small>{item.count} {item.format === 'pdf' ? 'pages · PDF' : `sections · ${item.assets.length} images`}</small><button className="primary-button" onClick={() => open(item.id, state.location)}>{state.updatedAt ? 'Continue reading' : 'Open book'}<ArrowRight size={16} /></button><RemoveBook book={item} onRemoved={removed} /></div></div>
       {guides.length > 0 && <details className="book-study-overview"><summary>Reading guides · {guides.filter(g => state.completed.includes(g.id)).length} of {guides.length} reviewed</summary><p>Each guide links sections of this book to related lessons.</p>{guides.map(guide => <Guide key={guide.id} guide={guide} done={state.completed.includes(guide.id)} onToggle={() => toggleGuide(guide)} onLesson={onLesson} />)}</details>}
     </section>})}
     {unreadable.map(id => <section className="book-shelf-entry" key={id}><div className="book-summary"><div className="book-cover"><BookX size={43} aria-hidden="true" /></div><div><h2>Could not open this book</h2><p>{id}</p><small>The saved copy in data/library/{id} is damaged. Remove it, then add the PDF or EPUB again. Your notes and reading position are kept.</small><RemoveBook book={{ id, title: id }} onRemoved={removed} /></div></div></section>)}
@@ -168,10 +217,11 @@ export default function BookLibrary({ data, selection, onLesson, onState, onImpo
       <div className="book-toolbar"><div className="book-page-controls"><button className="icon-button" aria-label="Previous book page" disabled={position <= 1} onClick={() => open(book.id, position - 1)}><ArrowLeft size={18} /></button><form onSubmit={e => { e.preventDefault(); const value = Number(pageInput); if (Number.isInteger(value) && value >= 1 && value <= book.count) open(book.id, value); else setPageInput(String(position)) }}><label>{book.format === 'pdf' ? 'PDF page' : 'Section'} <input aria-label="Book page number" type="number" min={1} max={book.count} value={pageInput} onChange={e => setPageInput(e.target.value)} onBlur={() => { if (!pageInput) setPageInput(String(position)) }} /></label><span> / {book.count}</span><button className="small-button" type="submit">Go</button></form><button className="icon-button" aria-label="Next book page" disabled={position >= book.count} onClick={() => open(book.id, position + 1)}><ArrowRight size={18} /></button></div>
         <div className="book-view-controls">{book.format === 'pdf' && <label className="pdf-zoom"><ZoomIn size={16} /><select aria-label="PDF zoom" value={zoom} onChange={e => setZoom(Number(e.target.value))}><option value={1}>Fit width</option><option value={1.5}>150%</option><option value={2}>200%</option><option value={3}>300%</option></select></label>}
           <button className={'icon-button ' + (saved.bookmarks.includes(position) ? 'bookmarked' : '')} aria-label={saved.bookmarks.includes(position) ? 'Remove bookmark' : 'Bookmark this page'} aria-pressed={saved.bookmarks.includes(position)} onClick={() => update(book.id, { bookmarks: saved.bookmarks.includes(position) ? saved.bookmarks.filter(n => n !== position) : [...saved.bookmarks, position] })}><Bookmark size={18} /></button>
-          <a href={`/api/library/${book.id}/asset/source.${book.format}`} download={`${book.id}.${book.format}`}>Download {book.format.toUpperCase()}<ExternalLink size={14} /></a></div></div>
+          <button className="book-download" onClick={() => { setDownloadError(''); downloadFile(`/api/library/${book.id}/asset/source.${book.format}`, `${book.id}.${book.format}`).catch(e => setDownloadError(e instanceof Error ? e.message : 'Could not download this file.')) }}>Download {book.format.toUpperCase()}<Download size={14} /></button></div></div>
+      {downloadError && <p className="book-error" role="alert">{downloadError}</p>}
       {chapterError && <p className="book-error" role="alert">{chapterError}</p>}
       {!chapter && !chapterError && <p className="book-hint" role="status">Loading…</p>}
-      {chapter && <>{book.format === 'pdf' ? <><div className="book-quality-note">Printed page {chapter.label}</div><Suspense fallback={<p className="book-hint">Opening PDF reader…</p>}><PdfPage bookId={book.id} page={position} zoom={zoom} /></Suspense><details className="pdf-text"><summary>Selectable page text</summary><p>{chapter.text || 'This page contains artwork without extractable text.'}</p></details></> : <><p className="book-quality-note">Click a figure to enlarge it.</p><article className="epub-page" aria-label={currentTitle} onClick={e => { const image = (e.target as HTMLElement).closest('img'); if (image) setFigure({ src: image.src, alt: image.alt }) }} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { const image = (e.target as HTMLElement).closest('img'); if (image) { e.preventDefault(); setFigure({ src: image.src, alt: image.alt }) } } }} dangerouslySetInnerHTML={{ __html: chapter.html || '' }} /></>}
+      {chapter && <>{book.format === 'pdf' ? <><div className="book-quality-note">Printed page {chapter.label}</div><Suspense fallback={<p className="book-hint">Opening PDF reader…</p>}><PdfPage bookId={book.id} page={position} zoom={zoom} /></Suspense><details className="pdf-text"><summary>Selectable page text</summary><p>{chapter.text || 'This page contains artwork without extractable text.'}</p></details></> : <><p className="book-quality-note">Click a figure to enlarge it.</p><article className="epub-page" aria-label={currentTitle} onClick={e => { showFigure((e.target as HTMLElement).closest('img')) }} onKeyDown={e => { if ((e.key === 'Enter' || e.key === ' ') && showFigure((e.target as HTMLElement).closest('img'))) e.preventDefault() }} dangerouslySetInnerHTML={{ __html: chapterHtml }} /></>}
         <footer className="book-attribution"><p>{book.attribution}</p><small>{book.rights}</small><div className="book-bottom-nav"><button className="secondary-button" disabled={position <= 1} onClick={() => open(book.id, position - 1)}><ArrowLeft size={16} />Previous</button><button className="primary-button" disabled={position >= book.count} onClick={() => open(book.id, position + 1)}>Next<ArrowRight size={16} /></button></div></footer></>}
     </main>{figure && <FigureViewer {...figure} onClose={() => setFigure(null)} />}
   </div>

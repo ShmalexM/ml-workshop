@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { getDocument, GlobalWorkerOptions, type PDFDocumentProxy } from 'pdfjs-dist'
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+import { sessionHeaders } from '../api'
 
 GlobalWorkerOptions.workerSrc = workerUrl
 
@@ -22,7 +23,8 @@ export default function PdfPage({ bookId, page, zoom }: { bookId: string; page: 
     let active = true
     setPdf(null); setError(''); setLoading(true)
     const task = getDocument({
-      url: `/api/library/${bookId}/asset/source.pdf`,
+      // Book files need the session token, like every other route with learner data.
+      url: `/api/library/${bookId}/asset/source.pdf`, httpHeaders: sessionHeaders(),
       cMapUrl: '/pdfjs/cmaps/', cMapPacked: true,
       standardFontDataUrl: '/pdfjs/standard_fonts/', wasmUrl: '/pdfjs/wasm/',
       iccUrl: '/pdfjs/iccs/',

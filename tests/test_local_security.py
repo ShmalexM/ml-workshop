@@ -114,10 +114,19 @@ class SessionTests(unittest.TestCase):
                 self.assertEqual(self.server.request('/api/project/state', token=token, body=project)[0], 403)
         self.assertNotIn(b'note-7f3a', self.server.request('/api/portfolio')[2])
 
-    def test_health_and_book_files_stay_public(self):
+    def test_only_health_is_public_and_book_files_need_the_token(self):
         self.assertEqual(self.server.request('/api/health', token='')[0], 200)
-        asset = '/api/library/fixture/asset/' + self.book['assets'][0]['path']
-        self.assertEqual(self.server.request(asset, token='')[0], 200)
+        # Figures and the original file, which a book ID alone would otherwise give to any local program.
+        for path in ('/api/library/fixture/asset/' + self.book['assets'][0]['path'], '/api/library/fixture/asset/source.epub'):
+            for token in ('', 'wrong'):
+                with self.subTest(path=path, token=token):
+                    status, _, body = self.server.request(path, token=token)
+                    self.assertEqual(status, 403)
+                    self.assertEqual(json.loads(body)['code'], 'session-expired')
+            status, headers, body = self.server.request(path)
+            self.assertEqual(status, 200)
+            self.assertIn('sandbox', headers['Content-Security-Policy'])
+        self.assertEqual(body, (self.data / 'library/fixture/source.epub').read_bytes())
         # The Host and Origin checks still apply to public routes.
         request = urllib.request.Request(self.server.url + '/api/health', headers={'Origin': 'https://example.com'})
         with self.assertRaises(urllib.error.HTTPError) as error:
