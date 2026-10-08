@@ -20,7 +20,7 @@ def add(n, title, intro, concept, explanation, tasks, tip, hints, starter, solut
 
 
 add(1, 'Store and print values',
-    ('A program is a list of instructions. Python runs them in order, from the top line to the '
+    ('A program is a series of instructions. Python runs them in order, from the top line to the '
      'bottom line.\n\nprint shows a value as output: the text that appears when the program runs.'),
     'name = value\nprint(name)',
     ('items = 3 stores the number 3 under the name items. A name that holds a value is called a '

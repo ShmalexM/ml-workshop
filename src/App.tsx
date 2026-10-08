@@ -85,7 +85,7 @@ export default function App(){
   const schedule=()=>{clearInterval(timer);if(document.visibilityState==='visible'){check();timer=setInterval(check,15000)}}
   schedule();document.addEventListener('visibilitychange',schedule)
   return()=>{clearInterval(timer);document.removeEventListener('visibilitychange',schedule)}},[])
- // Finished project walkthroughs and reading guides earn chests too, so the Hero badge is refreshed after they are saved.
+ // Finished projects and reading guides earn chests too, so the Hero badge is refreshed after they are saved.
  const refreshGame=useCallback(()=>{gameApi.summary().then(setGame).catch(()=>{})},[]);const reviewChanged=useRef(new Set<string>())
  useEffect(()=>{if(page==='hero')setLoot(null)},[page])
  const saveProject=useCallback(async(projectId:string,value:ProjectState)=>{try{await api('/project/state',{projectId,...value});setProjectSave('Saved on this computer');if(reviewChanged.current.delete(projectId))refreshGame()}catch{setProjectSave('Saved in this browser · server not reachable')}},[refreshGame])

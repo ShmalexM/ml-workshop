@@ -62,7 +62,7 @@ export default function AssistantSettings(){
  const removeKey=()=>run(async()=>{const next=await api<AssistantConfig>('/assistant/config',{enabled:config!.enabled,...formOf(config!),removeKey:true});setConfig(next);setStatus({text:'Key removed.'})})
  return <section className="assistant-settings" aria-labelledby="assistant-settings-title">
   <h3 id="assistant-settings-title">AI assistant</h3>
-  <label className="setting-toggle"><input type="checkbox" checked={enabled} disabled={busy} onChange={e=>void toggle(e.target.checked)}/><span>Use an AI assistant in lessons</span></label>
+  <label className="setting-toggle"><input type="checkbox" checked={enabled} disabled={busy} onChange={e=>void toggle(e.target.checked)}/><span>Use the AI assistant on every page</span></label>
   <p className="setting-note">Off by default. Bring your own: a model on this computer (Ollama, LM Studio) or an API key for a hosted provider.</p>
   {enabled&&<div className="assistant-settings-form">
    <label>Provider<select value={form.provider} disabled={busy} onChange={e=>{const p=providers.find(x=>x.id===e.target.value)!;change({provider:p.id,baseUrl:p.url||form.baseUrl});setModels([])}}>{providers.map(p=><option key={p.id} value={p.id}>{p.label}</option>)}</select></label>

@@ -228,7 +228,7 @@ CAMPAIGN_STAGES = [
 ]
 ABYSS_BOSSES = ('Tyrant', 'Behemoth', 'Herald', 'Warden', 'Devourer')
 BATTLE_COLUMNS = ('id', 'stage', 'started', 'finished', 'outcome', 'damage', 'kills', 'seconds')
-NEXT_BATTLE = 'Finish a lesson, project walkthrough or reading to earn your next battle.'
+NEXT_BATTLE = 'Finish a lesson, a project or a reading guide to earn your next battle.'
 # A fight started this recently blocks passive changes; an older one was left without a result.
 BATTLE_LOCK = timedelta(minutes=15)
 

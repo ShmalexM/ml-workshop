@@ -74,7 +74,7 @@ export default function BattleScreen({game,onGame,onExit}:{game:GameState;onGame
      <button className="g-button" onClick={begin} disabled={phase==='starting'||game.battles.available<1||!gl}><Swords size={17}/>{phase==='starting'?'Starting…':'Start fight'}</button>
      <span>{game.battles.available} {game.battles.available===1?'battle':'battles'} left</span>
     </div>
-    {game.battles.available<1&&<p className="ready-none">Finish a lesson, project walkthrough or reading to earn your next battle.</p>}
+    {game.battles.available<1&&<p className="ready-none">Finish a lesson, a project or a reading guide to earn your next battle.</p>}
    </section>
   </div>
  }

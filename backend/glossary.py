@@ -33,7 +33,7 @@ def term(id, name, definition, forms, paths=None, sense=None, lesson=None, exact
 
 
 # Terms each path introduces in its first lesson.
-term('program', 'Program', 'A list of instructions that Python runs from top to bottom.',
+term('program', 'Program', 'A series of instructions that Python runs from top to bottom.',
      ['program', 'programs'], lesson='python-1')
 term('variable', 'Variable', 'A name that holds a value, such as items = 3.',
      ['variable', 'variables'], but('tensorflow'), sense='Python', lesson='python-1')
