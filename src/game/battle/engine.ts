@@ -3,7 +3,7 @@ import {createRenderer,environment,reducedMotion} from '../three/scene'
 import {createComposer} from '../three/composer'
 import {HeroModel,type Appearance} from '../three/hero'
 import {Particles} from '../three/fx'
-import {disposeTree,glow} from '../three/materials'
+import {disposeTree,glow,ownGlow} from '../three/materials'
 import {ARENA_RADIUS,buildArena,type Arena} from './arena'
 import {ARCHETYPES,buildEnemy,stageDef,stageDmg,stageHp,type EnemyKind,type EnemyModel} from './enemies'
 import {KITS,type Ability,type Kit} from './kits'
@@ -109,6 +109,7 @@ export class BattleEngine{
  dispose(){
   this.disposed=true;cancelAnimationFrame(this.raf);for(const c of this.cleanups)c()
   this.hero.dispose();this.xrayMat.dispose();this.particles.dispose()
+  for(const f of this.fades)((f.obj as THREE.Mesh).material as THREE.Material).dispose()
   for(const pass of this.composer.passes)pass.dispose();this.composer.dispose()
   this.scene.traverse(o=>{const m=o as THREE.Mesh;if(m.geometry)m.geometry.dispose()})
   this.arena.dispose()
@@ -649,7 +650,8 @@ export class BattleEngine{
  }
 
  // ---------- feedback ----------
- private ringFx(p:THREE.Vector3,r:number,color:string,life:number){const ring=new THREE.Mesh(new THREE.RingGeometry(.85,1,48),glow(color,.9,THREE.DoubleSide));ring.rotation.x=-Math.PI/2;ring.position.set(p.x,.08,p.z);ring.scale.setScalar(r*.3);this.scene.add(ring);this.fades.push({obj:ring,t:0,life,grow:r,base:r*.3})}
+ // Each ring fades on its own, so it has its own material: fading the shared glow() material faded every ring of that color.
+ private ringFx(p:THREE.Vector3,r:number,color:string,life:number){const ring=new THREE.Mesh(new THREE.RingGeometry(.85,1,48),ownGlow(color,.9,THREE.DoubleSide));ring.rotation.x=-Math.PI/2;ring.position.set(p.x,.08,p.z);ring.scale.setScalar(r*.3);this.scene.add(ring);this.fades.push({obj:ring,t:0,life,grow:r,base:r*.3})}
  private floatText(p:THREE.Vector3,text:string,color:string,scale:number){
   if(this.floats.length>60){const old=this.floats.shift();old?.el.remove()}
   const el=document.createElement('div');el.className='float-text';el.textContent=text;el.style.color=color;el.style.fontSize=`${Math.round(15*scale)}px`;this.overlay.appendChild(el)
@@ -659,7 +661,7 @@ export class BattleEngine{
  private project(p:THREE.Vector3){const v=p.clone().project(this.camera);return {x:(v.x+1)/2*this.viewW,y:(1-v.y)/2*this.viewH,z:v.z}}
  private updateFx(dt:number){
   for(const f of this.fades){f.t+=dt;const p=f.t/f.life;f.obj.scale.setScalar(f.base+(f.grow-f.base)*Math.min(1,p*1.4));((f.obj as THREE.Mesh).material as THREE.Material).opacity=0.9*(1-p)}
-  for(const f of this.fades)if(f.t>=f.life){f.obj.removeFromParent();(f.obj as THREE.Mesh).geometry.dispose()}
+  for(const f of this.fades)if(f.t>=f.life){f.obj.removeFromParent();(f.obj as THREE.Mesh).geometry.dispose();((f.obj as THREE.Mesh).material as THREE.Material).dispose()}
   this.fades=this.fades.filter(f=>f.t<f.life)
   for(const l of this.lines){l.t-=dt;(l.line.material as THREE.LineBasicMaterial).opacity=Math.max(0,l.t/.22);if(l.t<=0){l.line.removeFromParent();l.line.geometry.dispose();(l.line.material as THREE.Material).dispose()}}
   this.lines=this.lines.filter(l=>l.t>0)

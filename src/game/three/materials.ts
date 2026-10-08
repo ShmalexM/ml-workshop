@@ -2,6 +2,10 @@ import * as THREE from 'three'
 
 type MatOpts={metal?:number;rough?:number;emissive?:string;glow?:number;flat?:boolean;map?:THREE.Texture;side?:THREE.Side;transparent?:boolean;opacity?:number}
 const cache=new Map<string,THREE.Material>()
+// Every material from mat() and glow(). Many meshes use each one, so nothing may change them after they are made.
+const shared=new WeakSet<THREE.Material>()
+/** True for a material from mat() or glow(). The tests check that no code changes one. */
+export const isShared=(m:THREE.Material)=>shared.has(m)
 
 /** Cached flat-shaded standard material: the low-poly look comes from flat normals, not textures. */
 export function mat(color:string,o:MatOpts={}):THREE.MeshStandardMaterial{
@@ -10,7 +14,7 @@ export function mat(color:string,o:MatOpts={}):THREE.MeshStandardMaterial{
  if(!m){
   m=new THREE.MeshStandardMaterial({color,metalness:o.metal??0,roughness:o.rough??.8,flatShading:o.flat??true,map:o.map??null,side:o.side??THREE.FrontSide,transparent:o.transparent||(o.opacity??1)<1,opacity:o.opacity??1})
   if(o.emissive){m.emissive=new THREE.Color(o.emissive);m.emissiveIntensity=o.glow??1}
-  cache.set(key,m)
+  cache.set(key,m);shared.add(m)
  }
  return m
 }
@@ -18,8 +22,13 @@ export function mat(color:string,o:MatOpts={}):THREE.MeshStandardMaterial{
 /** Additive, unlit material for halos, beams and rune light. Bloom picks these up. */
 export function glow(color:string,opacity=.8,side:THREE.Side=THREE.FrontSide){
  const key=['g',color,opacity,side].join('|');let m=cache.get(key) as THREE.MeshBasicMaterial|undefined
- if(!m){m=new THREE.MeshBasicMaterial({color,transparent:true,opacity,blending:THREE.AdditiveBlending,depthWrite:false,side});cache.set(key,m)}
+ if(!m){m=ownGlow(color,opacity,side);cache.set(key,m);shared.add(m)}
  return m
+}
+
+/** The same material as glow(), but new and owned by one mesh, which may fade or recolor it. Dispose it with the mesh. */
+export function ownGlow(color:string,opacity=.8,side:THREE.Side=THREE.FrontSide){
+ return new THREE.MeshBasicMaterial({color,transparent:true,opacity,blending:THREE.AdditiveBlending,depthWrite:false,side})
 }
 
 let mailTexture:THREE.CanvasTexture|null=null
