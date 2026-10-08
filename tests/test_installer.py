@@ -2,6 +2,7 @@
 import hashlib
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tarfile
@@ -90,6 +91,27 @@ class PackageReleaseTests(unittest.TestCase):
             (root / 'dist/index.html').write_text('<!doctype html>')
             with self.assertRaisesRegex(SystemExit, 'dist/THIRD_PARTY_LICENSES.txt is missing. Run `npm run build`'):
                 package_release.release_files(root)
+
+
+class PinnedDownloadTests(unittest.TestCase):
+    def test_installers_pin_uv_and_node_with_a_hash_for_every_target(self):
+        sh = (ROOT / 'install.sh').read_text()
+        ps = (ROOT / 'install.ps1').read_text()
+        uv = re.search(r'^UV_VERSION=(\S+)$', sh, re.M)[1]
+        node = re.search(r'^NODE_VERSION=(\S+) ', sh, re.M)[1]
+        self.assertEqual(re.search(r"\$UvVersion = '([^']+)'", ps)[1], uv)
+        self.assertEqual(re.search(r"\$NodeVersion = '([^']+)'", ps)[1], node)
+        self.assertEqual(node.split('.')[0], (ROOT / '.nvmrc').read_text().strip())
+        sh_targets = re.findall(r'UV_TARGET=(\S+) NODE_TARGET=(\S+) ;;', sh)
+        ps_targets = re.findall(r"\$S\.UvTarget = '([^']+)'; \$S\.NodeTarget = '([^']+)'", ps)
+        self.assertEqual(len(sh_targets), 4)
+        self.assertEqual(len(ps_targets), 2)
+        sh_pins = dict(re.findall(r'^    (\S+)\) say ([0-9a-f]{64}) ;;$', sh, re.M))
+        ps_pins = dict(re.findall(r"^        '(\S+)' = '([0-9a-f]{64})'$", ps, re.M))
+        self.assertEqual(set(sh_pins), {name for uv_target, node_target in sh_targets for name in
+                                        (f'{uv}/uv-{uv_target}.tar.gz', f'node-v{node}-{node_target}.tar.gz')})
+        self.assertEqual(set(ps_pins), {name for uv_target, node_target in ps_targets for name in
+                                        (f'{uv}/uv-{uv_target}.zip', f'node-v{node}-{node_target}.zip')})
 
 
 if __name__ == '__main__':unittest.main()

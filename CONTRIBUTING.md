@@ -161,6 +161,13 @@ CI runs on every pull request and every push to `main`. The macOS job builds the
 
 **Python packages.** `requirements.txt` lists the allowed version ranges. After you change it, run `python scripts/lock_requirements.py` with [uv](https://docs.astral.sh/uv/) on PATH. It rewrites `requirements.lock` and `requirements-light.lock` with exact versions and SHA-256 hashes for macOS, Linux and Windows on Python 3.12, and keeps the current versions where it can. Add `--upgrade` to move every package to the newest version allowed. Commit the lock files with the change.
 
+**uv and Node.js in the installers.** `install.sh` and `install.ps1` pin the uv and Node.js versions and the SHA-256 hash of each download. To update them, change the versions in both scripts and replace every hash. Take the hashes only from these sources:
+
+- uv: download each archive the scripts use from the uv release on GitHub. Check it with `gh attestation verify <file> --repo astral-sh/uv`, then take its hash with `shasum -a 256 <file>`.
+- Node.js: use an LTS release with the major version in `.nvmrc`. Download `SHASUMS256.txt` and `SHASUMS256.txt.sig` from `https://nodejs.org/dist/v<version>/` and check the signature with the keys from [nodejs/release-keys](https://github.com/nodejs/release-keys): `gpgv --keyring <path to gpg-only-active-keys/pubring.kbx> SHASUMS256.txt.sig SHASUMS256.txt`. Then copy the hashes of the archives the scripts use.
+
+`tests/test_installer.py` checks that both scripts use the same versions and have a hash for every platform they support.
+
 ## Publish a release
 
 Raise `version` in `package.json`, add the changes to [CHANGELOG.md](CHANGELOG.md), and merge to `main`. The release workflow then publishes `v<version>` with the archives the install command downloads, and installs it on macOS, Linux and Windows with the public command as a final check. Pushing a tag such as `v1.2.0` also works; a tag with a hyphen makes a prerelease.
