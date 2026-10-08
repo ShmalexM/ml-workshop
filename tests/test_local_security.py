@@ -266,5 +266,24 @@ with socket.create_connection(httpd.server_address, timeout=10) as sock:
         self.assertEqual(result.stdout.split(), ["b''", 'True'])
 
 
+
+class AddressTokenTests(unittest.TestCase):
+    """A #session= token from another page must not replace a working token unless the server accepts it."""
+
+    def test_address_token_is_checked_before_it_is_stored(self):
+        from runner import node_binary
+        node = node_binary()
+        if not node:
+            self.skipTest('Node.js is not installed')
+        # Node 23.6 and later load TypeScript without a flag; 22.6 to 23.5 need it.
+        probe = subprocess.run([node, '-p', 'Boolean(process.features.typescript)'], capture_output=True, text=True, timeout=30)
+        flags = [] if probe.stdout.strip() == 'true' else ['--experimental-strip-types', '--disable-warning=ExperimentalWarning']
+        result = subprocess.run([node, *flags, str(ROOT / 'tests/js/session_token.mjs')], capture_output=True, text=True, timeout=120)
+        if result.returncode and 'bad option' in result.stderr:
+            self.skipTest('This Node.js cannot load TypeScript files')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('session checks passed', result.stdout)
+
+
 if __name__ == '__main__':
     unittest.main()

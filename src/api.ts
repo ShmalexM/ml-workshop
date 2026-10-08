@@ -5,27 +5,44 @@ export const connectMessage = 'Open Engineering Workshop from its shortcut or st
 const tokenKey = 'engineering-workshop-session'
 export const unreachable = 'Cannot reach the local server. Start Engineering Workshop again, then reload this page.'
 
-// A token from this tab's address that storage did not accept. It wins over an older stored token.
+// A token from this tab's address that is used in this tab only: storage did not accept it, or the server could not
+// be reached to check it. It wins over an older stored token.
 let unsavedToken = ''
 // The launcher opens http://127.0.0.1:<port>/#session=<token>, optionally followed by &<page route>.
-// Keep the token, then remove it from the address bar and from this history entry.
-function takeTokenFromAddress(): string {
+// Take the token, then remove it from the address bar and from this history entry.
+function tokenFromAddress(): string {
   const match = location.hash.match(/^#session=([A-Za-z0-9_-]{32,128})(?:&(.*))?$/)
   if (!match) return ''
   history.replaceState(history.state, '', location.pathname + location.search + (match[2] ? '#' + match[2] : ''))
-  try { localStorage.setItem(tokenKey, match[1]); unsavedToken = '' } catch { unsavedToken = match[1] }
   return match[1]
 }
-let tabToken = takeTokenFromAddress()
+/** Store a token from the address when the server accepts it. Any page can open a link with #session=, so a token
+ * that the server refuses must not replace the working token of every open tab. False when the server refused it. */
+async function adopt(token: string): Promise<boolean> {
+  let status = 0
+  try { status = (await fetch('/api/session', {cache: 'no-store', headers: {'X-Workshop-Token': token}})).status } catch { /* not reachable */ }
+  if (status === 403) return false
+  if (status === 200) {
+    try { localStorage.setItem(tokenKey, token); unsavedToken = ''; return true } catch { /* storage is full or off */ }
+  }
+  unsavedToken = token
+  return true
+}
+const addressToken = tokenFromAddress()
+// Requests wait for the check, so they never send a token that is about to be replaced.
+let checked: Promise<unknown> = addressToken ? adopt(addressToken) : Promise.resolve()
 // An open tab or the Mac window can get a new address with a token. Store it and load the page again.
-addEventListener('hashchange', () => { const next = takeTokenFromAddress(); if (next) { tabToken = next; location.reload() } })
+addEventListener('hashchange', () => {
+  const next = tokenFromAddress()
+  if (next) checked = adopt(next).then(accepted => { if (accepted) location.reload() })
+})
 // Read storage on every request, so a token that another tab received is used here too.
 function currentToken() {
   if (unsavedToken) return unsavedToken
-  try { return localStorage.getItem(tokenKey) || tabToken } catch { return tabToken }
+  try { return localStorage.getItem(tokenKey) || '' } catch { return '' }
 }
 
-let connected = Boolean(currentToken())
+let connected = Boolean(addressToken || currentToken())
 const listeners = new Set<(connected: boolean) => void>()
 function setConnected(value: boolean) {
   if (connected === value) return
@@ -49,6 +66,7 @@ const isExpired = (status: number, data: {code?: string} | null) => status === 4
 
 /** fetch with the session token. Throws connectMessage when the server does not accept the token. */
 export async function authorized(url: string, init: RequestInit): Promise<Response> {
+  await checked
   let sent = ''
   for (let attempt = 0; attempt < 2; attempt++) {
     const token = currentToken()
@@ -116,6 +134,7 @@ export async function importBook(file: File, bookId: string, onProgress: (percen
     xhr.ontimeout = () => reject(new Error('The import timed out. Reload Books to check whether it finished, then retry if needed.'))
     xhr.send(file)
   })
+  await checked
   let sent = currentToken()
   if (!sent) { setConnected(false); throw new Error(connectMessage) }
   let result = await upload(sent)
