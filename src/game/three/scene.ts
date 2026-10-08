@@ -2,9 +2,9 @@ import * as THREE from 'three'
 import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js'
 import {releaseListenersOnDispose} from './shared'
 
-export function createRenderer(canvas:HTMLCanvasElement,opts:{alpha?:boolean;shadows?:boolean;preserve?:boolean;antialias?:boolean}={}){
+export function createRenderer(canvas:HTMLCanvasElement,opts:{alpha?:boolean;shadows?:boolean;preserve?:boolean;antialias?:boolean;maxPixelRatio?:number}={}){
  const renderer=new THREE.WebGLRenderer({canvas,antialias:opts.antialias??true,alpha:opts.alpha??false,preserveDrawingBuffer:opts.preserve??false,powerPreference:'high-performance'})
- renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2))
+ renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,opts.maxPixelRatio??2))
  renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=.95
  renderer.outputColorSpace=THREE.SRGBColorSpace
  if(opts.shadows){renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFShadowMap}

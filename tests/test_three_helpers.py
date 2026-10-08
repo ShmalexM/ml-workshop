@@ -1,4 +1,4 @@
-"""Runs the browser-free checks for the hero game's three.js helpers and materials with Node.js."""
+"""Runs the browser-free checks for the hero game's three.js helpers, materials and settings with Node.js."""
 from pathlib import Path
 import subprocess
 import sys
@@ -29,6 +29,9 @@ class ThreeHelperTests(unittest.TestCase):
 
     def test_three_helpers(self):
         self.run_check('tests/js/three_helpers.mjs', 'three helpers ok')
+
+    def test_battle_graphics_setting_is_kept(self):
+        self.run_check('tests/js/battle_graphics.mjs', 'battle graphics ok')
 
     def test_shared_materials_never_change(self):
         # Bundles the battle engine with esbuild, which vite installs.

@@ -4,6 +4,7 @@ import {appearanceOf} from '../three/hero'
 import {webglAvailable} from '../three/scene'
 import {classOf,equipped,heroStats,passiveMods} from '../stats'
 import {KITS} from './kits'
+import {readBattleGraphics} from '../graphics'
 import {BattleEngine,type BattleEnd,type Hud} from './engine'
 import {HeroHud,KitList,fmt} from './Hud'
 import type {GameState} from '../types'
@@ -30,7 +31,7 @@ export default function PracticeScreen({game,passives,draft,onExit,onTree}:{game
 
  useEffect(()=>{
   if(phase==='ready'||!canvas.current||!overlay.current||!strength)return
-  const e=new BattleEngine(canvas.current,overlay.current,{appearance:appearanceOf(hero.race,hero.class,cls.role,gear),classColor:cls.color,stats,name:hero.name,
+  const e=new BattleEngine(canvas.current,overlay.current,{appearance:appearanceOf(hero.race,hero.class,cls.role,gear),classColor:cls.color,graphics:readBattleGraphics(),stats,name:hero.name,
    stage,stageName:'Practice arena',bossName:'Training dummy',bossHp:strength.bossHp,bossRemaining:strength.bossHp,seed:(Date.now()>>>0)^run,
    enemyHealth:strength.enemyHealth,enemyDamage:strength.enemyDamage,practice:true},{
    hud:setHud,banner:text=>setBanner(b=>({text,n:(b?.n||0)+1})),end:r=>{setEnd(r);setPhase('down')}})

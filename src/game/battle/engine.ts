@@ -4,6 +4,7 @@ import {createComposer} from '../three/composer'
 import {HeroModel,type Appearance} from '../three/hero'
 import {Particles} from '../three/fx'
 import {disposeTree,glow,ownGlow} from '../three/materials'
+import {LIGHT_PIXEL_RATIO,type BattleGraphics} from '../graphics'
 import {ARENA_RADIUS,buildArena,type Arena} from './arena'
 import {ARCHETYPES,buildEnemy,stageDef,stageDmg,stageHp,type EnemyKind,type EnemyModel} from './enemies'
 import {KITS,type Ability,type Kit} from './kits'
@@ -14,7 +15,9 @@ export type BattleSetup={appearance:Appearance;classColor:string;stats:HeroStats
  /** Enemy health and damage multipliers from the server's expected power for the stage. */
  enemyHealth?:number;enemyDamage?:number
  /** Practice arena: a training dummy that never dies, optional waves, no boss, no time limit and nothing saved. */
- practice?:boolean}
+ practice?:boolean
+ /** Light: a lower pixel ratio and no bloom, from Settings. Standard when left out. */
+ graphics?:BattleGraphics}
 export type Hud={hp:number;maxHp:number;shield:number;cds:Record<Key,number>;bossHp:number;bossMax:number;bossSeen:boolean;enraged:boolean;time:number;kills:number;bossDamage:number;buffs:{name:string;left:number;color:string}[];auto:boolean;paused:boolean
  /** Practice arena meter: damage to the dummy since the last reset, damage per second over the last 10 sec, and the wave count. */
  practice?:{damage:number;dps:number;waves:boolean;wave:number}}
@@ -67,8 +70,9 @@ export class BattleEngine{
  private cleanups:(()=>void)[]=[]
  constructor(private canvas:HTMLCanvasElement,private overlay:HTMLElement,private setup:BattleSetup,private cb:Callbacks){
   // The scene is drawn into the composer's own buffers and only copied to the canvas, so canvas antialiasing would add memory, not smoother edges.
-  this.renderer=createRenderer(canvas,{shadows:true,antialias:false});this.scene.environment=environment(this.renderer);this.scene.environmentIntensity=.45
-  const made=createComposer(this.renderer,this.scene,this.camera,{strength:.22,radius:.4,threshold:1.4});this.composer=made.composer;this.bloomPass=made.bloom
+  const light=setup.graphics==='light'
+  this.renderer=createRenderer(canvas,{shadows:true,antialias:false,maxPixelRatio:light?LIGHT_PIXEL_RATIO:undefined});this.scene.environment=environment(this.renderer);this.scene.environmentIntensity=.45
+  const made=createComposer(this.renderer,this.scene,this.camera,light?null:{strength:.22,radius:.4,threshold:1.4});this.composer=made.composer;this.bloomPass=made.bloom
   let s=(setup.seed>>>0)||7;this.rng=()=>{s^=s<<13;s^=s>>>17;s^=s<<5;return (s>>>0)/4294967296}
   const def=stageDef(setup.stage);this.arena=buildArena(def.theme,setup.seed);this.scene.add(this.arena.group)
   this.scene.background=this.arena.fog.clone();this.scene.fog=new THREE.Fog(this.arena.fog,28,62)
@@ -89,7 +93,7 @@ export class BattleEngine{
   const ro=new ResizeObserver(()=>this.resize());ro.observe(canvas);this.cleanups.push(()=>ro.disconnect())
  }
  private camOffset(){return new THREE.Vector3(0,16.5,10.5).multiplyScalar(this.zoom)}
- private resize(){const w=this.canvas.clientWidth,h=this.canvas.clientHeight;this.viewW=w;this.viewH=h;if(!w||!h)return;this.renderer.setSize(w,h,false);this.composer.setSize(w,h);this.bloomPass.resolution.set(w,h);this.camera.aspect=w/h;this.camera.updateProjectionMatrix();this.particles.setScale(h*this.renderer.getPixelRatio())}
+ private resize(){const w=this.canvas.clientWidth,h=this.canvas.clientHeight;this.viewW=w;this.viewH=h;if(!w||!h)return;this.renderer.setSize(w,h,false);this.composer.setSize(w,h);this.bloomPass?.resolution.set(w,h);this.camera.aspect=w/h;this.camera.updateProjectionMatrix();this.particles.setScale(h*this.renderer.getPixelRatio())}
  start(){this.cb.banner(this.setup.stageName,'info');this.raf=requestAnimationFrame(this.frame)}
  setPaused(p:boolean){this.paused=p;this.pushHud(true)}
  setAuto(a:boolean){this.auto=a;this.pushHud(true)}
