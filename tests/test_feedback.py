@@ -122,6 +122,38 @@ class CheckFeedbackTests(unittest.TestCase):
         self.assertEqual((reset['call'], reset['expected'], reset['got']), ('counter({count:8},{type:"reset"}).count', '0', '8'))
 
 
+class CheckNamespaceTests(unittest.TestCase):
+    """Learner code may use any name. Checks look up builtins and their helpers first."""
+
+    def test_learner_names_do_not_change_check_helpers(self):
+        code = ('abs = 123\nraises = 123\ncalls = None\n_workshop_value = 1\n\n'
+                'def predict(x, weight, bias):\n    return weight * x + bias + _workshop_value - 1\n')
+        checks = BY_ID['foundations-1']['checks'] + [dict(label='raises', expr='raises(ZeroDivisionError, lambda: 1 / 0)')]
+        result = execute(code, checks)
+        self.assertTrue(result['passed'], result)
+        # The learner's own globals are unchanged after the checks ran.
+        result = execute(code, [dict(label='kept', expr='predict(1, 1, 1) == 2')])
+        self.assertTrue(result['passed'], result)
+
+    def test_learner_helpers_cannot_pass_wrong_work(self):
+        python = 'def safe_mean(values):\n    return 0\n\ndef raises(*args):\n    return True\n'
+        self.assertFalse(execute(python, BY_ID['python-10']['checks'])['passed'])
+        javascript = 'function counter(state) { return state; }\nfunction equal() { return true; }\n'
+        self.assertFalse(execute(javascript, BY_ID['web-1']['checks'], language='javascript')['passed'])
+
+    def test_no_lesson_asks_for_a_name_that_checks_reserve(self):
+        import ast
+        import builtins
+        reserved = {name for name in vars(builtins) if not name.startswith('_')}
+        reserved |= {'raises', 'calls', 'last_printed', 'check_torch_step', 'check_tf_step'}
+        for lesson in BY_ID.values():
+            if lesson.get('language') == 'javascript':
+                continue
+            defined = {node.name for node in ast.parse(lesson['solution']).body
+                       if isinstance(node, (ast.FunctionDef, ast.ClassDef))}
+            self.assertFalse(defined & reserved, lesson['id'])
+
+
 class ExplanationTests(unittest.TestCase):
     def test_common_errors(self):
         self.assertIn('colon', explain("  File \"exercise.py\", line 1\n    def f(x)\n            ^\nSyntaxError: expected ':'"))

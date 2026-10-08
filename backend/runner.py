@@ -1,5 +1,7 @@
 """Trusted personal-code runner, not an untrusted-code security sandbox."""
 import ast
+import builtins
+import importlib
 import json
 import linecache
 import os
@@ -43,6 +45,30 @@ def raises(exception, function):
     except exception: return True
     return False
 
+def calls(name, function):
+    """True when function() calls name: a builtin such as "sum", or a path such as "torch.Tensor.backward"."""
+    *path, attribute = name.split('.')
+    owner = builtins
+    if path:
+        owner = importlib.import_module(path[0])
+        for part in path[1:]: owner = getattr(owner, part)
+    original, seen = getattr(owner, attribute), []
+    def spy(*args, **kwargs):
+        seen.append(True)
+        return original(*args, **kwargs)
+    setattr(owner, attribute, spy)
+    try: function()
+    finally: setattr(owner, attribute, original)
+    return bool(seen)
+
+def last_printed(output):
+    """The last line the exercise printed, or '' if it printed nothing."""
+    sys.stdout.flush()
+    sys.stderr.flush()
+    try: lines = output.read_text(encoding='utf-8', errors='replace').splitlines()
+    except OSError: return ''
+    return next((line.strip() for line in reversed(lines) if line.strip()), '')
+
 def check_torch_step(fn, mode):
     import torch
     model=torch.nn.Linear(1,1,bias=False)
@@ -66,6 +92,13 @@ def check_tf_step(fn,mode):
     if mode=='update': return abs(float(w.numpy())-.4)<1e-5
     fn(w,opt,x,y)
     return abs(float(w.numpy())-.72)<1e-5
+
+def check_helpers(output):
+    """Names a check can use. They are layered over a copy of the learner's names, so learner
+    code that reuses a name such as abs, raises or _workshop_value changes neither side."""
+    return {**{k: v for k, v in vars(builtins).items() if not k.startswith('_')},
+            'raises': raises, 'calls': calls, 'last_printed': lambda: last_printed(output),
+            'check_torch_step': check_torch_step, 'check_tf_step': check_tf_step}
 
 def shown(value):
     """repr, cut to about 200 characters."""
@@ -160,15 +193,16 @@ def compared(shape,call,values,exc=None):
                                f'{type(want).__name__}.'+(' `return a, b, c` returns a tuple.' if type(want) is tuple else ''))
     return fields
 
-def run_check(check,ns):
+def run_check(check,ns,helpers):
     plan=instrument(check['expr'])
     values={}
     def remember(key,value):
         values[key]=value
         return value
-    ns[VALUE]=remember
+    # A fresh copy per check: the learner's functions still run in ns, and nothing the check adds stays there.
+    scope={**ns,**helpers,VALUE:remember}
     try:
-        if bool(eval(plan[0] if plan else check['expr'],ns)):return dict(passed=True,detail='')
+        if bool(eval(plan[0] if plan else check['expr'],scope)):return dict(passed=True,detail='')
         return dict(passed=False,detail=MISMATCH)|((compared(plan[1],plan[2],values) if plan else None) or {})
     except BaseException as exc:
         if isinstance(exc,ModuleNotFoundError):return dict(passed=False,detail=missing_package(exc))
@@ -189,12 +223,14 @@ def child(request_path, result_path):
     code=request['code']
     # Tracebacks read source lines from linecache; without this entry they show no code.
     linecache.cache[LEARNER_FILE]=(len(code),None,code.splitlines(True),LEARNER_FILE)
-    ns={'__name__':'__main__','raises':raises,'check_torch_step':check_torch_step,'check_tf_step':check_tf_step}
+    ns={'__name__':'__main__'}
+    # execute() writes the exercise's output to stdout.txt beside the result file.
+    helpers=check_helpers(Path(result_path).with_name('stdout.txt'))
     result={'error':None,'summary':None,'checks':[],'passed':False}
     try:
         exec(compile(code,LEARNER_FILE,'exec'),ns)
         for check in request['checks']:
-            result['checks'].append(dict(label=check['label'],**run_check(check,ns)))
+            result['checks'].append(dict(label=check['label'],**run_check(check,ns,helpers)))
         result['passed']=bool(result['checks']) and all(c['passed'] for c in result['checks'])
     except ModuleNotFoundError as exc:
         result['error']=missing_package(exc)
