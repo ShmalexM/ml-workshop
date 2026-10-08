@@ -264,7 +264,8 @@ param([switch]$Uninstall, [switch]$Purge)
         if (-not $S.Python) { Fail 'Could not find the Python 3.12 that was just installed.' }
     }
 
-    # scripts\setup.py creates app\.venv with this Python and installs the requirements with uv.
+    # scripts\setup.py creates app\.venv with this Python and installs the hash-locked
+    # requirements with uv.
     function Install-Requirements([string[]]$Extra) {
         return Invoke-Logged $S.Python (@((Join-Path $S.Stage 'scripts\setup.py'), '--no-build', '--no-launch') + $Extra)
     }

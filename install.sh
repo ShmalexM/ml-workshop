@@ -197,17 +197,14 @@ ensure_python() {
   export UV_PYTHON_INSTALL_DIR="$RUNTIME/python" UV_CACHE_DIR="$RUNTIME/cache" \
     UV_MANAGED_PYTHON=1 UV_NO_CONFIG=1 UV_VENV_RELOCATABLE=1
   unset PYTHONHOME PYTHONPATH VIRTUAL_ENV
-  if [ "$OS" = linux ]; then
-    # PyTorch from PyPI pulls in several GB of CUDA libraries that the lessons never use.
-    export UV_TORCH_BACKEND=cpu
-  fi
   ensure_uv
   run "$UV" python install 3.12 --no-bin --no-registry ||
     fail "Could not install Python 3.12. Check your internet connection and try again."
   PYTHON=$("$UV" python find 3.12 2>>"$LOG") || fail "Could not find the Python 3.12 that was just installed."
 }
 
-# scripts/setup.py creates app/.venv with this Python and installs the requirements with uv.
+# scripts/setup.py creates app/.venv with this Python and installs the hash-locked
+# requirements with uv.
 setup_packages() {
   run env PATH="$RUNTIME/uv:$PATH" "$PYTHON" "$STAGE/scripts/setup.py" --no-build --no-launch "$@"
 }

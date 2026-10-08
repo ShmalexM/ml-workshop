@@ -18,13 +18,13 @@ Remove personal notes, local paths and secrets from logs and screenshots before 
 
 Install [Node.js](https://nodejs.org/en/download) 22.13 or newer (24 recommended), including npm, and [Python](https://www.python.org/downloads/) 3.12 or newer. CI uses Python 3.12. [uv](https://docs.astral.sh/uv/getting-started/installation/) is optional; setup uses it when available and otherwise uses Python's built-in `venv` and pip. On Linux, your distribution may also require its `python3-venv` package.
 
-Clone this repository, then use the setup wrapper for your OS. Allow several GB for a full ML install. Internet is needed for installation; installed lessons run offline. Setup creates `.venv`, installs packages, builds the interface, and opens your browser. It does not install Python packages globally. Rerun setup after updating or to repair dependencies; your saved progress is kept.
+Clone this repository, then use the setup wrapper for your OS. Setup installs the exact package versions in `requirements.lock`, or `requirements-light.lock` for a light install, and checks every file against its SHA-256 hash. PyTorch comes from its CPU index at download.pytorch.org. Allow several GB for a full ML install. Internet is needed for installation; installed lessons run offline. Setup creates `.venv`, installs packages, builds the interface, and opens your browser. It does not install Python packages globally. Rerun setup after updating or to repair dependencies; your saved progress is kept.
 
 To update a clone, export your progress, stop the app, run `git pull --ff-only`, then rerun setup. If you are developing on a branch, commit or stash your source edits before integrating updates. Setup preserves `data/`.
 
 ### macOS
 
-On Apple silicon, setup uses the pinned `requirements.lock` snapshot. On Intel Macs, run setup with `--no-ml`: current PyTorch and TensorFlow releases no longer ship Intel macOS packages. With Homebrew, `brew install node uv` provides the prerequisites; the macOS wrapper can use uv to obtain Python 3.12.
+On Intel Macs, run setup with `--no-ml`: current PyTorch and TensorFlow releases no longer ship Intel macOS packages. With Homebrew, `brew install node uv` provides the prerequisites; the macOS wrapper can use uv to obtain Python 3.12.
 
 ```sh
 git clone https://github.com/ShmalexM/ml-workshop.git
@@ -156,6 +156,10 @@ The suite checks solutions and starters, plausible wrong answers, worked example
 `npm test` and `npm start` use the checkout's `.venv` on every OS. For a quick API-only check, run `node scripts/py.mjs -m unittest discover -s tests -p test_api.py -v`.
 
 CI runs on every pull request and every push to `main`. The macOS job builds the frontend and runs the full suite, including every ML lesson, on Apple silicon with Python 3.12. The Linux and Windows jobs run light setup, build, and all non-ML tests. An installer job packages a release with `scripts/package_release.py` and installs it on macOS, Linux and Windows without the ML libraries. It then runs `tests/check_install.py`, updates the copy and uninstalls it. To try the installer locally, package a release, then run `EW_ARCHIVE=release/engineering-workshop.tar.gz EW_HOME=<temporary folder> EW_LIGHT=1 EW_NO_LAUNCH=1 EW_NO_SHORTCUTS=1 sh install.sh`. CI does not install the ML libraries with the installer, or on Linux and Windows. It does not test desktop browser integration or NVIDIA hardware. Windows exercises have a wall timeout and returned-output cap, but no CPU or file-size limit. For UI changes, check both desktop and narrow layouts and each lesson stage: Understand, See an example, and Try it yourself.
+
+## Update pinned dependencies
+
+**Python packages.** `requirements.txt` lists the allowed version ranges. After you change it, run `python scripts/lock_requirements.py` with [uv](https://docs.astral.sh/uv/) on PATH. It rewrites `requirements.lock` and `requirements-light.lock` with exact versions and SHA-256 hashes for macOS, Linux and Windows on Python 3.12, and keeps the current versions where it can. Add `--upgrade` to move every package to the newest version allowed. Commit the lock files with the change.
 
 ## Publish a release
 
