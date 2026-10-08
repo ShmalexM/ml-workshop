@@ -2,7 +2,6 @@
 import {useMemo} from 'react'
 import {highlightCode,tagHighlighter,tags as t} from '@lezer/highlight'
 import {pythonLanguage} from '@codemirror/lang-python'
-import './codeView.css'
 
 type Token={text:string;cls:string}
 type Row={kind:'same'|'add'|'del';tokens:Token[];old?:number;cur?:number}

@@ -1,6 +1,6 @@
 import {useEffect,useRef,useState} from 'react'
 import {CheckCircle2,X} from 'lucide-react'
-import {CodeDiff,CodeLines} from './CodeView'
+import {CodeDiff,CodeLines} from './lazyCode'
 import type {Lesson} from '../types'
 export default function Solution({lesson,code,draft,onClose,onLoad}:{lesson:Lesson;code:string;draft:string;onClose:()=>void;onLoad:()=>void}){
  const dialog=useRef<HTMLDialogElement>(null);const [compare,setCompare]=useState(false);const python=lesson.language!=='javascript'

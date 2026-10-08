@@ -21,6 +21,7 @@ import type {GameSummary} from './game/types'
 import type {BookLocation,LibraryData} from './libraryTypes'
 import './components/learnLayout.css'
 import {AssistantButton,AssistantDock} from './assistant/Assistant'
+import {preloadCode} from './components/lazyCode'
 const BookLibrary=lazy(()=>import('./components/BookLibrary'))
 const HeroPage=lazy(()=>import('./game/HeroPage'))
 type Page='paths'|'learn'|'projects'|'practice'|'progress'|'books'|'hero'
@@ -88,6 +89,8 @@ export default function App(){
  // Finished projects and reading guides earn chests too, so the Hero badge is refreshed after they are saved.
  const refreshGame=useCallback(()=>{gameApi.summary().then(setGame).catch(()=>{})},[]);const reviewChanged=useRef(new Set<string>())
  useEffect(()=>{if(page==='hero')setLoot(null)},[page])
+ // The Learn page's stages need the editor and the highlighted code views. Start loading them as it opens.
+ useEffect(()=>{if(page==='learn')preloadCode()},[page])
  const saveProject=useCallback(async(projectId:string,value:ProjectState)=>{try{await api('/project/state',{projectId,...value});setProjectSave('Saved on this computer');if(reviewChanged.current.delete(projectId))refreshGame()}catch{setProjectSave('Saved in this browser · server not reachable')}},[refreshGame])
  useEffect(()=>{let active=true;(async()=>{try{
    const [curriculum,s,r,books,projects]=await Promise.all([api<{courses:Course[];lessons:Lesson[];glossary:GlossaryEntry[]}>('/curriculum'),api<State>('/state'),api<Runtime>('/runtime'),api<LibraryData>('/library'),api<Portfolio>('/portfolio')])
