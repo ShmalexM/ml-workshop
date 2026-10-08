@@ -214,6 +214,17 @@ class WorkerTests(unittest.TestCase):
             self.assertEqual([folder for folder in stale if folder.exists()], [])
             self.assertTrue(fresh.is_dir()); self.assertTrue((root/'library').is_dir())
 
+    def test_glossary_guides_match_section_titles_without_source_file_names(self):
+        class FixtureLibrary:
+            def book(self, book_id):
+                if book_id != 'gpu-glossary': raise KeyError(book_id)
+                titles = ['What is a CUDA Kernel?', 'What is a Thread Block?', 'Thread Block Grid', 'Unrelated notes']
+                return dict(title='GPU Glossary', format='pdf', sha256='any', count=4,
+                            toc=[dict(title=t, location=i+1, label=str(i+1), depth=0) for i, t in enumerate(titles)])
+        guides = study_guides(FixtureLibrary())
+        self.assertEqual([guide['id'] for guide in guides], ['gpu-threads'])
+        self.assertEqual([reading['location'] for reading in guides[0]['readings']], [1, 2, 3])
+
     def test_numeric_guides_only_apply_to_verified_pdf_edition(self):
         class FixtureLibrary:
             def book(self, book_id):

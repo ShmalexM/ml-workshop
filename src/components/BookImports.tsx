@@ -7,11 +7,11 @@ const suggestedBooks = [
   {id: 'gpu-glossary', title: 'GPU Glossary', author: 'Modal', tag: 'GPU FUNDAMENTALS',
     description: 'Connect GPU hardware, CUDA, and performance concepts.',
     url: 'https://modal.com/gpu-glossary', link: 'Read on Modal',
-    hint: 'Have an EPUB or PDF copy? Add it here for offline reading. EPUB supports linked glossary sections.'},
+    hint: 'Modal publishes the glossary as a website, with its Markdown source on GitHub under CC BY 4.0. There is no official EPUB or PDF. If you made your own copy, add it here to read offline.'},
   {id: 'inference-engineering', title: 'Inference Engineering', author: 'Philip Kiely · Baseten', tag: 'MODELS IN PRODUCTION',
     description: 'Explore how models are optimized and served in production.',
     url: 'https://www.baseten.co/inference-engineering/', link: 'Get a free copy',
-    hint: 'Download your copy from Baseten, then add the PDF or EPUB here. PDF preserves the printed layout.'},
+    hint: 'Baseten offers the book as a free PDF or EPUB. Download your copy there, then add it here. Use the PDF for the printed page layout and the reading guides.'},
 ]
 
 function DropZone({label, disabled, busy, percent, error, onFiles}: {

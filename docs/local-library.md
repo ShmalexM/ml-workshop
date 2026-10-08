@@ -6,13 +6,15 @@ Open **Books** in Engineering Workshop. Imported PDFs and EPUBs are available of
 
 Open **Books**. The **GPU Glossary** and **Inference Engineering** cards each have a drop area and **Choose file** button. Drop one PDF or EPUB onto the matching card, or choose it from your computer. **Read on Modal** opens the online glossary; **Get a free copy** opens Baseten's download page. The app does not download or bundle either book for you.
 
+Modal publishes the *GPU Glossary* as a website, with its Markdown source on [GitHub](https://github.com/modal-labs/gpu-glossary) under CC BY 4.0. There is no official EPUB or PDF, so the card accepts a copy you made yourself. Baseten offers *Inference Engineering* as a free PDF or EPUB.
+
 Uploads show progress, followed by a chapter/search preparation step. When **Ready to read** appears, choose **Read book** or **Open book**; no reload or terminal command is needed. On the Mac app, **Choose file** opens a native file picker.
 
 Use **Add another book** for any other PDF or EPUB, or to keep a second edition. Reimporting the same file returns the existing copy without resetting notes or reading position.
 
 **Remove book** on a book's card deletes the copy stored in `data/library/<id>/` after you confirm. It does not delete the file you imported, and your notes, bookmarks and reading position stay in the progress database, so importing the same file again brings them back. A different edition cannot overwrite a suggested book; import it separately instead. Files must be non-empty and no larger than 100 MB. Invalid, encrypted, or interrupted imports show an error and can be retried without changing existing books.
 
-PDFs preserve their original printed layout, fonts and diagrams. EPUBs use a responsive reading layout and retain original image resolution. Reading guides appear only when their locations match: glossary section keys for EPUB, and the verified PDF edition for *Inference Engineering*. Other editions and formats still support reading, search, notes and bookmarks.
+PDFs preserve their original printed layout, fonts and diagrams. EPUBs use a responsive reading layout and retain original image resolution. Reading guides appear only when their locations match: glossary sections by source file name (such as `device-software--kernel`) or by section title (such as "What is a Kernel?"), and the verified PDF edition for *Inference Engineering*. Other editions and formats still support reading, search, notes and bookmarks.
 
 ### Optional command-line import
 
