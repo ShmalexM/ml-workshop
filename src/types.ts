@@ -9,4 +9,5 @@ export type Runtime = {python:string;javascript:boolean;packages:Record<string,s
 /** call, expected and got are set when the check compares one value; explanation is a plain-language line. */
 export type CheckResult = {label:string;passed:boolean;detail?:string;call?:string;expected?:string;got?:string;explanation?:string}
 /** summary is the error's last line with its line number; explanation is a plain-language line. */
-export type RunResult = {stdout:string;error:string|null;summary?:string|null;explanation?:string|null;checks:CheckResult[];passed:boolean;duration:number;state?:State}
+/** stale is set in the browser when the code changes after this run. */
+export type RunResult = {stdout:string;error:string|null;summary?:string|null;explanation?:string|null;checks:CheckResult[];passed:boolean;duration:number;state?:State;stale?:boolean}

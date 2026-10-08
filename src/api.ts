@@ -3,7 +3,7 @@ import type { BookImportResult } from './libraryTypes'
 /** Shown when this browser has no valid session token. */
 export const connectMessage = 'Open Engineering Workshop from its shortcut or start command to connect this browser.'
 const tokenKey = 'engineering-workshop-session'
-const unreachable = 'Cannot reach the local server. Start Engineering Workshop again, then reload this page.'
+export const unreachable = 'Cannot reach the local server. Start Engineering Workshop again, then reload this page.'
 
 // The launcher opens http://127.0.0.1:<port>/#session=<token>, optionally followed by &<page route>.
 // Keep the token, then remove it from the address bar and from this history entry.

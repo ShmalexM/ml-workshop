@@ -9,3 +9,4 @@
 .check-values dt{color:#5f6f86}
 .check-values dd{margin:0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#233249;white-space:pre-wrap;overflow-wrap:anywhere}
 .check-values dd.got{color:#af414d}
+.stale-note{margin:12px 14px 0;padding:9px 12px;border-radius:6px;background:#fff8e9;border:1px solid #f2e3be;color:#7a5a24;font-size:12px;line-height:1.5}

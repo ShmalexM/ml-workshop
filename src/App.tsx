@@ -1,6 +1,6 @@
 import {lazy,Suspense,useCallback,useEffect,useRef,useState,type CSSProperties,type MouseEvent} from 'react'
 import {CodeXml,Settings as SettingsIcon,LoaderCircle,X} from 'lucide-react'
-import {api,connectMessage,serverReachable} from './api'
+import {api,connectMessage,serverReachable,unreachable} from './api'
 import type {Course,Lesson,State,Runtime,RunResult,LearningStage,EditorPrefs} from './types'
 import type {Portfolio,ProjectState} from './portfolioTypes'
 import Curriculum from './components/Curriculum'
@@ -28,7 +28,10 @@ function projectRoute(){return location.hash.match(/^#projects\/([a-z0-9-]+)$/)?
 function projectFilter(){return new URLSearchParams(location.hash.split('?')[1]||'').get('track')||'all'}
 const localKey='ml-workshop-drafts-v1',projectKey='ml-workshop-projects-v1'
 type Draft={code:string;notes:string;updatedAt:number}
-function readCache<T>(key:string):Record<string,T>{try{return JSON.parse(localStorage.getItem(key)||'{}')}catch{return {}}}
+// Browser storage can hold anything, including null or an old shape. Keep only well-formed entries.
+const isDraft=(value:unknown):value is Draft=>{const d=value as Partial<Draft>|null;return typeof d?.code==='string'&&typeof d.notes==='string'&&Number.isSafeInteger(d.updatedAt)}
+const isProjectState=(value:unknown):value is ProjectState=>{const p=value as Partial<ProjectState>|null;return typeof p?.notes==='string'&&Array.isArray(p.reviewed)&&p.reviewed.every(Number.isInteger)&&Number.isSafeInteger(p.updatedAt)}
+function readCache<T>(key:string,valid:(value:unknown)=>value is T):Record<string,T>{try{const data:unknown=JSON.parse(localStorage.getItem(key)||'{}');return data&&typeof data==='object'&&!Array.isArray(data)?Object.fromEntries(Object.entries(data).filter(([,value])=>valid(value))):{}}catch{return {}}}
 const lessonsPanelKey='ml-workshop-lessons-panel',readerWidthKey='ml-workshop-reader-width',editorKey='ml-workshop-editor-v1'
 // Editor options are kept per browser. Code suggestions and the dark code background are off unless turned on in Settings.
 function readEditorPrefs():EditorPrefs{try{const saved=JSON.parse(localStorage.getItem(editorKey)||'{}');return {suggestions:saved.suggestions===true,dark:saved.dark===true}}catch{return {suggestions:false,dark:false}}}
@@ -63,7 +66,7 @@ export default function App(){
  useEffect(()=>{if(!focusLesson.current)return;focusLesson.current=false;const active=document.activeElement;if(active&&active!==document.body&&!(active.closest('.curriculum')&&!wide))return;document.querySelector<HTMLElement>('.lesson-reader h1')?.focus()},[id,page,wide])
  const [busy,setBusy]=useState(false);const [results,setResults]=useState<Record<string,RunResult>>({})
  const [saveStatus,setSaveStatus]=useState('Saved on this computer');const [solution,setSolution]=useState<string|null>(null)
- const [cache,setCache]=useState(()=>readCache<Draft>(localKey));const cacheRef=useRef(cache)
+ const [cache,setCache]=useState(()=>readCache(localKey,isDraft));const cacheRef=useRef(cache)
  const timers=useRef<Record<string,ReturnType<typeof setTimeout>>>({});const [loaded,setLoaded]=useState(false)
  // Hero game: a summary drives the nav badge; the full state loads only on the Hero page.
  const [game,setGame]=useState<GameSummary|null>(null);const [loot,setLoot]=useState<(LootNotice&{lessonId:string})|null>(null);const closeLoot=useCallback(()=>setLoot(null),[])
@@ -83,7 +86,7 @@ export default function App(){
    if(!active)return
    const recovered=Object.fromEntries(Object.entries(cacheRef.current).filter(([key,draft])=>curriculum.lessons.some(l=>l.id===key)&&draft.updatedAt >= (s.draftUpdated?.[key]??0)))
    cacheRef.current=recovered;setCache(recovered);try{localStorage.setItem(localKey,JSON.stringify(recovered))}catch{}
-   const projectCache=readCache<ProjectState>(projectKey)
+   const projectCache=readCache(projectKey,isProjectState)
    for(const [key,cached] of Object.entries(projectCache))if(projects.projects.some(p=>p.id===key)&&cached.updatedAt>=(projects.projectState[key]?.updatedAt||0)){const value={...cached,tasks:cached.tasks??projects.projectState[key]?.tasks??{}};projects.projectState[key]=value;void saveProject(key,value)}
    setPortfolio(projects);portfolioRef.current=projects
    setCourses(curriculum.courses);setLessons(curriculum.lessons);setState(s)
@@ -96,9 +99,14 @@ export default function App(){
  function showPage(next:Page){setPage(next);setDrawer(false);if(next==='books')setBookSelection(null);location.hash=next==='learn'?`learn/${id}`:next}
  function showProjects(track?:string){setPage('projects');setProjectId('');setProjectTrack(track||'all');location.hash='projects'+(track?'?track='+track:'')}
  function selectProject(next:string){setProjectId(next);location.hash='projects'+(next?'/'+next:projectTrack!=='all'?'?track='+projectTrack:'')}
- const save=useCallback(async(lessonId:string,draft:Draft)=>{try{await api('/draft',{lessonId,...draft});setSaveStatus('Saved on this computer')}catch{setSaveStatus('Saved in this browser · server not reachable')}},[])
+ // applied is false when this computer already has a newer copy, for example from another tab.
+ const save=useCallback(async(lessonId:string,draft:Draft)=>{try{const result=await api<{applied?:boolean}>('/draft',{lessonId,...draft});setSaveStatus(result.applied===false?'A newer copy is saved on this computer':'Saved on this computer')}catch(e){const message=(e as Error).message;setSaveStatus(message===unreachable?'Saved in this browser · server not reachable':'Saved in this browser only · '+message)}},[])
  useEffect(()=>{if(loaded)Object.entries(cacheRef.current).forEach(([lessonId,draft])=>{void save(lessonId,draft)})},[loaded,save])
- function updateDraft(lessonId:string,code:string,notes:string){const draft={code,notes,updatedAt:Date.now()};const next={...cacheRef.current,[lessonId]:draft};cacheRef.current=next;setCache(next);try{localStorage.setItem(localKey,JSON.stringify(next));setSaveStatus('Saving…')}catch{setSaveStatus('Browser storage unavailable · saving to server')};clearTimeout(timers.current[lessonId]);timers.current[lessonId]=setTimeout(()=>void save(lessonId,draft),350)}
+ function updateDraft(lessonId:string,code:string,notes:string){
+  // Results describe the code that ran. Once the code changes they are marked stale, not shown as current.
+  const before=cacheRef.current[lessonId]?.code??state?.drafts[lessonId]??lessons.find(l=>l.id===lessonId)?.starter
+  if(code!==before)setResults(old=>old[lessonId]&&!old[lessonId].stale?{...old,[lessonId]:{...old[lessonId],stale:true}}:old)
+  const draft={code,notes,updatedAt:Date.now()};const next={...cacheRef.current,[lessonId]:draft};cacheRef.current=next;setCache(next);try{localStorage.setItem(localKey,JSON.stringify(next));setSaveStatus('Saving…')}catch{setSaveStatus('Browser storage unavailable · saving to server')};clearTimeout(timers.current[lessonId]);timers.current[lessonId]=setTimeout(()=>void save(lessonId,draft),350)}
  function updateProject(projectId:string,value:ProjectState){if(rewardKey(portfolioRef.current.projectState[projectId])!==rewardKey(value))reviewChanged.current.add(projectId);const next={...portfolioRef.current,projectState:{...portfolioRef.current.projectState,[projectId]:value}};portfolioRef.current=next;setPortfolio(next);try{localStorage.setItem(projectKey,JSON.stringify(next.projectState));setProjectSave('Saving…')}catch{setProjectSave('Browser storage unavailable · saving to server')};clearTimeout(projectTimers.current[projectId]);projectTimers.current[projectId]=setTimeout(()=>void saveProject(projectId,value),350)}
  function selectLesson(next:string){if(busy)return;focusLesson.current=true;setId(next);setStage('understand');setPage('learn');setDrawer(false);setSolution(null);setError('');setLoot(null);location.hash='learn/'+next;setState(old=>old?{...old,currentLesson:next}:old);void api('/current',{lessonId:next}).catch(()=>setSaveStatus('Could not save your place · server not reachable'))}
  if(!state||!lessons.length)return <main className="loading-screen"><SessionBanner/><CodeXml size={44}/><h1>{error?'Could not load Engineering Workshop':'Loading Engineering Workshop…'}</h1>{error?<>{error!==connectMessage&&<p>{error}</p>}<button className="primary-button" onClick={()=>location.reload()}>Reload</button></>:<LoaderCircle size={23} className="spin"/>}</main>
