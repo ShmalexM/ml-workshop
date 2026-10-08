@@ -30,3 +30,20 @@
  .reader-top{margin-bottom:19px}
  .panel-divider{display:none}
 }
+
+/* Try it yourself: tasks and hints first, then the tip and a closed recap of the idea. */
+.lesson-content h2.challenge-heading{margin-top:4px;font-size:17px}
+.lesson-content .hint-area{margin-bottom:20px}
+.disclosure small{margin-left:10px;font-size:12px;font-weight:450;color:var(--muted)}
+.recap{margin:20px 0;padding:0 16px;border:1px solid var(--line);border-radius:8px}
+.recap>summary{padding:13px 0;font-size:13px;font-weight:600;color:#33445c;cursor:pointer}
+.recap .formula{margin:4px 0 0}
+.recap .guided-explanation{margin:14px 0 16px}
+@media(min-width:1450px){.lesson-content h2.challenge-heading{font-size:19px}.recap>summary{font-size:14px}}
+
+/* Footer notes: why Next lesson is locked, or what passing the checks earned. */
+.lesson-navigation{flex-wrap:wrap;row-gap:8px}
+.lesson-navigation-note{flex-basis:100%;display:flex;align-items:center;justify-content:flex-end;gap:8px;margin:0;font-size:12px;line-height:1.5;color:var(--muted);text-align:right}
+.reward-note{justify-content:flex-start;color:#06663c;text-align:left}
+.reward-note svg{color:#a86b00}
+.reward-note a{font-weight:600;text-decoration:underline;text-underline-offset:3px}
