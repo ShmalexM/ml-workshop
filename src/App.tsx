@@ -62,8 +62,8 @@ export default function App(){
   document.title=names[page]?`${names[page]} · Engineering Workshop`:'Engineering Workshop'
  },[page,id,lessons,projectId,portfolio,bookSelection,library])
  // After picking a lesson, focus its title unless focus is still on a visible control, such as the lesson list beside the lesson.
- const focusLesson=useRef(false)
- useEffect(()=>{if(!focusLesson.current)return;focusLesson.current=false;const active=document.activeElement;if(active&&active!==document.body&&!(active.closest('.curriculum')&&!wide))return;document.querySelector<HTMLElement>('.lesson-reader h1')?.focus()},[id,page,wide])
+ const focusLesson=useRef(false);const [selection,setSelection]=useState(0)
+ useEffect(()=>{if(!focusLesson.current)return;focusLesson.current=false;const active=document.activeElement;if(active&&active!==document.body&&!(active.closest('.curriculum')&&!wide))return;document.querySelector<HTMLElement>('.lesson-reader h1')?.focus()},[id,page,wide,selection])
  const [busy,setBusy]=useState(false);const [results,setResults]=useState<Record<string,RunResult>>({})
  const [saveStatus,setSaveStatus]=useState('Saved on this computer');const [solution,setSolution]=useState<string|null>(null)
  const [cache,setCache]=useState(()=>readCache(localKey,isDraft));const cacheRef=useRef(cache)
@@ -108,7 +108,7 @@ export default function App(){
   if(code!==before)setResults(old=>old[lessonId]&&!old[lessonId].stale?{...old,[lessonId]:{...old[lessonId],stale:true}}:old)
   const draft={code,notes,updatedAt:Date.now()};const next={...cacheRef.current,[lessonId]:draft};cacheRef.current=next;setCache(next);try{localStorage.setItem(localKey,JSON.stringify(next));setSaveStatus('Saving…')}catch{setSaveStatus('Browser storage unavailable · saving to server')};clearTimeout(timers.current[lessonId]);timers.current[lessonId]=setTimeout(()=>void save(lessonId,draft),350)}
  function updateProject(projectId:string,value:ProjectState){if(rewardKey(portfolioRef.current.projectState[projectId])!==rewardKey(value))reviewChanged.current.add(projectId);const next={...portfolioRef.current,projectState:{...portfolioRef.current.projectState,[projectId]:value}};portfolioRef.current=next;setPortfolio(next);try{localStorage.setItem(projectKey,JSON.stringify(next.projectState));setProjectSave('Saving…')}catch{setProjectSave('Browser storage unavailable · saving to server')};clearTimeout(projectTimers.current[projectId]);projectTimers.current[projectId]=setTimeout(()=>void saveProject(projectId,value),350)}
- function selectLesson(next:string){if(busy)return;focusLesson.current=true;setId(next);setStage('understand');setPage('learn');setDrawer(false);setSolution(null);setError('');setLoot(null);location.hash='learn/'+next;setState(old=>old?{...old,currentLesson:next}:old);void api('/current',{lessonId:next}).catch(()=>setSaveStatus('Could not save your place · server not reachable'))}
+ function selectLesson(next:string){if(busy)return;focusLesson.current=true;setSelection(n=>n+1);setId(next);setStage('understand');setPage('learn');setDrawer(false);setSolution(null);setError('');setLoot(null);location.hash='learn/'+next;setState(old=>old?{...old,currentLesson:next}:old);void api('/current',{lessonId:next}).catch(()=>setSaveStatus('Could not save your place · server not reachable'))}
  if(!state||!lessons.length)return <main className="loading-screen"><SessionBanner/><CodeXml size={44}/><h1>{error?'Could not load Engineering Workshop':'Loading Engineering Workshop…'}</h1>{error?<>{error!==connectMessage&&<p>{error}</p>}<button className="primary-button" onClick={()=>location.reload()}>Reload</button></>:<LoaderCircle size={23} className="spin"/>}</main>
  const lessonsOpen=wide?docked:drawer
  function toggleLessons(){if(!wide){setDrawer(open=>!open);return}const next=!docked;setDocked(next);savePref(lessonsPanelKey,next?'open':'closed')}
