@@ -50,7 +50,7 @@ export class BattleEngine{
  private mouse=new THREE.Vector2();private aim=new THREE.Vector3();private holding=false;private keys=new Set<string>();private raycaster=new THREE.Raycaster();private groundPlane=new THREE.Plane(UP,0)
  // Abilities aim at the cursor after mouse input, and at the target or nearest enemy after keyboard input.
  private lastInput:'mouse'|'key'='mouse';private reported=false
- private raf=0;private timer=new THREE.Timer();private hudT=0;private disposed=false;private still=reducedMotion()
+ private raf=0;private timer=new THREE.Timer();private hudT=0;private disposed=false;private still=reducedMotion();private viewW=0;private viewH=0
  private ring:THREE.Mesh;private cursorRing:THREE.Mesh;private shieldMesh:THREE.Mesh
  // A flat class-colored copy of the hero, drawn on top of everything while the boss stands in front of it.
  private xray:THREE.Mesh[]=[];private xrayOn=false;private xrayMat:THREE.MeshBasicMaterial
@@ -77,7 +77,7 @@ export class BattleEngine{
   const ro=new ResizeObserver(()=>this.resize());ro.observe(canvas);this.cleanups.push(()=>ro.disconnect())
  }
  private camOffset(){return new THREE.Vector3(0,16.5,10.5).multiplyScalar(this.zoom)}
- private resize(){const w=this.canvas.clientWidth,h=this.canvas.clientHeight;if(!w||!h)return;this.renderer.setSize(w,h,false);this.composer.setSize(w,h);this.bloomPass.resolution.set(w,h);this.camera.aspect=w/h;this.camera.updateProjectionMatrix();this.particles.setScale(h*this.renderer.getPixelRatio())}
+ private resize(){const w=this.canvas.clientWidth,h=this.canvas.clientHeight;this.viewW=w;this.viewH=h;if(!w||!h)return;this.renderer.setSize(w,h,false);this.composer.setSize(w,h);this.bloomPass.resolution.set(w,h);this.camera.aspect=w/h;this.camera.updateProjectionMatrix();this.particles.setScale(h*this.renderer.getPixelRatio())}
  start(){this.cb.banner(this.setup.stageName,'info');this.raf=requestAnimationFrame(this.frame)}
  setPaused(p:boolean){this.paused=p;this.pushHud(true)}
  setAuto(a:boolean){this.auto=a;this.pushHud(true)}
@@ -556,7 +556,8 @@ export class BattleEngine{
   const el=document.createElement('div');el.className='float-text';el.textContent=text;el.style.color=color;el.style.fontSize=`${Math.round(15*scale)}px`;this.overlay.appendChild(el)
   this.floats.push({el,pos:p.clone().add(new THREE.Vector3((this.rng()-.5)*.6,this.rng()*.4,0)),t:0,life:.9})
  }
- private project(p:THREE.Vector3){const v=p.clone().project(this.camera);return {x:(v.x+1)/2*this.canvas.clientWidth,y:(1-v.y)/2*this.canvas.clientHeight,z:v.z}}
+ // Uses the size saved by resize(): reading clientWidth here, after the bar and text writes, forced a layout for every unit and number on every frame.
+ private project(p:THREE.Vector3){const v=p.clone().project(this.camera);return {x:(v.x+1)/2*this.viewW,y:(1-v.y)/2*this.viewH,z:v.z}}
  private updateFx(dt:number){
   for(const f of this.fades){f.t+=dt;const p=f.t/f.life;f.obj.scale.setScalar(f.base+(f.grow-f.base)*Math.min(1,p*1.4));((f.obj as THREE.Mesh).material as THREE.Material).opacity=0.9*(1-p)}
   for(const f of this.fades)if(f.t>=f.life){f.obj.removeFromParent();(f.obj as THREE.Mesh).geometry.dispose()}
