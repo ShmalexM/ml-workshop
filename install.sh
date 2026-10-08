@@ -402,7 +402,8 @@ finish() {
     errors=$EW_HOME/.launch-errors
     if url=$("$APP/.venv/bin/python" "$APP/scripts/installed.py" </dev/null 2>"$errors"); then
       rm -f "$errors"
-      say "Done. Engineering Workshop is open in your browser at $url"
+      # The launcher prints the address with the session token after #. Show only the address.
+      say "Done. Engineering Workshop is open in your browser at ${url%%#*}"
     else
       reason=$(cat "$errors")
       cat "$errors" >>"$LOG"

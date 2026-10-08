@@ -69,7 +69,7 @@ Pass `--no-ml` to setup to skip PyTorch, TensorFlow, Transformers, tokenizers, L
 .\"Setup Engineering Workshop.cmd" --no-ml --no-launch
 ```
 
-Once running, open http://127.0.0.1:7318. Closing the browser leaves the local server running. Set `ML_WORKSHOP_PORT` to use another port and `ML_WORKSHOP_DATA_DIR` to keep progress, logs, and the PID file in another directory. Use the same settings when starting and stopping. Relative data paths are resolved against the checkout directory. These settings apply to the browser launchers; the native Mac window uses the default configuration.
+The launcher opens the app in your browser at the address it prints, `http://127.0.0.1:7318/#session=<token>`. The token connects that browser; after that, http://127.0.0.1:7318 is enough. Closing the browser leaves the local server running. Set `ML_WORKSHOP_PORT` to use another port and `ML_WORKSHOP_DATA_DIR` to keep progress, logs, and the PID file in another directory. Use the same settings when starting and stopping. Relative data paths are resolved against the checkout directory. These settings apply to the browser launchers; the native Mac window uses the default configuration.
 
 ### Native Mac window
 
@@ -93,7 +93,7 @@ All platforms cap returned output at 24,000 bytes and clean up exercise process 
 
 - **Setup cannot find Python or Node/npm:** install the prerequisites, reopen your terminal, and rerun setup. uv is optional.
 - **Frontend not built or packages missing:** rerun setup from the checkout directory.
-- **Port 7318 is in use:** stop the program that uses it, or set `ML_WORKSHOP_PORT` to an unused port. If it is another Engineering Workshop server, the launcher opens that server.
+- **Port 7318 is in use:** stop the program that uses it, or set `ML_WORKSHOP_PORT` to an unused port. If it is the server of this checkout, the launcher opens it. If it is another copy with a different data folder, the launcher stops with an error, because this browser cannot get that server's session token.
 
 ## Develop locally
 

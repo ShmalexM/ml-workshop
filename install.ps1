@@ -419,7 +419,8 @@ param([switch]$Uninstall, [switch]$Purge)
                 Write-Log ($errors -join [Environment]::NewLine)
                 Fail ('Engineering Workshop is installed but did not start.' + [Environment]::NewLine + ($errors -join ' '))
             }
-            Say "Done. Engineering Workshop is open in your browser at $url"
+            # The launcher prints the address with the session token after #. Show only the address.
+            Say "Done. Engineering Workshop is open in your browser at $("$url".Split('#')[0])"
         }
         Say "Your progress is saved in $($S.Data)."
         if ($S.Shortcuts) {

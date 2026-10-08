@@ -62,6 +62,24 @@ class PlatformPathsTests(unittest.TestCase):
             with patch.dict(os.environ, {'ML_WORKSHOP_DATA_DIR': str(install / 'elsewhere')}):
                 self.assertEqual(paths.data_dir(app), (install / 'elsewhere').resolve())
 
+    def test_session_token_is_private_and_kept(self):
+        with tempfile.TemporaryDirectory() as directory:
+            data = Path(directory)
+            self.assertIsNone(paths.read_session_token(data))
+            token = paths.session_token(data)
+            self.assertRegex(token, r'^[A-Za-z0-9_-]{43}$')
+            # A restart reads the same token, so open pages keep working.
+            self.assertEqual(paths.session_token(data), token)
+            self.assertEqual(paths.read_session_token(data), token)
+            if os.name != 'nt':
+                self.assertEqual((data / paths.SESSION_TOKEN).stat().st_mode & 0o777, 0o600)
+            (data / paths.SESSION_TOKEN).write_text('damaged')
+            replaced = paths.session_token(data)
+            self.assertNotEqual(replaced, token)
+            (data / paths.SESSION_TOKEN).unlink()
+            self.assertNotIn(paths.session_token(data), (token, replaced))
+            self.assertEqual([p.name for p in data.iterdir()], [paths.SESSION_TOKEN])
+
     def test_detached_flags(self):
         with ExitStack() as stack:
             for name, value in [('DETACHED_PROCESS', 8), ('CREATE_NEW_PROCESS_GROUP', 512), ('CREATE_NO_WINDOW', 134217728)]:
@@ -175,12 +193,23 @@ class LaunchTests(unittest.TestCase):
 
     def test_reuse_and_browser_choice(self):
         with tempfile.TemporaryDirectory() as directory:
-            with patch.object(launch, 'data_dir', return_value=Path(directory)), patch.object(launch, 'port', return_value=17319), patch.object(launch, 'health', return_value={'app': 'ml-workshop'}), patch.object(launch.subprocess, 'Popen') as spawn, patch.object(launch.webbrowser, 'open') as browser:
+            token = paths.session_token(Path(directory))
+            with patch.object(launch, 'data_dir', return_value=Path(directory)), patch.object(launch, 'port', return_value=17319), patch.object(launch, 'health', return_value={'app': 'ml-workshop'}), patch.object(launch, 'token_accepted', return_value=True), patch.object(launch.subprocess, 'Popen') as spawn, patch.object(launch.webbrowser, 'open') as browser:
                 with patch.object(sys, 'argv', ['launch.py', '--no-open']):launch.main()
                 browser.assert_not_called()
                 with patch.object(sys, 'argv', ['launch.py']):launch.main()
-                browser.assert_called_once_with('http://127.0.0.1:17319')
+                # The browser gets the token in the URL fragment.
+                browser.assert_called_once_with(f'http://127.0.0.1:17319/#session={token}')
                 spawn.assert_not_called()
+
+    def test_reuse_needs_this_data_folders_token(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.object(launch, 'data_dir', return_value=Path(directory)), patch.object(launch, 'port', return_value=17319), patch.object(launch, 'health', return_value={'app': 'ml-workshop'}), patch.object(launch.subprocess, 'Popen') as spawn, patch.object(launch.webbrowser, 'open') as browser:
+                with self.assertRaisesRegex(RuntimeError, 'session-token file is missing'):launch.main()
+                paths.session_token(Path(directory))
+                with patch.object(launch, 'token_accepted', return_value=False), self.assertRaisesRegex(RuntimeError, 'another copy'):launch.main()
+            spawn.assert_not_called()
+            browser.assert_not_called()
 
     def test_concurrent_launch_api_and_stop(self):
         # CI macOS installs into the selected interpreter; portable CI uses a
@@ -198,16 +227,15 @@ class LaunchTests(unittest.TestCase):
             stop_command = [sys.executable, str(ROOT / 'scripts/stop.py')]
             try:
                 processes = [subprocess.Popen(command, cwd=ROOT, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) for _ in range(2)]
-                for process in processes:
-                    stdout, stderr = process.communicate(timeout=40)
+                outputs = [process.communicate(timeout=40) for process in processes]
+                token = paths.read_session_token(data)
+                for process, (stdout, stderr) in zip(processes, outputs):
                     self.assertEqual(process.returncode, 0, stderr)
-                    self.assertEqual(stdout.strip(), f'http://127.0.0.1:{port}')
+                    self.assertEqual(stdout.strip(), f'http://127.0.0.1:{port}/#session={token}')
                 pid = (data / 'server.pid').read_text()
                 subprocess.run(command, cwd=ROOT, env=env, check=True, capture_output=True, timeout=20)
                 self.assertEqual((data / 'server.pid').read_text(), pid)
                 url = f'http://127.0.0.1:{port}'
-                with urllib.request.urlopen(url + '/api/bootstrap') as response:
-                    token = json.load(response)['token']
                 for lesson, code in [('foundations-1', 'print("python works")'), ('web-1', 'console.log("javascript works")')]:
                     request = urllib.request.Request(url + '/api/run', data=json.dumps(dict(lessonId=lesson, code=code, mode='run')).encode(), headers={'Content-Type': 'application/json', 'X-Workshop-Token': token})
                     with urllib.request.urlopen(request, timeout=15) as response:result = json.load(response)

@@ -12,6 +12,7 @@ from pathlib import Path
 import socket
 import subprocess
 import sys
+import urllib.error
 import urllib.request
 
 
@@ -43,11 +44,17 @@ def main(install):
     try:
         started = subprocess.run(command + ['--no-open'], env=env, capture_output=True, text=True, timeout=120)
         check(started.returncode == 0, f'the app did not start: {started.stderr}')
-        check(started.stdout.strip() == url, f'unexpected launcher output: {started.stdout!r}')
+        # The server keeps its session token in the data folder; the launcher passes it in the URL fragment.
+        token = (install / 'data' / 'session-token').read_text(encoding='ascii').strip()
+        check(started.stdout.strip() == f'{url}/#session={token}', f'unexpected launcher output: {started.stdout!r}')
         health = call(url + '/api/health')
         check(health.get('app') == 'ml-workshop', f'unexpected /api/health response: {health}')
         print(f'{url}/api/health -> {health}')
-        token = call(url + '/api/bootstrap')['token']
+        try:
+            call(url + '/api/state')
+            check(False, '/api/state answered without the session token')
+        except urllib.error.HTTPError as error:
+            check(error.code == 403, f'/api/state without the token returned {error.code}')
         for lesson, code in [('foundations-1', 'print("python works")'), ('web-1', 'console.log("javascript works")')]:
             result = call(url + '/api/run', dict(lessonId=lesson, code=code, mode='run'), token)
             check(result.get('error') is None and 'works' in result.get('stdout', ''), f'{lesson}: {result}')

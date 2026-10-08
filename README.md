@@ -136,8 +136,8 @@ Yes. Open **Settings** and, under **Hero game**, clear **Earn chests and battles
 
 - **The install command stops with an error.** It prints the reason and the path of `install.log` in the install folder. Fix the cause, such as a lost internet connection, and run the command again.
 - **The app does not open.** Run the install command again. It repairs the app and keeps your progress.
-- **Port 7318 is in use.** The app uses port 7318 on `127.0.0.1`. Stop the other program that uses it. If another copy of Engineering Workshop already runs on that port, the app opens that copy and shows its progress.
-- **Saving fails after the server restarts.** The page normally gets a new session token and retries the save by itself. If saving still fails, reload the page.
+- **Port 7318 is in use.** The app uses port 7318 on `127.0.0.1`. Stop the other program that uses it. If another copy of Engineering Workshop with a different data folder runs on that port, the app says so; stop that copy first.
+- **Saving fails, or the page says to open Engineering Workshop from its shortcut.** This browser does not have the session token. The token stays the same when the server restarts, so this happens in a new browser, after you clear the browser's site data, or after the `session-token` file in the `data` folder is deleted. Open the app from its shortcut, or run the start command again. Lesson drafts typed in the meantime stay in the browser and are saved when the page loads again.
 - **Something else goes wrong.** Look in `server.log` in the `data` folder. Remove personal information before you share it.
 
 ## Run from a clone

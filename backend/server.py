@@ -7,6 +7,7 @@ import argparse
 import json
 import mimetypes
 import os
+import re
 import secrets
 import sqlite3
 import sys
@@ -25,11 +26,16 @@ import game
 ROOT=Path(__file__).resolve().parents[1]
 # Same rule as the launcher: data/ in a clone, the data folder next to app/ in an installed copy.
 sys.path.append(str(ROOT/'scripts'))
-from platform_paths import data_dir
+from platform_paths import data_dir, session_token
 DATA=data_dir()
 DATA.mkdir(parents=True,exist_ok=True)
 DB=DATA/'workshop.sqlite3'
-TOKEN=secrets.token_urlsafe(32)
+# The token stays the same across restarts. The launcher reads it from the data folder and gives
+# it to the browser in the URL fragment; no endpoint returns it.
+TOKEN=session_token(DATA)
+SESSION_HELP='Open Engineering Workshop from its shortcut or start command to connect this browser.'
+# Health is polled by the launcher. Book files load by URL from <img> and the PDF viewer, which cannot send the header.
+PUBLIC_API=re.compile(r'/api/health|/api/library/[^/]+/asset/.+')
 RUN_LOCK=threading.Lock()
 IMPORT_LOCK=threading.Lock()
 VERSION=json.loads((ROOT/'package.json').read_text(encoding='utf-8'))['version']
@@ -88,7 +94,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Cache-Control','no-store')
         self.send_header('X-Content-Type-Options','nosniff')
         self.end_headers();self.wfile.write(body)
-    def allowed(self,write=False):
+    def allowed(self,token=True):
         expected=f'127.0.0.1:{self.server.server_port}'
         if self.headers.get('Host')!=expected:
             self.send({'error':f'Open http://{expected}/ instead. The workshop only answers on that address.'},403);return False
@@ -97,12 +103,13 @@ class Handler(BaseHTTPRequestHandler):
             self.send({'error':'Cross-origin requests are disabled.'},403);return False
         if self.headers.get('Sec-Fetch-Site')=='cross-site':
             self.send({'error':'Cross-site requests are disabled.'},403);return False
-        if write and not secrets.compare_digest(self.headers.get('X-Workshop-Token',''),TOKEN):
-            self.send({'error':'Session expired. Reload the page to reconnect.','code':'session-expired'},403);return False
+        if token and not secrets.compare_digest(self.headers.get('X-Workshop-Token',''),TOKEN):
+            self.send({'error':SESSION_HELP,'code':'session-expired'},403);return False
         return True
     def do_GET(self):
-        if not self.allowed():return
         parsed=urlparse(self.path);path=parsed.path
+        # Every API response with learner data needs the token. Static files and the public routes do not.
+        if not self.allowed(token=path.startswith('/api/') and not PUBLIC_API.fullmatch(path)):return
         if path=='/api/portfolio':return self.send(dict(**load_portfolio(DATA),projectState=project_state()))
         if path=='/api/library':
             return self.send(dict(books=LIBRARY.catalog(),guides=study_guides(LIBRARY),readingState=reading_state()))
@@ -122,7 +129,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send({'error':'Unknown library endpoint'},404)
             except (KeyError,ValueError):return self.send({'error':'Unknown book page or asset'},404)
         if path=='/api/health':return self.send(dict(app='ml-workshop',version=VERSION,busy=RUN_LOCK.locked()))
-        if path=='/api/bootstrap':return self.send(dict(token=TOKEN))
+        # Lets the launcher check that a running server uses this data folder's token.
+        if path=='/api/session':return self.send({'ok':True})
         if path=='/api/curriculum':return self.send(public_curriculum())
         if path=='/api/state':return self.send(state())
         if path=='/api/game':
@@ -193,7 +201,7 @@ class Handler(BaseHTTPRequestHandler):
                 if not block:break
                 self.wfile.write(block);remaining-=len(block)
     def do_POST(self):
-        if not self.allowed(write=True):return
+        if not self.allowed():return
         if urlparse(self.path).path=='/api/library/import':return self.import_book_file()
         try:
             length=int(self.headers.get('Content-Length','0'))

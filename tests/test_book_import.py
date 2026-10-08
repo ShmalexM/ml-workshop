@@ -21,6 +21,7 @@ from book_import import import_upload, sweep_staging
 from book_study import study_guides, INFERENCE_GUIDE_EDITION
 from library import Library
 from book_fixture import make_custom_epub, make_epub
+from server_fixture import server_token
 
 
 class UploadTests(unittest.TestCase):
@@ -35,11 +36,7 @@ class UploadTests(unittest.TestCase):
         cls.proc = subprocess.Popen([sys.executable, str(ROOT/'backend/server.py'), '--port', str(cls.port)],
                                    env={**os.environ, 'ML_WORKSHOP_DATA_DIR': str(cls.data)},
                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        for _ in range(60):
-            try:
-                cls.token = json.load(urllib.request.urlopen(cls.url+'/api/bootstrap'))['token']; break
-            except OSError: time.sleep(.1)
-        else: raise RuntimeError('Test server unavailable')
+        cls.token = server_token(cls.url, cls.data, cls.proc)
 
     @classmethod
     def tearDownClass(cls):

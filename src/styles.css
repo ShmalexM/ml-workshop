@@ -9,6 +9,8 @@
 .solution-dialog{border:1px solid var(--line);color:var(--text)}
 .solution-dialog::backdrop{background:#12213877;backdrop-filter:blur(2px)}
 .backup-status{font-size:12px;color:#087446;margin-top:12px}
+.session-banner{margin:0;padding:9px 16px;background:#fff8e9;border-bottom:1px solid #f2e3be;color:#6b4d1f;font-size:13px;line-height:1.5;text-align:center}
+.loading-screen>.session-banner{border:1px solid #f2e3be;border-radius:7px}
 @media(min-width:1450px){.editor-panel{height:64%}}
 /* Touch screens usually have no keyboard, so the key hints under the editor are hidden there. */
 @media(hover:none) and (pointer:coarse){.shortcut{display:none}}

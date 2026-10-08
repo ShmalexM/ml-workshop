@@ -23,6 +23,7 @@ import game
 from courses import COURSES, LESSONS
 from library import import_book
 from book_fixture import make_epub
+from server_fixture import server_token
 
 # Finishing everything earns one chest and one battle per lesson and per path.
 EARNED = len(LESSONS) + len(COURSES)
@@ -698,17 +699,7 @@ class GameApiTests(unittest.TestCase):
             env={**os.environ, 'ML_WORKSHOP_DATA_DIR': cls.tmp.name, 'PYTHONDONTWRITEBYTECODE': '1'},
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         cls.addClassCleanup(cls.stop_server)
-        for _ in range(80):
-            try:
-                with urllib.request.urlopen(cls.url + '/api/bootstrap', timeout=1) as response:
-                    cls.token = json.load(response)['token']
-                break
-            except OSError:
-                if cls.proc.poll() is not None:
-                    raise RuntimeError('Game test server exited')
-                time.sleep(.1)
-        else:
-            raise RuntimeError('Game test server unavailable')
+        cls.token = server_token(cls.url, directory, cls.proc)
 
     @classmethod
     def stop_server(cls):

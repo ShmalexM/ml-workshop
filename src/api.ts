@@ -1,29 +1,84 @@
 import type { BookImportResult } from './libraryTypes'
 
-let token = ''
-let renewal:Promise<void>|null = null
-type Options={keepalive?:boolean}
-async function request(path:string, body?:unknown, options:Options={}):Promise<[Response,any]> {
-  let response:Response
-  // keepalive lets a write finish while the page is closing or reloading.
-  try{response=await fetch('/api'+path,{method:body===undefined?'GET':'POST',headers:body===undefined?{}:{'Content-Type':'application/json','X-Workshop-Token':token},body:body===undefined?undefined:JSON.stringify(body),keepalive:options.keepalive})}
-  catch{throw new Error('Cannot reach the local server. Start Engineering Workshop again, then reload this page.')}
-  return [response,await response.json()]
+/** Shown when this browser has no valid session token. */
+export const connectMessage = 'Open Engineering Workshop from its shortcut or start command to connect this browser.'
+const tokenKey = 'engineering-workshop-session'
+const unreachable = 'Cannot reach the local server. Start Engineering Workshop again, then reload this page.'
+
+// The launcher opens http://127.0.0.1:<port>/#session=<token>, optionally followed by &<page route>.
+// Keep the token, then remove it from the address bar and from this history entry.
+function takeTokenFromAddress(): string {
+  const match = location.hash.match(/^#session=([A-Za-z0-9_-]{32,128})(?:&(.*))?$/)
+  if (!match) return ''
+  history.replaceState(history.state, '', location.pathname + location.search + (match[2] ? '#' + match[2] : ''))
+  try { localStorage.setItem(tokenKey, match[1]) } catch { /* storage unavailable: keep the token for this tab only */ }
+  return match[1]
 }
-export async function api<T>(path:string, body?:unknown, options?:Options):Promise<T> {
-  let [response,data]=await request(path,body,options)
-  // A restarted server rejects the old session token. Get the new token once, then retry this write once.
-  if(response.status===403&&data.code==='session-expired'){await renewToken();[response,data]=await request(path,body,options)}
+let tabToken = takeTokenFromAddress()
+// An open tab or the Mac window can get a new address with a token. Store it and load the page again.
+addEventListener('hashchange', () => { const next = takeTokenFromAddress(); if (next) { tabToken = next; location.reload() } })
+// Read storage on every request, so a token that another tab received is used here too.
+function currentToken() {
+  try { return localStorage.getItem(tokenKey) || tabToken } catch { return tabToken }
+}
+
+let connected = Boolean(currentToken())
+const listeners = new Set<(connected: boolean) => void>()
+function setConnected(value: boolean) {
+  if (connected === value) return
+  connected = value
+  listeners.forEach(listener => listener(value))
+}
+/** Calls listener now and whenever this browser gains or loses a valid session. Returns an unsubscribe function. */
+export function onSessionChange(listener: (connected: boolean) => void) {
+  listeners.add(listener); listener(connected)
+  return () => { listeners.delete(listener) }
+}
+addEventListener('storage', event => { if (event.key === tokenKey && event.newValue) setConnected(true) })
+
+const isExpired = (status: number, data: {code?: string} | null) => status === 403 && data?.code === 'session-expired'
+
+/** fetch with the session token. Throws connectMessage when the server does not accept the token. */
+async function authorized(url: string, init: RequestInit): Promise<Response> {
+  let sent = ''
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const token = currentToken()
+    // Retry only when another tab stored a different token after the first attempt.
+    if (!token || token === sent) break
+    sent = token
+    let response: Response
+    try { response = await fetch(url, {...init, headers: {...init.headers as Record<string, string>, 'X-Workshop-Token': token}}) }
+    catch { throw new Error(unreachable) }
+    if (response.status !== 403 || !isExpired(response.status, await response.clone().json().catch(() => null))) { setConnected(true); return response }
+  }
+  setConnected(false)
+  throw new Error(connectMessage)
+}
+
+type Options={keepalive?:boolean}
+export async function api<T>(path:string, body?:unknown, options:Options={}):Promise<T> {
+  // keepalive lets a write finish while the page is closing or reloading.
+  const response=await authorized('/api'+path,{method:body===undefined?'GET':'POST',headers:body===undefined?{}:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),keepalive:options.keepalive})
+  const data=await response.json()
   if(!response.ok)throw new Error(data.error||'The local server could not complete this request.')
   return data
 }
-export async function bootstrap(){const data=await api<{token:string}>('/bootstrap');token=data.token}
-// Writes that fail together share one token request.
-function renewToken(){return renewal??=bootstrap().finally(()=>{renewal=null})}
+
+/** Download a file from the local server. The request carries the token, so it is saved from a blob: URL. */
+export async function downloadFile(url: string, filename: string) {
+  const response = await authorized(url, {cache: 'no-store'})
+  if (!response.ok) throw new Error((await response.json().catch(() => null))?.error || 'Could not download this file.')
+  const link = document.createElement('a')
+  link.href = URL.createObjectURL(await response.blob())
+  link.download = filename
+  document.body.append(link); link.click(); link.remove()
+  // Some browsers read the blob after click() returns.
+  setTimeout(() => URL.revokeObjectURL(link.href), 60_000)
+}
 
 /** Stream the file to the local server without base64 copies or a JSON body limit. */
 export async function importBook(file: File, bookId: string, onProgress: (percent: number) => void): Promise<BookImportResult> {
-  const upload = () => new Promise<{status: number; data: BookImportResult & {error?: string; code?: string}}>((resolve, reject) => {
+  const upload = (token: string) => new Promise<{status: number; data: BookImportResult & {error?: string; code?: string}}>((resolve, reject) => {
     const xhr = new XMLHttpRequest()
     const query = new URLSearchParams({filename: file.name})
     if (bookId) query.set('book', bookId)
@@ -39,10 +94,15 @@ export async function importBook(file: File, bookId: string, onProgress: (percen
     xhr.ontimeout = () => reject(new Error('The import timed out. Reload Books to check whether it finished, then retry if needed.'))
     xhr.send(file)
   })
-  let result = await upload()
-  if (result.status === 403 && result.data.code === 'session-expired') {
-    await renewToken(); onProgress(0); result = await upload()
+  let sent = currentToken()
+  if (!sent) { setConnected(false); throw new Error(connectMessage) }
+  let result = await upload(sent)
+  // Another tab may have stored a newer token. Retry once with it.
+  if (isExpired(result.status, result.data) && currentToken() !== sent) {
+    sent = currentToken(); onProgress(0); result = await upload(sent)
   }
+  if (isExpired(result.status, result.data)) { setConnected(false); throw new Error(connectMessage) }
+  setConnected(true)
   if (result.status < 200 || result.status >= 300) throw new Error(result.data.error || 'Could not import this book. Choose the file again to retry.')
   return result.data
 }
