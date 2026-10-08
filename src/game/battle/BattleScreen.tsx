@@ -32,7 +32,7 @@ export default function BattleScreen({game,onGame,onExit}:{game:GameState;onGame
  }
  useEffect(()=>{
   if(phase!=='fighting'||!battle||!canvas.current||!overlay.current)return
-  const e=new BattleEngine(canvas.current,overlay.current,{appearance:appearanceOf(hero.race,hero.class,cls.role,gear),classColor:cls.color,stats,name:hero.name,stage:battle.stage,stageName:battle.stageName,bossName:battle.bossName,bossHp:battle.bossHp,bossRemaining:battle.bossRemaining,seed:battle.id*7919+battle.stage},{
+  const e=new BattleEngine(canvas.current,overlay.current,{appearance:appearanceOf(hero.race,hero.class,cls.role,gear),classColor:cls.color,stats,name:hero.name,stage:battle.stage,stageName:battle.stageName,bossName:battle.bossName,bossHp:battle.bossHp,bossRemaining:battle.bossRemaining,seed:battle.id*7919+battle.stage,enemyHealth:battle.enemyHealth,enemyDamage:battle.enemyDamage},{
    hud:setHud,banner:(text,tone)=>setBanner(b=>({text,tone,n:(b?.n||0)+1})),end:r=>setEnd(r)})
   engine.current=e;e.start();canvas.current.focus()
   // Leaving a fight without an ending (another page, reload, closed tab) saves it as a retreat, so its boss damage is kept.

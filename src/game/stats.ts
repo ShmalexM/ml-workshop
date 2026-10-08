@@ -35,7 +35,8 @@ export function heroStats(items:Partial<Record<Slot,Item>>,level:number):HeroSta
   haste:curve(totals.haste,220,.40),
   mastery:curve(totals.mastery,220,.50),
   versatility:curve(totals.versatility,260,.30),
-  damageReduction:Math.min(.7,totals.armor/(totals.armor+650)),
+  // The armor needed for the same reduction grows with level, so plate stays ahead of cloth without making plate wearers untouchable.
+  damageReduction:Math.min(.7,totals.armor/(totals.armor+400+30*level)),
   effects:Object.values(items).flatMap(item=>item?.effect?[item.effect.id]:[]),
  }
 }

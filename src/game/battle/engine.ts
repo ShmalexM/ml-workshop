@@ -9,7 +9,9 @@ import {KITS,type Ability,type Kit} from './kits'
 import type {HeroStats} from '../stats'
 
 export type Key='Q'|'W'|'E'|'R'
-export type BattleSetup={appearance:Appearance;classColor:string;stats:HeroStats;name:string;stage:number;stageName:string;bossName:string;bossHp:number;bossRemaining:number;seed:number}
+export type BattleSetup={appearance:Appearance;classColor:string;stats:HeroStats;name:string;stage:number;stageName:string;bossName:string;bossHp:number;bossRemaining:number;seed:number
+ /** Enemy health and damage multipliers from the server's expected power for the stage. */
+ enemyHealth?:number;enemyDamage?:number}
 export type Hud={hp:number;maxHp:number;shield:number;cds:Record<Key,number>;bossHp:number;bossMax:number;bossSeen:boolean;enraged:boolean;time:number;kills:number;bossDamage:number;buffs:{name:string;left:number;color:string}[];auto:boolean;paused:boolean}
 export type BattleEnd={outcome:'victory'|'defeat'|'retreat';bossDamage:number;kills:number;seconds:number;timeUp:boolean}
 type Callbacks={hud:(h:Hud)=>void;banner:(text:string,tone:'info'|'boss'|'danger'|'good')=>void;end:(r:BattleEnd)=>void}
@@ -17,16 +19,19 @@ type Callbacks={hud:(h:Hud)=>void;banner:(text:string,tone:'info'|'boss'|'danger
 type Unit={
  id:number;kind:EnemyKind;name:string;model:EnemyModel;pos:THREE.Vector3;facing:number;radius:number;speed:number
  hp:number;maxHp:number;dmg:number;range:number;interval:number;atk:number;ranged:string|null;elite:boolean;boss:boolean
- dead:boolean;deathT:number;root:number;stun:number;slow:number;slowT:number;burn:{dps:number;t:number}[];knock:THREE.Vector3|null
+ dead:boolean;deathT:number;root:number;stun:number;slow:number;slowT:number;burn:{dps:number;t:number;source:string}[];knock:THREE.Vector3|null;stunDr:{n:number;until:number}
  bar:HTMLDivElement|null;lunge:number;phase:number;cool:{slam:number;charge:number;rain:number;summon:number};charge:{dir:THREE.Vector3;t:number}|null
 }
 type Buff={name:string;t:number;color:string;damageUp?:number;reduce?:number;hot?:number;grow?:number}
 type Shot={mesh:THREE.Mesh;pos:THREE.Vector3;vel:THREE.Vector3;range:number;fromHero:boolean;dmg:number;ability:Ability|null;hit:Set<number>;color:string}
-type Zone={pos:THREE.Vector3;radius:number;t:number;tick:number;next:number;delay:number;ability:Ability|null;dmg:number;fromHero:boolean;meshes:THREE.Object3D[];color:string;once:boolean;line?:{dir:THREE.Vector3;length:number;width:number;boss:Unit}}
+type Zone={pos:THREE.Vector3;radius:number;t:number;tick:number;next:number;delay:number;ability:Ability|null;dmg:number;impact:number;hits:number;lingering:Ability|null;fromHero:boolean;meshes:THREE.Object3D[];color:string;once:boolean;line?:{dir:THREE.Vector3;length:number;width:number;boss:Unit}}
 type Fade={obj:THREE.Object3D;t:number;life:number;grow:number;base:number}
 type Float={el:HTMLDivElement;pos:THREE.Vector3;t:number;life:number}
 
 const UP=new THREE.Vector3(0,1,0)
+const BURN_STACKS=3
+/** Auto-battle stays this far from the portal where enemies spawn. */
+const PORTAL_KEEP=8
 const flat=(v:THREE.Vector3)=>{v.y=0;return v}
 
 /** League-style arena fight: click to move and attack, Q/W/E/R toward the cursor, boss damage carries over. */
@@ -171,14 +176,14 @@ export class BattleEngine{
  private spawn(kind:EnemyKind,elite:boolean){
   const a=ARCHETYPES[kind];const s=this.setup.stage;const model=buildEnemy(kind,'',elite?1.35:1)
   const pos=this.arena.portal.clone().add(new THREE.Vector3((this.rng()-.5)*4,0,1+this.rng()*2))
-  const hpMult=stageHp(s)*(elite?2.6:1);const dmgMult=stageDmg(s)*(elite?1.5:1)
+  const hpMult=(this.setup.enemyHealth??stageHp(s))*(elite?2.6:1);const dmgMult=(this.setup.enemyDamage??stageDmg(s))*(elite?1.5:1)
   const u=this.makeUnit(kind,(elite?'Elite ':'')+a.name,model,pos,a.radius*(elite?1.35:1),a.speed,a.hp*hpMult*.62,a.dmg*dmgMult*.72,a.range,a.interval,a.ranged??null,elite,false)
   this.particles.burst(pos.clone().setY(1),{count:24,color:this.arena.accent,speed:2.5,size:.12,life:.6})
   return u
  }
  private spawnBoss(kind:EnemyKind,scale:number,variant:string){
   const model=buildEnemy(kind,variant,scale);const pos=this.arena.portal.clone().add(new THREE.Vector3(0,0,2.5))
-  const a=ARCHETYPES[kind];const dmg=17*stageDmg(this.setup.stage)
+  const a=ARCHETYPES[kind];const dmg=17*(this.setup.enemyDamage??stageDmg(this.setup.stage))
   const boss=this.makeUnit(kind,this.setup.bossName,model,pos,a.radius*scale*.75,Math.min(a.speed,3.6)*.9,this.setup.bossRemaining,dmg,a.ranged?6.5:1.6+a.radius*scale*.6,1.4,a.ranged??null,true,true)
   boss.maxHp=this.setup.bossHp;boss.cool={slam:6,charge:10,rain:8,summon:16}
   this.boss=boss;this.bossSpawned=true;this.shake=.6
@@ -190,7 +195,7 @@ export class BattleEngine{
   model.object.position.copy(pos);this.scene.add(model.object)
   const bar=boss?null:document.createElement('div')
   if(bar){bar.className='unit-bar'+(elite?' elite':'');bar.innerHTML='<i></i>';this.overlay.appendChild(bar)}
-  const u:Unit={id:this.nextId++,kind,name,model,pos:pos.clone(),facing:0,radius,speed,hp,maxHp:hp,dmg,range,interval,atk:interval*(.5+this.rng()*.5),ranged,elite,boss,dead:false,deathT:0,root:0,stun:0,slow:0,slowT:0,burn:[],knock:null,bar,lunge:0,phase:this.rng()*6,cool:{slam:0,charge:0,rain:0,summon:0},charge:null}
+  const u:Unit={id:this.nextId++,kind,name,model,pos:pos.clone(),facing:0,radius,speed,hp,maxHp:hp,dmg,range,interval,atk:interval*(.5+this.rng()*.5),ranged,elite,boss,dead:false,deathT:0,root:0,stun:0,slow:0,slowT:0,burn:[],knock:null,stunDr:{n:0,until:0},bar,lunge:0,phase:this.rng()*6,cool:{slam:0,charge:0,rain:0,summon:0},charge:null}
   this.units.push(u);return u
  }
 
@@ -220,12 +225,14 @@ export class BattleEngine{
   }else{
    const arrows=new THREE.Vector3((this.keys.has('ArrowRight')?1:0)-(this.keys.has('ArrowLeft')?1:0),0,(this.keys.has('ArrowDown')?1:0)-(this.keys.has('ArrowUp')?1:0))
    if(arrows.lengthSq()>0){this.moveTo=this.clampArena(this.heroPos.clone().add(arrows.setLength(1.5)));this.target=null}
-   if(this.auto&&!this.target&&!this.moveTo&&!this.holding)this.target=this.nearestEnemy(this.heroPos,40)
    if(this.target&&this.target.dead)this.target=null
+   if(this.auto&&!this.moveTo&&!this.holding)this.autoTarget()
    if(!this.target&&!this.moveTo){const near=this.nearestEnemy(this.heroPos,this.kit.auto.range+1.5);if(near)this.target=near}
    let goal:THREE.Vector3|null=null
    if(this.target){const dist=flat(this.target.pos.clone().sub(this.heroPos)).length()-this.target.radius;if(dist>this.kit.auto.range)goal=this.target.pos;else this.autoAttack(dt)}
    else if(this.moveTo){goal=this.moveTo;if(flat(this.moveTo.clone().sub(this.heroPos)).length()<.15){this.moveTo=null;goal=null}}
+   // Auto waits for melee enemies outside the spawn area instead of walking into new waves.
+   if(goal&&this.auto&&this.target&&!this.target.ranged&&this.gap(this.target)>this.kit.auto.range+2&&this.nearPortal(goal)&&this.nearPortal(this.heroPos,PORTAL_KEEP+1.5))goal=null
    if(goal){const dir=flat(goal.clone().sub(this.heroPos));const len=dir.length();if(len>.05){const step=Math.min(len,this.moveSpeed()*dt);this.heroPos.add(dir.setLength(step));this.heroFacing=Math.atan2(dir.x,dir.z);moving=true}}
    if(this.auto)this.autoCast()
   }
@@ -252,15 +259,46 @@ export class BattleEngine{
   if(this.kit.auto.projectile){this.hero.play(this.setup.appearance.role==='ranged'?'shoot':'cast',.32);this.fire(this.heroPos,t.pos,dmg,null,this.kit.auto.projectile,24,this.kit.auto.range+3,true)}
   else{this.hero.play('attack');const target=t;setTimeout(()=>{if(!target.dead&&!this.disposed&&flat(target.pos.clone().sub(this.heroPos)).length()-target.radius<=this.kit.auto.range+.6){this.damage(target,dmg,null);if(this.kit.auto.slow)this.slowUnit(target,this.kit.auto.slow,2)}},140)}
  }
+ // ---------- auto-battle ----------
+ /** Fight the nearest enemy, but finish one already in reach before turning to another. */
+ private autoTarget(){
+  const near=this.nearestEnemy(this.heroPos,40);if(!near)return
+  const t=this.target;if(t&&t!==near&&this.gap(t)<=this.kit.auto.range)return
+  this.target=near
+ }
+ private gap(u:Unit,from=this.heroPos){return flat(u.pos.clone().sub(from)).length()-u.radius}
+ private enemiesNear(p:THREE.Vector3,r:number){let n=0;for(const u of this.units)if(!u.dead&&this.gap(u,p)<=r)n++;return n}
+ private nearPortal(p:THREE.Vector3,r=PORTAL_KEEP){return flat(p.clone().sub(this.arena.portal)).length()<r}
+ /** A dash, leap or blink may end here: away from the spawn portal and not inside a pack. */
+ private safeLanding(p:THREE.Vector3,crowd:number){return !this.nearPortal(p)&&this.enemiesNear(p,3.5)<=crowd}
  private autoCast(){
-  const near=this.nearestEnemy(this.heroPos,14);const low=this.hp<this.maxHp*.5
+  const near=this.nearestEnemy(this.heroPos,16);const hp=this.hp/this.maxHp;const boss=this.boss&&!this.boss.dead?this.boss:null
+  const melee=this.enemiesNear(this.heroPos,2.5)
   for(const a of this.kit.abilities){if(this.cds[a.key]>0)continue
-   if(['heal','shield'].includes(a.kind)&&!low)continue
-   if(a.kind==='buff'&&!near)continue
-   if(['blink','disengage'].includes(a.kind)&&!(a.power>0&&near))continue
-   if(!['heal','shield','buff'].includes(a.kind)&&!near)continue
-   if(near){this.aim.copy(near.pos)}
-   this.tryCast(a.key);break}
+   const big=a.cd>=25
+   let aim:THREE.Vector3|null=near?.pos||null;let go=false
+   switch(a.kind){
+    case 'heal':go=hp<.5;break
+    case 'shield':go=hp<.75&&melee>0||hp<.5;break
+    case 'buff':go=a.reduce&&!a.damageUp?melee>=2||hp<.6&&melee>0:!!near&&(boss!==null&&this.gap(boss)<6||!big&&this.enemiesNear(this.heroPos,5)>=3);break
+    case 'nova':case 'spin':{const r=(a.radius||3)+.3;const n=this.enemiesNear(this.heroPos,r);go=big?n>=4||(boss!==null&&this.gap(boss)<=r):n>=1;break}
+    case 'cone':{const r=a.radius||3;const t=big&&boss&&this.gap(boss)<=r?boss:this.nearestEnemy(this.heroPos,r);aim=t?.pos||null;go=!!t&&(!big||t===boss||this.enemiesNear(this.heroPos,r)>=4);break}
+    case 'projectile':case 'chain':go=!!near&&this.gap(near)<=(a.range||10);break
+    case 'ground':{const reach=(a.range||0)+(a.radius||3)*.6;const t=big&&boss&&this.gap(boss)<=reach?boss:near;aim=t?.pos||null;go=!!t&&this.gap(t)<=reach&&(!big||t===boss||this.enemiesNear(t.pos,a.radius||3)>=4);break}
+    case 'dash':{if(!near)break;const d=this.gap(near);const dir=flat(near.pos.clone().sub(this.heroPos)).normalize()
+     const end=a.pierce?this.clampArena(this.heroPos.clone().add(dir.multiplyScalar(a.range||8))):near.pos
+     go=d>=1.5&&d<=(a.range||8)&&(a.pierce?this.safeLanding(end,1):!this.nearPortal(end));break}
+    case 'leap':{if(!near)break;const t=boss&&this.gap(boss)<=(a.range||9)?boss:near;aim=t.pos;go=this.gap(t)<=(a.range||9)&&this.safeLanding(t.pos,4)&&(t===boss||this.enemiesNear(t.pos,a.radius||4)>=4);break}
+    case 'blink':
+     if(a.power>0){go=!!near&&this.gap(near)<=(a.range||10)&&this.safeLanding(near.pos,3)}
+     else if(near&&(melee>=2||hp<.5&&melee>0)){const away=flat(this.heroPos.clone().sub(near.pos));if(away.lengthSq()<1e-4)away.set(0,0,1);aim=this.clampArena(this.heroPos.clone().add(away.setLength(a.range||8)));go=this.safeLanding(aim,1)}
+     break
+    case 'disengage':if(near&&melee>0&&hp<.8){const end=this.clampArena(this.heroPos.clone().add(flat(this.heroPos.clone().sub(near.pos)).setLength(a.range||7)));go=this.safeLanding(end,1)}break
+    case 'spree':go=!!near&&(boss!==null&&this.gap(boss)<=(a.range||8)||this.enemiesNear(this.heroPos,a.range||8)>=4);break
+   }
+   if(!go)continue
+   if(aim)this.aim.copy(aim)
+   this.lastInput='mouse';this.tryCast(a.key);break}
  }
  private tryCast(key:Key){
   if(this.over||this.paused||this.hero.dead||this.cds[key]>0||this.dash||this.spree)return
@@ -274,7 +312,7 @@ export class BattleEngine{
    case 'ground':{this.hero.play('cast');this.zone(a.range?within(a.range):this.heroPos.clone(),a,pow);break}
    case 'dash':{this.dash={to:this.clampArena(this.heroPos.clone().add(dir.clone().multiplyScalar(a.range||8))),speed:24,ability:a,hit:new Set()};this.face(this.dash.to);this.trail();break}
    case 'blink':{
-    if(a.power>0){const t=this.nearestEnemy(aim,4)||this.nearestEnemy(this.heroPos,a.range||10);if(!t)return;const behind=t.pos.clone().add(flat(t.pos.clone().sub(this.heroPos)).setLength(t.radius+.7));this.blinkTo(behind);this.face(t.pos);this.hero.play('attack');this.damage(t,pow,a);if(a.stun)t.stun=Math.max(t.stun,a.stun)}
+    if(a.power>0){const t=this.nearestEnemy(aim,4)||this.nearestEnemy(this.heroPos,a.range||10);if(!t)return;const behind=t.pos.clone().add(flat(t.pos.clone().sub(this.heroPos)).setLength(t.radius+.7));this.blinkTo(behind);this.face(t.pos);this.hero.play('attack');this.damage(t,pow,a);if(a.stun)this.stunUnit(t,a.stun)}
     else this.blinkTo(this.clampArena(within(a.range||8)))
     this.trail();break}
    case 'disengage':{this.dash={to:this.clampArena(this.heroPos.clone().sub(dir.clone().multiplyScalar(a.range||7))),speed:22,ability:null,hit:new Set(),arc:1.6,from:this.heroPos.clone(),t:0,total:.45};this.trail();break}
@@ -287,6 +325,7 @@ export class BattleEngine{
    case 'chain':{this.hero.play('cast');this.chain(a,aim,pow);break}
    case 'spree':{const t=this.units.filter(u=>!u.dead&&u.pos.distanceTo(this.heroPos)<(a.range||8)).slice(0,a.count||5);if(!t.length)return;this.spree={targets:t,next:0,ability:a};break}
   }
+  if(a.barrier)this.shield={amount:Math.max(this.shield.amount,this.maxHp*a.barrier),t:6}
   this.cds[key]=a.cd/(1+this.setup.stats.haste*.5)
   if(this.has('riftwalk')&&this.rng()<.25){this.cds[key]=0;this.floatText(this.heroPos,'Reset','#c08aff',1.4)}
  }
@@ -298,7 +337,7 @@ export class BattleEngine{
  }
  private dashHits(d:NonNullable<BattleEngine['dash']>){
   if(!d.ability)return
-  for(const u of this.units){if(u.dead||d.hit.has(u.id))continue;if(flat(u.pos.clone().sub(this.heroPos)).length()<u.radius+.8){d.hit.add(u.id);this.damage(u,this.power()*d.ability.power,d.ability);if(d.ability.stun)u.stun=Math.max(u.stun,d.ability.stun);if(!d.ability.pierce){this.dash=null;this.hero.play('attack');if(this.has('galeforce'))this.land({...d,ability:null});return}}}
+  for(const u of this.units){if(u.dead||d.hit.has(u.id))continue;if(flat(u.pos.clone().sub(this.heroPos)).length()<u.radius+.8){d.hit.add(u.id);this.damage(u,this.power()*d.ability.power,d.ability);if(d.ability.stun)this.stunUnit(u,d.ability.stun);if(!d.ability.pierce){this.dash=null;this.hero.play('attack');if(this.has('galeforce'))this.land({...d,ability:null});return}}}
  }
  private blinkTo(p:THREE.Vector3){this.particles.burst(this.heroPos.clone().setY(1),{count:30,color:this.setup.classColor,speed:2,size:.12,life:.5});this.heroPos.copy(this.clampArena(p));this.particles.burst(this.heroPos.clone().setY(1),{count:30,color:this.setup.classColor,speed:2,size:.12,life:.5});if(this.has('galeforce'))this.land({to:this.heroPos.clone(),speed:0,ability:null,hit:new Set()})}
  private trail(){for(let i=0;i<20;i++)this.particles.spawn(this.heroPos.clone().add(new THREE.Vector3((this.rng()-.5),1+this.rng(),(this.rng()-.5))),new THREE.Vector3(0,.4,0),new THREE.Color(this.setup.classColor),.14,.5)}
@@ -317,7 +356,7 @@ export class BattleEngine{
 
  // ---------- damage ----------
  private damage(u:Unit,base:number,ability:Ability|null,opts:{noProc?:boolean;color?:string}={}){
-  if(u.dead)return
+  if(u.dead||this.over)return
   const st=this.setup.stats
   let d=base*(1+st.versatility)*(1+this.buffSum('damageUp'))*(ability?1+st.mastery:1)
   if(this.has('kingslayer')&&(u.elite||u.boss))d*=1.35
@@ -328,19 +367,33 @@ export class BattleEngine{
   if(u.boss)this.bossDamage+=Math.min(d,Math.max(0,before))
   this.floatText(u.pos.clone().setY(u.model.height*.9),(crit?'':'')+d,crit?'#ffb340':opts.color||'#ffffff',crit?1.45:1)
   u.lunge=-.12
-  if(ability?.burn)u.burn.push({dps:this.power()*ability.burn,t:6})
+  if(ability?.burn)this.burn(u,this.power()*ability.burn,6,ability.name)
   if(ability?.slow)this.slowUnit(u,ability.slow,3)
-  if(ability?.root)u.root=Math.max(u.root,ability.root)
+  if(ability?.root)u.root=u.boss?Math.max(u.root,ability.root*.4):Math.max(u.root,ability.root)
   if(ability?.drain)this.heal(d*ability.drain,true)
   if(!opts.noProc){
    if(this.has('bloodsong'))this.heal(d*.08,false)
-   if(this.has('inferno'))u.burn.push({dps:d*.4/3,t:3})
+   if(this.has('inferno'))this.burn(u,d*.4/3,3,'inferno')
    if(this.has('wintergrasp'))this.slowUnit(u,.3,2)
    if(this.has('stormcall')){this.stormCount++;if(this.stormCount%4===0)this.chain({key:'Q',name:'Stormcall',kind:'chain',cd:0,power:.6,range:8,bounces:2,color:'#9ad8ff',text:''},u.pos,this.power()*.6,true)}
   }
   if(u.hp<=0)this.kill(u)
  }
  private slowUnit(u:Unit,amount:number,t:number){u.slow=Math.max(u.slow,amount);u.slowT=Math.max(u.slowT,t)}
+ /** At most 3 burns from one source on one enemy; a new one replaces the oldest. */
+ private burn(u:Unit,dps:number,t:number,source:string){
+  const same=u.burn.filter(b=>b.source===source)
+  if(same.length>=BURN_STACKS){const oldest=same.reduce((a,b)=>b.t<a.t?b:a);u.burn.splice(u.burn.indexOf(oldest),1)}
+  u.burn.push({dps,t,source})
+ }
+ /** Bosses take half-length stuns, each further stun within 15 sec is halved again, and a fourth is ignored. A stun never extends a running one. Roots on bosses last 40%. */
+ private stunUnit(u:Unit,t:number){
+  if(!u.boss){u.stun=Math.max(u.stun,t);return}
+  if(u.stun>0)return
+  if(this.time>=u.stunDr.until)u.stunDr.n=0
+  if(u.stunDr.n>=3)return
+  u.stunDr.n++;u.stun=t*.5**u.stunDr.n;u.stunDr.until=this.time+15
+ }
  private kill(u:Unit){
   u.dead=true;u.deathT=0;this.kills++;u.bar?.remove();u.bar=null
   this.particles.burst(u.pos.clone().setY(u.model.height*.5),{count:u.boss?160:26,color:u.boss?'#ffb340':this.arena.accent,speed:u.boss?6:2.5,size:u.boss?.2:.12,life:u.boss?1.4:.7})
@@ -349,11 +402,11 @@ export class BattleEngine{
   if(u.boss&&!this.over){this.over=true;this.outcome='victory';this.endT=2.2;this.cb.banner(`${u.name} falls`,'good');this.shake=.8;for(const o of this.units)if(!o.dead&&!o.boss){o.hp=0;this.kill(o)}}
  }
  private areaHit(p:THREE.Vector3,radius:number,dmg:number,a:Ability|null,noProc=false){
-  for(const u of this.units){if(u.dead)continue;if(flat(u.pos.clone().sub(p)).length()<=radius+u.radius){this.damage(u,dmg,a,{noProc});if(a?.stun)u.stun=Math.max(u.stun,a.stun);if(a?.knock&&!u.boss)u.knock=flat(u.pos.clone().sub(p)).setLength(a.knock*3)}}
+  for(const u of this.units){if(u.dead)continue;if(flat(u.pos.clone().sub(p)).length()<=radius+u.radius){this.damage(u,dmg,a,{noProc});if(a?.stun)this.stunUnit(u,a.stun);if(a?.knock&&!u.boss)u.knock=flat(u.pos.clone().sub(p)).setLength(a.knock*3)}}
  }
  private coneHit(a:Ability,dir:THREE.Vector3){
   const r=a.radius||3,half=a.spread||.8
-  for(const u of this.units){if(u.dead)continue;const v=flat(u.pos.clone().sub(this.heroPos));if(v.length()>r+u.radius)continue;if(v.lengthSq()>.01&&v.normalize().angleTo(dir)>half)continue;this.damage(u,this.power()*a.power,a);if(a.stun)u.stun=Math.max(u.stun,a.stun)}
+  for(const u of this.units){if(u.dead)continue;const v=flat(u.pos.clone().sub(this.heroPos));if(v.length()>r+u.radius)continue;if(v.lengthSq()>.01&&v.normalize().angleTo(dir)>half)continue;this.damage(u,this.power()*a.power,a);if(a.stun)this.stunUnit(u,a.stun)}
   this.particles.burst(this.heroPos.clone().add(dir.clone().multiplyScalar(r*.6)).setY(1),{count:30,color:a.color,speed:3,size:.12,life:.4,spread:.4})
  }
  private chain(a:Ability,near:THREE.Vector3,dmg:number,noProc=false){
@@ -372,8 +425,8 @@ export class BattleEngine{
   for(const u of this.units){
    const m=u.model
    if(u.dead){u.deathT+=dt;m.object.position.y=-u.deathT*.8;m.object.scale.setScalar(Math.max(.01,m.object.scale.x*(1-dt*1.5)));if(u.deathT>1.2){m.object.removeFromParent();disposeTree(m.object);u.deathT=99}continue}
-   for(const b of u.burn){b.t-=dt;u.hp-=b.dps*dt;if(u.boss)this.bossDamage+=b.dps*dt}
-   u.burn=u.burn.filter(b=>b.t>0);if(u.hp<=0){this.kill(u);continue}
+   if(!this.over){for(const b of u.burn){b.t-=dt;const d=Math.min(b.dps*dt,Math.max(0,u.hp));u.hp-=b.dps*dt;if(u.boss)this.bossDamage+=d}
+    u.burn=u.burn.filter(b=>b.t>0);if(u.hp<=0){this.kill(u);continue}}
    u.stun=Math.max(0,u.stun-dt);u.root=Math.max(0,u.root-dt);u.slowT=Math.max(0,u.slowT-dt);if(u.slowT<=0)u.slow=0
    if(u.knock){u.pos.add(u.knock.clone().multiplyScalar(dt));u.knock.multiplyScalar(1-dt*6);if(u.knock.length()<.2)u.knock=null}
    const toHero=flat(this.heroPos.clone().sub(u.pos));const dist=toHero.length()-u.radius-.5
@@ -442,20 +495,22 @@ export class BattleEngine{
   if(a?.explode){this.areaHit(s.pos,a.explode,s.dmg,a);this.ringFx(s.pos,a.explode,a.color,.35);this.particles.burst(s.pos.clone(),{count:50,color:a.color,speed:4,size:.16,life:.6})}
   else this.damage(u,s.dmg,a)
   if(a?.pull&&!u.boss){u.pos.copy(this.heroPos.clone().add(flat(u.pos.clone().sub(this.heroPos)).setLength(1.4)))}
-  if(a?.stun)u.stun=Math.max(u.stun,a.stun)
+  if(a?.stun)this.stunUnit(u,a.stun)
   this.particles.burst(s.pos.clone(),{count:10,color:s.color,speed:1.5,size:.1,life:.3})
  }
+ /** A hero zone hits once per tick for `dmg`. Its first hit can be a bigger impact, and stuns, roots and burns land only with that first hit. */
  private zone(p:THREE.Vector3,a:Ability,dmg:number){
   const meshes=this.decal(p,a.radius||3,a.color,.28)
-  this.zones.push({pos:p.clone(),radius:a.radius||3,t:(a.duration||.1)+(a.delay||0),tick:a.tick||.5,next:a.delay||0,delay:a.delay||0,ability:a,dmg,fromHero:true,meshes,color:a.color,once:(a.duration||.1)<=.15})
+  const impact=a.impact!==undefined?this.power()*a.impact:dmg
+  this.zones.push({pos:p.clone(),radius:a.radius||3,t:(a.duration||.1)+(a.delay||0),tick:a.tick||.5,next:a.delay||0,delay:a.delay||0,ability:a,dmg,impact,hits:0,lingering:{...a,stun:undefined,root:undefined,burn:undefined},fromHero:true,meshes,color:a.color,once:(a.duration||.1)<=.15})
  }
  private telegraph(p:THREE.Vector3,r:number,delay:number,dmg:number,boss:Unit){
   const meshes=this.decal(p,r,'#ff2a2a',.18,true)
-  this.zones.push({pos:p.clone(),radius:r,t:delay,tick:0,next:delay,delay,ability:null,dmg,fromHero:false,meshes,color:'#ff2a2a',once:true});void boss
+  this.zones.push({pos:p.clone(),radius:r,t:delay,tick:0,next:delay,delay,ability:null,dmg,impact:dmg,hits:0,lingering:null,fromHero:false,meshes,color:'#ff2a2a',once:true});void boss
  }
  private telegraphLine(b:Unit,dir:THREE.Vector3,length:number,width:number,delay:number){
   const plane=new THREE.Mesh(new THREE.PlaneGeometry(width,length),glow('#ff2a2a',.25,THREE.DoubleSide));plane.rotation.x=-Math.PI/2;plane.rotation.z=-Math.atan2(dir.x,dir.z);const mid=b.pos.clone().add(dir.clone().multiplyScalar(length/2));plane.position.set(mid.x,.05,mid.z);this.scene.add(plane)
-  this.zones.push({pos:b.pos.clone(),radius:0,t:delay,tick:0,next:delay,delay,ability:null,dmg:0,fromHero:false,meshes:[plane],color:'#ff2a2a',once:true,line:{dir,length,width,boss:b}})
+  this.zones.push({pos:b.pos.clone(),radius:0,t:delay,tick:0,next:delay,delay,ability:null,dmg:0,impact:0,hits:0,lingering:null,fromHero:false,meshes:[plane],color:'#ff2a2a',once:true,line:{dir,length,width,boss:b}})
  }
  private decal(p:THREE.Vector3,r:number,color:string,opacity:number,grow=false){
   const fill=new THREE.Mesh(new THREE.CircleGeometry(r,40),glow(color,opacity,THREE.DoubleSide));fill.rotation.x=-Math.PI/2;fill.position.set(p.x,.05,p.z)
@@ -470,8 +525,9 @@ export class BattleEngine{
    if(z.next<=0){
     if(z.line){const b=z.line.boss;if(!b.dead){b.charge={dir:z.line.dir.clone(),t:z.line.length/14}}}
     else if(z.fromHero){if(this.rng()<.9)this.particles.burst(z.pos.clone().add(new THREE.Vector3((this.rng()-.5)*z.radius,2.5,(this.rng()-.5)*z.radius)),{count:6,color:z.color,speed:1,size:.14,life:.6,gravity:6})
-     this.areaHit(z.pos,z.radius,z.once?z.dmg:z.dmg*(z.tick/1)*2,z.ability)
-     if(z.once&&z.ability){this.particles.burst(z.pos.clone().setY(.5),{count:90,color:z.color,speed:5,size:.18,life:.7,spread:.3});this.shake=Math.max(this.shake,.25)}
+     const first=z.hits++===0
+     this.areaHit(z.pos,z.radius,first?z.impact:z.dmg,first?z.ability:z.lingering)
+     if(first&&(z.once||z.ability?.impact)){this.particles.burst(z.pos.clone().setY(.5),{count:90,color:z.color,speed:5,size:.18,life:.7,spread:.3});this.shake=Math.max(this.shake,.25)}
      z.next=z.once?99:z.tick}
     else{if(flat(this.heroPos.clone().sub(z.pos)).length()<=z.radius)this.hurtHero(z.dmg);this.particles.burst(z.pos.clone().setY(.3),{count:40,color:'#ff4a2a',speed:3.5,size:.15,life:.5,spread:.3});this.shake=Math.max(this.shake,.2);z.t=0}
    }

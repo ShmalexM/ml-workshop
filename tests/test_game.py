@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import random
+import shutil
 import socket
 import sqlite3
 import subprocess
@@ -29,6 +30,7 @@ from server_fixture import server_token
 EARNED = len(LESSONS) + len(COURSES)
 
 STAMP = '2026-10-05T22:00:00+00:00'
+HP1, HP2 = game.boss_hp(1), game.boss_hp(2)
 
 
 def progress_fixture():
@@ -63,12 +65,25 @@ class LootTests(unittest.TestCase):
         ]
         for stage, names in enumerate(expected, 1):
             self.assertEqual(game.stage_names(stage), names)
-            self.assertEqual(game.boss_hp(stage), round(3000 * 1.7**(stage - 1)))
+            power, health = game.STAGE_TARGETS[stage - 1]
+            self.assertEqual(game.stage_target(stage), (power, health))
+            self.assertEqual(game.boss_hp(stage), int(round(game.BOSS_HP_PER_POWER[stage - 1] * power, -2)))
+            if stage > 1:
+                self.assertGreater(game.boss_hp(stage), game.boss_hp(stage - 1))
+                self.assertGreater(power, game.STAGE_TARGETS[stage - 2][0])
+            current = game.campaign(dict(stage=stage, bossDamage=0))
+            self.assertEqual((current['targetPower'], current['targetHealth']), (power, health))
+            self.assertAlmostEqual(current['enemyHealth'], power / 36)
+            self.assertAlmostEqual(current['enemyDamage'], health / 480)
         for stage in range(11, 31):
             boss = ('Tyrant', 'Behemoth', 'Herald', 'Warden', 'Devourer')[(stage - 11) % 5]
             self.assertEqual(game.stage_names(stage), (f'The Abyss · Depth {stage - 10}',
                                                       'Abyssal ' + boss))
             self.assertEqual(game.boss_hp(stage), round(game.boss_hp(10) * 1.25**(stage - 10)))
+            self.assertGreater(game.stage_target(stage)[0], game.stage_target(stage - 1)[0])
+        # Damage saved against an earlier, larger boss leaves the boss alive at 1 health.
+        old = game.campaign(dict(stage=1, bossDamage=10**6))
+        self.assertEqual((old['bossDamage'], old['bossRemaining']), (HP1 - 1, 1))
         self.assertEqual(len(game.CAMPAIGN_STAGES), 10)
 
     def test_every_class_all_tiers(self):
@@ -274,6 +289,19 @@ class LootTests(unittest.TestCase):
             means=means, items=sum(totals) / 1000, minLegendary=minimum_legendary,
             tier1Ilvl=round(low, 3), tier5Ilvl=round(high, 3),
             halfLessonsLegendary=half_lesson_legendary / 1000)), flush=True)
+
+
+class BalanceSimulationTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which('node') and (ROOT / 'node_modules' / 'esbuild').is_dir(),
+                         'needs Node and the installed npm packages')
+    def test_battle_rules_hold_in_the_headless_engine(self):
+        """Burns cap at 3 per source, bosses resist stuns, a dead hero deals no damage, and
+        Auto does at least as well as standing still for the dash classes."""
+        result = subprocess.run(['node', str(ROOT / 'scripts' / 'game_balance_sim.mjs'), 'check',
+                                 '--workers', '4'], cwd=ROOT, capture_output=True, text=True,
+                                timeout=300)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout.strip().splitlines()[-1], 'ok')
 
 
 class GameStateTests(unittest.TestCase):
@@ -534,8 +562,8 @@ class GameStateTests(unittest.TestCase):
             if index:
                 self.progress['completed'][f'foundations-{index}'] = dict(at=STAMP, xp=100)
             battle = self.action('battle/start', {})['battle']
-            self.assertEqual(battle['bossHp'], 3000)
-            self.assertEqual(battle['bossRemaining'], 3000 - (0, 700, 1200)[index])
+            self.assertEqual(battle['bossHp'], HP1)
+            self.assertEqual(battle['bossRemaining'], HP1 - (0, 700, 1200)[index])
             response = self.action('battle/finish', dict(
                 battleId=battle['id'], outcome='defeat', bossDamage=damage, kills=2, seconds=60))
             self.assertFalse(response['result']['stageCleared'])
@@ -554,7 +582,7 @@ class GameStateTests(unittest.TestCase):
         finished = self.action('battle/finish', payload)
         result, saved = finished['result'], finished['game']
         self.assertEqual({k: v for k, v in result.items() if k != 'chest'},
-                         dict(outcome='victory', damage=1500, stageCleared=True, stage=2))
+                         dict(outcome='victory', damage=HP1 - 1500, stageCleared=True, stage=2))
         reward = result['chest']
         self.assertEqual(reward['source'], 'boss:1')
         self.assertEqual(reward['kind'], 'boss')
@@ -562,10 +590,10 @@ class GameStateTests(unittest.TestCase):
         self.assertEqual(reward['title'], 'Grimpelt the Alpha defeated')
         self.assertEqual(reward['subtitle'], 'Stage 1 · Blighted Outskirts')
         self.assertEqual(saved['campaign']['bossDamage'], 0)
-        self.assertEqual(saved['campaign']['bossRemaining'], 5100)
+        self.assertEqual(saved['campaign']['bossRemaining'], HP2)
         self.assertEqual(saved['campaign']['stagesCleared'], 1)
         self.assertEqual(saved['lifetime'], dict(fights=4, victories=1, kills=14, deaths=3,
-                                               totalDamage=3000, bestDamage=1500))
+                                               totalDamage=HP1, bestDamage=max(700, HP1 - 1500)))
         self.assertEqual(saved['battles'], dict(earned=4, used=4, available=0))
         self.assertEqual(reward['earnedAt'], saved['history'][0]['finishedAt'])
         before = game.export(self.db)
@@ -591,7 +619,7 @@ class GameStateTests(unittest.TestCase):
         self.assertEqual(saved['battles'], dict(earned=EARNED + 1, used=0, available=EARNED + 1))
         battle = self.action('battle/start', {})['battle']
         self.action('battle/finish', dict(battleId=battle['id'], outcome='victory',
-                                          bossDamage=3000, kills=1, seconds=30))
+                                          bossDamage=HP1, kills=1, seconds=30))
         self.action('open', dict(source='welcome'))
         before = game.export(self.db)
         statements = []
@@ -689,7 +717,7 @@ class GameStateTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'response failed'):
                 self.action('battle/start', {})
         self.assertEqual(game.export(self.db), before)
-        payload = dict(battleId=battle['id'], outcome='victory', bossDamage=3000, kills=1, seconds=2)
+        payload = dict(battleId=battle['id'], outcome='victory', bossDamage=HP1, kills=1, seconds=2)
         original_put = game.put_meta
         def fail_second_write(db, key, value):
             if key == 'bossDamage':
@@ -871,7 +899,9 @@ class GameApiTests(unittest.TestCase):
         self.request('/api/run', dict(lessonId='foundations-1', code=solution, mode='check'))
         first = self.request('/api/game/battle/start', {})
         self.assertEqual(set(first['battle']), {'id', 'stage', 'stageName', 'bossName',
-                                               'bossHp', 'bossDamage', 'bossRemaining'})
+                                               'bossHp', 'bossDamage', 'bossRemaining',
+                                               'targetPower', 'targetHealth', 'enemyHealth',
+                                               'enemyDamage'})
         self.assertEqual(first['game']['battles'], dict(earned=2, used=1, available=1))
         second = self.request('/api/game/battle/start', {})
         self.assertEqual(second['game']['history'][0]['outcome'], 'abandoned')
@@ -883,20 +913,20 @@ class GameApiTests(unittest.TestCase):
         response = self.request('/api/game/battle/finish', {**payload, 'battleId': second['battle']['id']})
         self.assertEqual(response['result'], dict(outcome='defeat', damage=1000,
                                                  stageCleared=False, stage=1, chest=None))
-        self.assertEqual(response['game']['campaign']['bossRemaining'], 2000)
+        self.assertEqual(response['game']['campaign']['bossRemaining'], HP1 - 1000)
         self.assertEqual(self.assert_error('/api/game/battle/start', {}), game.NEXT_BATTLE)
         self.request('/api/project/state', dict(projectId='sample', notes='', reviewed=[0, 1], updatedAt=2000))
         third = self.request('/api/game/battle/start', {})['battle']
         self.assertEqual(third['bossDamage'], 1000)
-        self.assertEqual(third['bossRemaining'], 2000)
+        self.assertEqual(third['bossRemaining'], HP1 - 1000)
         response = self.request('/api/game/battle/finish', {**payload, 'battleId': third['id'],
-                                                           'bossDamage': 5000, 'outcome': 'defeat'})
+                                                           'bossDamage': HP1 + 1000, 'outcome': 'defeat'})
         self.assertEqual(response['result']['outcome'], 'victory')
-        self.assertEqual(response['result']['damage'], 2000)
+        self.assertEqual(response['result']['damage'], HP1 - 1000)
         self.assertEqual(response['game']['campaign']['stage'], 2)
         self.assertEqual(response['game']['campaign']['bossDamage'], 0)
         self.assertEqual(response['game']['lifetime'], dict(fights=3, victories=1, kills=8,
-                                                          deaths=1, totalDamage=3000, bestDamage=2000))
+                                                          deaths=1, totalDamage=HP1, bestDamage=HP1 - 1000))
         self.assertEqual(response['game']['battles'], dict(earned=3, used=3, available=0))
         self.assertEqual(response['result']['chest']['source'], 'boss:1')
         backup = self.request(self.request('/api/backup', {})['url'])['game']
@@ -978,7 +1008,7 @@ class GameApiTests(unittest.TestCase):
         self.assertEqual(Counter(status for status, _ in starts), {200: 1, 400: 7})
         self.assertTrue(all(body['error'] == game.NEXT_BATTLE for status, body in starts if status == 400))
         battle = next(body['battle'] for status, body in starts if status == 200)
-        payload = dict(battleId=battle['id'], outcome='victory', bossDamage=3000, kills=1, seconds=20)
+        payload = dict(battleId=battle['id'], outcome='victory', bossDamage=HP1, kills=1, seconds=20)
         with ThreadPoolExecutor(max_workers=8) as pool:
             finishes = list(pool.map(lambda _: attempt('/api/game/battle/finish', payload), range(8)))
         self.assertEqual(Counter(status for status, _ in finishes), {200: 1, 400: 7})

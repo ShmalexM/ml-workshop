@@ -198,9 +198,15 @@ STARTER_WEAPONS = dict(
     hunter=['bow'], shaman=['mace', 'shield'], rogue=['dagger', 'dagger'], monk=['staff'],
     druid=['staff'], demonhunter=['warglaive', 'warglaive'], priest=['staff'],
     mage=['staff'], warlock=['staff'])
-BOSS_HP_BASE = 3000
-BOSS_HP_GROWTH = 1.7
+# Expected Power and Health of a hero who reaches each stage at the planned pace, measured
+# with `npm run game:sim`. Enemies scale with these targets, so a hero at the target finds each
+# stage about as hard as the first, and a hero above it wins sooner. Boss health is the number of
+# seconds a hero at the target needs to bring the boss down, times Power.
+STAGE_TARGETS = [(36, 480), (55, 670), (100, 1030), (180, 1700), (240, 2160),
+                 (320, 2800), (360, 2950), (410, 3300), (450, 3600), (490, 3900)]
+BOSS_HP_PER_POWER = [125, 170, 185, 200, 215, 200, 210, 220, 225, 230]
 ABYSS_GROWTH = 1.25
+ABYSS_TARGET_GROWTH = (1.12, 1.08)
 MAX_BATTLE_DAMAGE = 2**53 - 1
 CAMPAIGN_STAGES = [
     dict(stage=stage, name=name, boss=boss)
@@ -240,18 +246,33 @@ def stage_names(stage):
             'Abyssal ' + ABYSS_BOSSES[(stage - 11) % len(ABYSS_BOSSES)])
 
 
+def stage_target(stage):
+    """Expected (Power, Health) on reaching a stage; the Abyss keeps rising past the curriculum."""
+    if stage <= 10:
+        return STAGE_TARGETS[stage - 1]
+    power, health = STAGE_TARGETS[-1]
+    return (round(power * ABYSS_TARGET_GROWTH[0]**(stage - 10)),
+            round(health * ABYSS_TARGET_GROWTH[1]**(stage - 10)))
+
+
 def boss_hp(stage):
     if stage <= 10:
-        return round(BOSS_HP_BASE * BOSS_HP_GROWTH**(stage - 1))
+        return int(round(BOSS_HP_PER_POWER[stage - 1] * STAGE_TARGETS[stage - 1][0], -2))
     return round(boss_hp(10) * ABYSS_GROWTH**(stage - 10))
 
 
 def campaign(meta):
-    stage, damage = meta['stage'], meta['bossDamage']
+    stage = meta['stage']
     name, boss = stage_names(stage)
     hp = boss_hp(stage)
+    # Damage saved before a boss health change can exceed the new total; the boss keeps 1 health.
+    damage = min(meta['bossDamage'], hp - 1)
+    power, health = stage_target(stage)
+    first_power, first_health = STAGE_TARGETS[0]
     return dict(stage=stage, stageName=name, bossName=boss, bossHp=hp,
-                bossDamage=damage, bossRemaining=hp - damage)
+                bossDamage=damage, bossRemaining=hp - damage,
+                targetPower=power, targetHealth=health,
+                enemyHealth=power / first_power, enemyDamage=health / first_health)
 
 
 def boss_chest(stage, finished):
