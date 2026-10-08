@@ -21,6 +21,9 @@ if args.file and not args.id:
 data = data_dir()
 for source,book_id in [(args.epub,'gpu-glossary'),(args.pdf,'inference-engineering'),(args.file,args.id)]:
     if source:
-        book = import_book(source,data,book_id)
+        try:
+            book = import_book(source,data,book_id)
+        except ValueError as exc:
+            sys.exit(f'Could not import {source}: {exc}')
         print(f"{book['title']}: {book['count']} {'pages' if book['format']=='pdf' else 'sections'}, {len(book['assets'])} original image assets. SHA-256: {book['sha256']}")
 print(f'Open Books in Engineering Workshop. Originals and extracted content stay in {data/"library"}.')

@@ -23,7 +23,7 @@ Run results show learners only their own code. Tracebacks and stacks keep frames
 
 ## Local books
 
-`backend/library.py` imports user-supplied books into ignored `data/library/`. Each manifest contains a text index, navigation, attribution, and allowed assets. EPUB content passes through a tag/attribute whitelist; image bytes are unchanged. The original PDF is preserved and streamed with byte-range support. `pypdf` loads only during PDF import; PDF.js is a lazy browser component with local worker, font, CMap, and WASM assets.
+`backend/library.py` imports user-supplied books into ignored `data/library/`. Each book folder has `book.json` (metadata, navigation, attribution and allowed assets) and `chapters/<n>.json` (one page or section each, with its text and sanitized HTML). The server caches only `book.json` summaries and reads chapters from disk per request. A `book.json` from import version 1, which held every chapter, is split into chapter files the first time the server reads it. Imports enforce section, per-file and total output limits while reading (see [Local book library](local-library.md)). EPUB content passes through a tag/attribute whitelist; image bytes are unchanged. The original PDF is preserved and streamed with byte-range support. `pypdf` loads only during PDF import; PDF.js is a lazy browser component with local worker, font, CMap, and WASM assets.
 
 The Books UI uses hash routes for direct chapter links, cancellable PDF rendering, and timestamped reading state in SQLite. Notes, bookmarks, and reviewed guide IDs are included in progress exports; book binaries and extracted content are not. Reading guides live in `backend/book_study.py` and appear only for matching locally imported books.
 

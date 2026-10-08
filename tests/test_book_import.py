@@ -16,10 +16,10 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT/'backend'))
-from book_import import import_upload
+from book_import import import_upload, sweep_staging
 from book_study import study_guides, INFERENCE_GUIDE_EDITION
 from library import Library
-from book_fixture import make_epub
+from book_fixture import make_custom_epub, make_epub
 
 
 class UploadTests(unittest.TestCase):
@@ -52,6 +52,14 @@ class UploadTests(unittest.TestCase):
             response = connection.getresponse()
             return response.status, json.loads(response.read())
         finally: connection.close()
+
+    def test_over_limit_epub_returns_plain_error_and_leaves_nothing(self):
+        before = Library(self.data).catalog()
+        source = make_custom_epub(self.root/'bomb.epub', {'big.xhtml': '<html><body>' + '<p>' + 'a'*(9 << 20) + '</p></body></html>'})
+        status, result = self.upload(source.read_bytes(), 'bomb.epub')
+        self.assertEqual(status, 400); self.assertIn('larger than 8 MB when unpacked', result['error'])
+        self.assertEqual(Library(self.data).catalog(), before)
+        self.assertEqual(list(self.data.glob('.upload-*')) + list(self.data.glob('.parse-*')), [])
 
     def test_upload_preserves_original_and_duplicate_reading_state(self):
         source = make_epub(self.root/'fixture.epub'); raw = source.read_bytes()
@@ -158,6 +166,18 @@ class WorkerTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'too long'): import_upload(source, root, source.name)
             self.assertEqual(Library(root).catalog(), [])
             self.assertEqual(list(root.glob('.parse-*')), [])
+
+    def test_stale_staging_folders_are_swept(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            stale = [root/'.upload-old', root/'.parse-old', root/'library/.import-old', root/'library/.removing-old']
+            fresh = root/'.upload-fresh'
+            for folder in stale + [fresh]: (folder/'partial').mkdir(parents=True)
+            old = time.time() - 2*3600
+            for folder in stale: os.utime(folder, (old, old))
+            sweep_staging(root)
+            self.assertEqual([folder for folder in stale if folder.exists()], [])
+            self.assertTrue(fresh.is_dir()); self.assertTrue((root/'library').is_dir())
 
     def test_numeric_guides_only_apply_to_verified_pdf_edition(self):
         class FixtureLibrary:

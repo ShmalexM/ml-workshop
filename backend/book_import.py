@@ -1,22 +1,40 @@
 """Bounded browser imports. Parsing runs in a disposable worker, then publishes atomically."""
 import json
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
+import time
 
 from library import Library, digest, import_book, normalized
 
 SUGGESTED = {'gpu-glossary': 'GPU Glossary', 'inference-engineering': 'Inference Engineering'}
 PARSE_TIMEOUT = 90
+# Staging folders older than this belong to a server that stopped mid-import or mid-removal.
+STALE_STAGING_SECONDS = 3600
+WORKER_MEMORY = 3 << 30
 
 
 class ImportConflict(ValueError):
     pass
 
 
+def sweep_staging(data_dir):
+    """Delete leftover staging folders, which can hold up to 100 MB each."""
+    cutoff = time.time() - STALE_STAGING_SECONDS
+    for pattern in ('.upload-*', '.parse-*', 'library/.import-*', 'library/.removing-*'):
+        for path in Path(data_dir).glob(pattern):
+            try:
+                if path.is_dir() and not path.is_symlink() and path.stat().st_mtime < cutoff:
+                    shutil.rmtree(path)
+            except OSError:
+                pass
+
+
 def import_upload(source, data_dir, filename, suggested=''):
     data_dir = Path(data_dir)
+    sweep_staging(data_dir)
     library = Library(data_dir)
     checksum = digest(source)
     book_id = suggested or 'book-' + checksum[:24]
@@ -66,11 +84,25 @@ def parse(source, destination, book_id, filename, expected_title):
     (Path(destination)/'library'/book_id/'book.json').write_text(json.dumps(book, ensure_ascii=False), encoding='utf-8')
 
 
+def limit_memory():
+    """Linux enforces an address-space limit; macOS and Windows rely on the import size limits."""
+    if not sys.platform.startswith('linux'):
+        return
+    import resource
+    soft, hard = resource.getrlimit(resource.RLIMIT_AS)
+    limit = WORKER_MEMORY if hard == resource.RLIM_INFINITY else min(WORKER_MEMORY, hard)
+    resource.setrlimit(resource.RLIMIT_AS, (limit, hard))
+
+
 if __name__ == '__main__':
     try:
+        limit_memory()
         parse(*sys.argv[1:])
     except ValueError as exc:
         print(json.dumps({'error': str(exc)}))
+        sys.exit(1)
+    except MemoryError:
+        print(json.dumps({'error': 'This book needs more memory to import than the import limit allows.'}))
         sys.exit(1)
     except Exception:
         print(json.dumps({'error': 'Could not read this book. Try a fresh, unencrypted PDF or EPUB.'}))
