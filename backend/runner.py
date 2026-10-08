@@ -23,6 +23,7 @@ LEARNER_FILE='exercise.py'
 VALUE='_workshop_value'
 MISMATCH='The result did not match this requirement. Try a hint or inspect your output.'
 RETURNED_NONE='Your function returned None. `print` shows a value but does not return it. Use `return`.'
+IS_NONE='This value is None. Set it to the value that the task asks for.'
 
 def apply_limits():
     if resource is not None and sys.platform != 'win32':
@@ -129,6 +130,7 @@ def instrument(expr):
 
     Shapes: `a == b`, `a is True`, `abs(a - b) < tol` and `raises(Error, lambda: a)`. The wrapper
     returns its argument unchanged, so the check passes or fails exactly as the plain expression.
+    Returns the code, the shape, the learner's expression, and whether that expression is a call.
     """
     try:tree=ast.parse(expr,mode='eval')
     except SyntaxError:return None
@@ -138,7 +140,7 @@ def instrument(expr):
         op,left,right=body.ops[0],body.left,body.comparators[0]
         if isinstance(op,ast.Eq) or isinstance(op,ast.Is) and isinstance(right,ast.Constant):
             got,want=(right,left) if isinstance(left,ast.Constant) and not isinstance(right,ast.Constant) else (left,right)
-            call=ast.unparse(got)
+            call,called=ast.unparse(got),isinstance(got,ast.Call)
             if got is left:body.left,body.comparators[0]=value('got',left),value('expected',right)
             else:body.left,body.comparators[0]=value('expected',left),value('got',right)
             shape='equal'
@@ -146,7 +148,7 @@ def instrument(expr):
               and left.func.id=='abs' and len(left.args)==1 and not left.keywords
               and isinstance(left.args[0],ast.BinOp) and isinstance(left.args[0].op,(ast.Sub,ast.Add))):
             difference=left.args[0]
-            call=ast.unparse(difference.left)
+            call,called=ast.unparse(difference.left),isinstance(difference.left,ast.Call)
             difference.left,difference.right=value('got',difference.left),value('expected',difference.right)
             body.comparators[0]=value('tolerance',right)
             shape='near' if isinstance(difference.op,ast.Sub) else 'near-negated'
@@ -154,21 +156,22 @@ def instrument(expr):
     elif (isinstance(body,ast.Call) and isinstance(body.func,ast.Name) and body.func.id=='raises'
           and len(body.args)==2 and not body.keywords and isinstance(body.args[1],ast.Lambda)
           and not ast.unparse(body.args[1].args)):
-        call=ast.unparse(body.args[1].body)
+        call,called=ast.unparse(body.args[1].body),True
         body.args[0]=value('expected',body.args[0])
         body.args[1].body=value('got',body.args[1].body)
         shape='raises'
     else:return None
     try:code=compile(ast.fix_missing_locations(tree),'<check>','eval')
     except (SyntaxError,ValueError):return None
-    return code,shape,call[:200]
+    return code,shape,call[:200],called
 
 def same_items(got,want):
     try:return list(got)==list(want)
     except Exception:return False
 
-def compared(shape,call,values,exc=None):
+def compared(plan,values,exc=None):
     """Fields for a failed check: call, expected, got, and a detail or explanation when they help."""
+    _,shape,call,called=plan
     if 'expected' not in values:return None
     want=values['expected']
     if shape=='raises':
@@ -187,7 +190,8 @@ def compared(shape,call,values,exc=None):
     if 'tolerance' in values:expected+=f' (within {shown(values["tolerance"])})'
     fields=dict(call=call,expected=expected,got=shown(got),detail=f'Got {shown(got)}, expected {expected}.')
     if got is None and want is not None:
-        fields['explanation']=RETURNED_NONE
+        # Return advice fits a function call only; a variable that is None needs a value instead.
+        fields['explanation']=RETURNED_NONE if called else IS_NONE
     elif {type(got),type(want)}=={list,tuple} and same_items(got,want):
         fields['explanation']=(f'The values match, but you returned a {type(got).__name__} and the check expects a '
                                f'{type(want).__name__}.'+(' `return a, b, c` returns a tuple.' if type(want) is tuple else ''))
@@ -203,13 +207,13 @@ def run_check(check,ns,helpers):
     scope={**ns,**helpers,VALUE:remember}
     try:
         if bool(eval(plan[0] if plan else check['expr'],scope)):return dict(passed=True,detail='')
-        return dict(passed=False,detail=MISMATCH)|((compared(plan[1],plan[2],values) if plan else None) or {})
+        return dict(passed=False,detail=MISMATCH)|((compared(plan,values) if plan else None) or {})
     except BaseException as exc:
         if isinstance(exc,ModuleNotFoundError):return dict(passed=False,detail=missing_package(exc))
         result=dict(passed=False,detail=error_line(learner_only(exc))[:1200])
         # For `abs(None - x)`, say the function returned None instead of showing the TypeError.
         if plan and (plan[1]=='raises' or 'got' in values and values['got'] is None):
-            result|=compared(plan[1],plan[2],values,exc if plan[1]=='raises' else None) or {}
+            result|=compared(plan,values,exc if plan[1]=='raises' else None) or {}
         return result
 
 def child(request_path, result_path):

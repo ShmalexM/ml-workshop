@@ -5,6 +5,7 @@ const {inspect,isDeepStrictEqual} = require('node:util');
 const LEARNER_FILE='exercise.js';
 const MISMATCH='The result did not match this requirement. Try a hint or inspect your output.';
 const RETURNED_UNDEFINED='Your function returned undefined. `console.log` shows a value but does not return it. Use `return`.';
+const IS_UNDEFINED='This value is undefined. Set it to the value that the task asks for.';
 const request=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
 const result={error:null,summary:null,checks:[],passed:false};
 // Values a simple check compared, so a failure can show them.
@@ -56,7 +57,8 @@ function compared(plan){
   if(!plan||!('got' in values)||!('expected' in values))return {};
   const fields={call:plan.call.slice(0,200),expected:shown(values.expected),got:shown(values.got)};
   fields.detail=`Got ${fields.got}, expected ${fields.expected}.`;
-  if(values.got===undefined&&values.expected!==undefined)fields.explanation=RETURNED_UNDEFINED;
+  // Return advice fits a function call only, such as counter(s, a); not counter(s, a).count or a variable.
+  if(values.got===undefined&&values.expected!==undefined)fields.explanation=/^[\w$.\s]+\(\s*\)$/.test(topLevel(plan.call)||'')?RETURNED_UNDEFINED:IS_UNDEFINED;
   return fields;
 }
 

@@ -85,6 +85,17 @@ class CheckFeedbackTests(unittest.TestCase):
             self.assertEqual(check['explanation'], RETURNED_NONE)
         self.assertNotIn('TypeError', result['checks'][3]['detail'])
 
+    def test_variable_that_is_none_gets_no_return_advice(self):
+        result = execute('items = 3\nprice = None\ndelivery = 1\ntotal = 7\n', BY_ID['python-1']['checks'])
+        price = failed(result)[0]
+        self.assertEqual((price['call'], price['got']), ('price', 'None'))
+        self.assertNotEqual(price['explanation'], RETURNED_NONE)
+        self.assertIn('This value is None', price['explanation'])
+        result = execute('let total;\nfunction counter() {}\n', [dict(label='value', expr='total === 3'),
+                         dict(label='call', expr='counter() === 3')], language='javascript')
+        self.assertIn('This value is undefined', result['checks'][0]['explanation'])
+        self.assertIn('returned undefined', result['checks'][1]['explanation'])
+
     def test_wrong_exception_names_both(self):
         code = 'def mse(predictions, targets):\n    return sum((p - t) ** 2 for p, t in zip(predictions, targets)) / len(targets)\n'
         checks = {c['label']: c for c in execute(code, BY_ID['foundations-2']['checks'])['checks']}
