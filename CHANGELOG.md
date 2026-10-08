@@ -32,8 +32,22 @@ This file lists the notable changes in each release. The format follows [Keep a 
 - The chest earned for a lesson is a line under the lesson buttons instead of a pop-up over **Next lesson**.
 - **Projects** has 12 hands-on projects, each pinned to one commit. A project gives setup and run commands, 3 to 5 tasks that link to the lines to change, and a command to check each task. Tasks can be ticked and have their own notes. Pasted output is checked in the browser and not saved. A project's chest tier follows its level, and is one tier higher when every check passed. Notes and ticks on the earlier walkthroughs are kept under **Retired projects**.
 
+### Security
+
+- Book files (covers, figures and the original PDF or EPUB) need the session token, like the rest of the API. Only `/api/health` is public.
+- On macOS and Linux, cleanup after an exercise also ends processes that left its process group with `setsid()`. Exercises have a process limit (the user's count plus 256), and on Linux a 4 GB memory limit. Temporary files go in the exercise folder.
+- An EPUB may hold at most 2,000 images and 150 MB of image data.
+
 ### Fixed
 
+- One damaged `book.json` no longer hides the whole library. That book shows as **Could not open this book** with **Remove book**.
+- **Export progress and notes** works after removing a book you had read.
+- A tab that opened before the app had a session loads when another tab connects. A new launch token works when the browser's storage is full.
+- The launcher restarts a running server from another version, when no exercise is running, instead of reusing it after an update.
+- `server.py --help` no longer creates the data folder.
+- Two backups in the same microsecond no longer fail.
+- On Windows, a slow process query no longer makes the stop command fail, and an exercise result held by antivirus is read again.
+- `THIRD_PARTY_NOTICES.md` names the Liberation fonts' GPLv2 license and links their source. `THIRD_PARTY_LICENSES.txt` lists beautiful-ui.
 - Text and button colors meet WCAG AA contrast, the focus ring is darker, and text is at least 12px.
 - A locked **Next lesson** says why in visible text.
 - Checks in 20 lessons reject the wrong answers that used to pass, and learner code that reuses a name such as `abs` or `raises` no longer breaks grading. A far-future draft revision no longer blocks later saves, results are marked out of date after the code changes, and a draft the server refuses shows the reason.

@@ -6,12 +6,12 @@ The server binds to loopback, validates Host and Origin, and rejects cross-site 
 
 ## Session token
 
-Every API request must send the session token, except `/api/health` and the files of imported books. This covers reading and changing progress, drafts, notes, project state, reading state, game state and backups, and running exercise code.
+Every API request must send the session token, except `/api/health`. This covers reading and changing progress, drafts, notes, project state, reading state, game state, backups and book files, and running exercise code.
 
 - The server keeps the token in the `session-token` file in the data folder. The token stays the same when the server restarts. The server makes a new one only when the file is missing.
 - The launcher, the app shortcuts, the installers and the native Mac window open `http://127.0.0.1:7318/#session=<token>`. The browser does not send the part after `#` to the server. The page saves the token in the browser's local storage and removes it from the address bar.
 - No endpoint returns the token. A browser without it shows "Open Engineering Workshop from its shortcut or start command to connect this browser".
-- The app's page files, `/api/health` and book files (covers, images, the original PDF or EPUB) do not need the token. The browser loads book files by URL, so it cannot send the token with them.
+- Only the app's page files and `/api/health` work without the token. The Books page fetches covers, figures and the original PDF or EPUB with it, and the PDF reader sends it as a request header.
 - Another program that runs as your user account can read the token file. The token protects against other accounts on the computer and against web pages, not against software you run yourself.
 
 ## File permissions
