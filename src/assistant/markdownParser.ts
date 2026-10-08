@@ -9,6 +9,23 @@ export type Block={kind:'p'|'h'|'quote';text:string}|{kind:'pre'|'plain';text:st
 /** Lines longer than this are shown as plain text, without Markdown. */
 export const LONG_LINE=2000
 
+// Bidirectional controls and zero-width characters. They can show text in another order than it runs,
+// or hide text, as in "Trojan Source".
+const invisible=/[؜​-‏‪-‮⁠⁦-⁩﻿]/g
+export const stripInvisible=(text:string)=>text.replace(invisible,'')
+export const hasInvisible=(text:string)=>text.search(invisible)>=0
+export const codePoint=(char:string)=>'U+'+char.codePointAt(0)!.toString(16).toUpperCase().padStart(4,'0')
+/** Text split into plain parts and single invisible characters, so code can show them as ⟨U+202E⟩. */
+export function splitInvisible(text:string):{text:string;hidden:boolean}[]{
+ const parts:{text:string;hidden:boolean}[]=[];let last=0
+ for(const match of text.matchAll(invisible)){
+  if(match.index>last)parts.push({text:text.slice(last,match.index),hidden:false})
+  parts.push({text:match[0],hidden:true});last=match.index+1
+ }
+ if(last<text.length)parts.push({text:text.slice(last),hidden:false})
+ return parts
+}
+
 /** Remove a model's <think> section. While it is still open, say so instead of showing it. */
 export function withoutThinking(text:string):{text:string;thinking:boolean}{
  const start=text.trimStart()
@@ -87,9 +104,9 @@ export function parseBlocks(source:string):Block[]{
  return blocks
 }
 
-/** Only http and https links work. */
+/** Only http and https links work. Invisible characters are removed first, so the shown host is the real one. */
 export function safeLink(url:string):URL|null{
- try{const parsed=new URL(url);return parsed.protocol==='https:'||parsed.protocol==='http:'?parsed:null}catch{return null}
+ try{const parsed=new URL(stripInvisible(url));return parsed.protocol==='https:'||parsed.protocol==='http:'?parsed:null}catch{return null}
 }
 
 /** The next index of char at or after `from`. Callers ask with growing `from`, so the text is searched once. */
@@ -137,7 +154,7 @@ function parseLine(text:string):Inline[]{
   }else if(char==='['){
    const link=bracket(i,false)
    if(link){
-    const url=safeLink(link.target);const label=link.label
+    const url=safeLink(link.target);const label=stripInvisible(link.label)
     emit(url?{t:'link',text:label,href:url.href,host:url.host}:{t:'text',v:label},link.next);continue
    }
   }

@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict'
 
 const md = await import(new URL('../src/assistant/markdownParser.ts', import.meta.url).href)
-const {parseBlocks, parseInline, withoutThinking, LONG_LINE} = md
+const {parseBlocks, parseInline, withoutThinking, splitInvisible, stripInvisible, codePoint, LONG_LINE} = md
 const text = v => ({t: 'text', v})
 const checks = []
 const check = (name, run) => checks.push([name, run])
@@ -69,6 +69,22 @@ check('links', () => {
   assert.deepEqual(parseInline('[a]( https://x.example)'), [text('[a]( https://x.example)')])
   assert.equal(link('[x](https://openai.com@evil.example/login)').host, 'evil.example')
   assert.equal(link('[x](https://аpple.com/)').host, 'xn--pple-43d.com')
+})
+
+check('bidi and zero-width characters in links', () => {
+  const spoof = parseInline('[Open the OpenAI dashboard‮](https://moc.ianepo.ai/login)')[0]
+  assert.deepEqual(spoof, {t: 'link', text: 'Open the OpenAI dashboard', href: 'https://moc.ianepo.ai/login', host: 'moc.ianepo.ai'})
+  const hidden = parseInline('[a​b⁦c⁩](https://exa​mple.com/‮x)')[0]
+  assert.deepEqual(hidden, {t: 'link', text: 'abc', href: 'https://example.com/x', host: 'example.com'})
+})
+
+check('hidden characters in code', () => {
+  const code = 'if access != "user‮ ⁦# admin⁩ ⁦":'
+  const parts = splitInvisible(code)
+  assert.deepEqual(parts.filter(p => p.hidden).map(p => codePoint(p.text)), ['U+202E', 'U+2066', 'U+2069', 'U+2066'])
+  assert.equal(parts.map(p => p.text).join(''), code)
+  assert.equal(stripInvisible(code), 'if access != "user # admin ":')
+  assert.deepEqual(splitInvisible('plain'), [{text: 'plain', hidden: false}])
 })
 
 check('thinking', () => {
