@@ -84,7 +84,8 @@
 .troubleshooting dt{font-size:13px;font-weight:600;line-height:1.5;overflow-wrap:anywhere}
 .troubleshooting dd{margin:4px 0 0;font-size:12px;color:#5b6b80;line-height:1.65;overflow-wrap:anywhere}
 .hands-on .project-deliverable{margin-top:22px}
-.platform-badge{align-self:flex-start;margin-top:12px;font-size:10px;color:#8a5a12;background:#fdf3e3;border-radius:4px;padding:3px 7px}
+.card-badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.platform-badge{font-size:10px;color:#8a5a12;background:#fdf3e3;border-radius:4px;padding:3px 7px}
 .retired-projects{margin-top:26px;border:1px solid var(--line);border-radius:10px;background:#fff;padding:14px 18px}
 .retired-projects summary{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:650;cursor:pointer;color:#4f5f74}
 .retired-projects>p{font-size:12px;color:#718198;margin:10px 0 4px}
