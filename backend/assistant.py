@@ -45,8 +45,17 @@ MAX_MESSAGE = 16000
 # History budget in characters: the oldest turns are dropped first.
 HISTORY = {'local': 12000, 'cloud': 24000}
 RATE_WINDOW = 600
+# Model lists: one request at a time, at most this many in 10 minutes.
+MODELS_LIMIT = 20
 BUSY = 'An answer is still streaming. Stop it first.'
 TOO_MANY = 'Too many messages in the last 10 minutes. Wait a few minutes, then try again.'
+MODELS_BUSY = 'The model list is still loading.'
+TOO_MANY_LISTS = 'The model list was loaded too often in the last 10 minutes. Wait a few minutes, then try again.'
+TEST_STOPPED = 'The connection test was stopped.'
+CHAT_EXPIRED = 'The answer took longer than 3 minutes and was stopped.'
+# The request thread waits this much longer than the provider deadline before it gives up on the reader thread.
+GRACE = 5
+STREAM_ID = re.compile(r'[A-Za-z0-9_-]{8,64}')
 
 
 class PolicyError(ValueError):
@@ -232,12 +241,14 @@ class Assistant:
         self.file = Path(data) / CONFIG_NAME
         self.file_lock = threading.Lock()
         self.stream_lock = threading.Lock()
+        self.models_lock = threading.Lock()
         self.cancel = None
         try:
             limit = int(os.environ.get('ML_WORKSHOP_ASSISTANT_LIMIT', '30'))
         except ValueError:
             limit = 30
         self.limit = RateLimit(max(1, limit))
+        self.models_limit = RateLimit(MODELS_LIMIT)
 
     # ---- Settings file ----
 
@@ -329,60 +340,98 @@ class Assistant:
             return None
         return config
 
-    def _upstream(self, handler, config):
+    def _upstream(self, handler, config, timeout, expired_message=''):
         try:
             target = check_base_url(config['baseUrl'], handler.server.server_port)
         except PolicyError as exc:
             handler.send({'error': str(exc)}, 400)
             return None
         key = config['key'] if config['keyOrigin'] == origin(config['baseUrl']) else ''
-        return providers.Upstream(target, key)
+        return providers.Upstream(target, key, timeout, expired_message)
 
     def models(self, handler):
         config = self._ready(handler, need_model=False)
         if not config:
             return
-        upstream = self._upstream(handler, config)
+        upstream = self._upstream(handler, config, providers.MODELS_TIMEOUT,
+                                  f'{host_label(config["baseUrl"])} did not send the model list within {providers.MODELS_TIMEOUT} seconds.')
         if not upstream:
             return
+        if not self.models_lock.acquire(blocking=False):
+            return handler.send({'error': MODELS_BUSY}, 409)
         try:
-            names = providers.fetch_models(upstream, PRESETS[config['provider']]['protocol'])
-        except providers.ProviderError as exc:
-            return handler.send({'error': str(exc)}, 502)
-        return handler.send({'models': names})
+            if not self.models_limit.take():
+                status, reply = 429, {'error': TOO_MANY_LISTS}
+            else:
+                try:
+                    status, reply = 200, {'models': providers.fetch_models(upstream, PRESETS[config['provider']]['protocol'])}
+                except providers.ProviderError as exc:
+                    status, reply = 502, {'error': str(exc)}
+        finally:
+            upstream.abort()
+            self.models_lock.release()
+        return handler.send(reply, status)
 
-    def test(self, handler):
+    def test(self, handler, body):
+        """Ask the model for a short reply. Stop with the same id, or closing the request, ends it."""
         config = self._ready(handler)
         if not config:
             return
-        upstream = self._upstream(handler, config)
+        wanted = body.get('id')
+        test_id = wanted if isinstance(wanted, str) and STREAM_ID.fullmatch(wanted) else secrets.token_hex(8)
+        upstream = self._upstream(handler, config, providers.TEST_TIMEOUT,
+                                  f'{host_label(config["baseUrl"])} did not answer within {providers.TEST_TIMEOUT} seconds.')
         if not upstream:
             return
-        # The answer is sent after the lock is released, so the next request never finds it still held.
-        status, reply = self._test(config, upstream)
-        return handler.send(reply, status)
-
-    def _test(self, config, upstream):
         if not self.stream_lock.acquire(blocking=False):
-            return 409, {'error': BUSY}
+            return handler.send({'error': BUSY}, 409)
         try:
             if not self.limit.take():
-                return 429, {'error': TOO_MANY}
-            events = queue.Queue()
-            started = time.monotonic()
-            providers.run_stream(upstream, PRESETS[config['provider']]['protocol'], config['provider'], config['model'],
-                                 [{'role': 'user', 'content': 'Reply with OK.'}], 32, events, deadline=started + 60)
-            reply = []
-            while not events.empty():
-                kind, value = events.get()
-                if kind == 'error':
-                    return 502, {'error': value}
-                if kind == 'delta':
-                    reply.append(value)
-            return 200, {'ok': True, 'model': config['model'], 'seconds': round(time.monotonic() - started, 1),
-                         'reply': ''.join(reply)[:200]}
+                status, reply = 429, {'error': TOO_MANY}
+            else:
+                cancel = threading.Event()
+                self.cancel = (test_id, cancel)
+                try:
+                    status, reply = self._test(handler, config, upstream, cancel)
+                finally:
+                    self.cancel = None
+                    upstream.abort()
         finally:
             self.stream_lock.release()
+        # The answer is sent after the lock is released, so the next request never finds it still held.
+        if status is None:
+            handler.close_connection = True
+            return
+        return handler.send(reply, status)
+
+    def _test(self, handler, config, upstream, cancel):
+        events = queue.Queue()
+        started = time.monotonic()
+        reader = threading.Thread(target=providers.run_stream, daemon=True, name='assistant-test',
+                                  args=(upstream, PRESETS[config['provider']]['protocol'], config['provider'], config['model'],
+                                        [{'role': 'user', 'content': 'Reply with OK.'}], 32, events))
+        reader.start()
+        reply = []
+        while True:
+            if cancel.is_set():
+                return 409, {'error': TEST_STOPPED}
+            if browser_gone(handler.connection):
+                return None, None
+            if time.monotonic() - started > providers.TEST_TIMEOUT + GRACE:
+                return 502, {'error': upstream.expired_message}
+            try:
+                kind, value = events.get(timeout=0.2)
+            except queue.Empty:
+                if not reader.is_alive() and events.empty():
+                    return 502, {'error': f'{host_label(config["baseUrl"])} closed the connection without an answer.'}
+                continue
+            if kind == 'error':
+                return 502, {'error': value}
+            if kind == 'delta':
+                reply.append(value)
+            if kind == 'done':
+                return 200, {'ok': True, 'model': config['model'], 'seconds': round(time.monotonic() - started, 1),
+                             'reply': ''.join(reply)[:200]}
 
     def build_messages(self, config, body):
         page_kind = body.get('pageKind')
@@ -441,25 +490,26 @@ class Assistant:
             messages = self.build_messages(config, body)
         except ValueError as exc:
             return handler.send({'error': str(exc)}, 400)
-        upstream = self._upstream(handler, config)
+        upstream = self._upstream(handler, config, providers.TOTAL_TIMEOUT, CHAT_EXPIRED)
         if not upstream:
             return
         if not self.stream_lock.acquire(blocking=False):
             return handler.send({'error': BUSY}, 409)
-        allowed = self.limit.take()
-        if allowed:
-            cancel = threading.Event()
-            stream_id = secrets.token_hex(8)
-            self.cancel = (stream_id, cancel)
-            try:
-                self._stream(handler, config, upstream, messages, cancel, stream_id)
-            finally:
-                self.cancel = None
-                upstream.abort()
-                self.stream_lock.release()
-            return
-        self.stream_lock.release()
-        return handler.send({'error': TOO_MANY}, 429)
+        try:
+            allowed = self.limit.take()
+            if allowed:
+                cancel = threading.Event()
+                stream_id = secrets.token_hex(8)
+                self.cancel = (stream_id, cancel)
+                try:
+                    self._stream(handler, config, upstream, messages, cancel, stream_id)
+                finally:
+                    self.cancel = None
+                    upstream.abort()
+        finally:
+            self.stream_lock.release()
+        if not allowed:
+            return handler.send({'error': TOO_MANY}, 429)
 
     def stop(self, handler, body):
         """Stop the current answer. With an id, only the answer that has that id, so a late Stop never ends the next answer."""
@@ -492,11 +542,16 @@ class Assistant:
 
         try:
             write({'type': 'meta', 'id': stream_id, 'model': config['model'], 'host': host_label(config['baseUrl']), 'local': is_local(config['baseUrl'])})
-            last = time.monotonic()
+            last = started = time.monotonic()
             while True:
                 if cancel.is_set():
                     upstream.abort()
                     write({'type': 'done', 'stopped': True})
+                    return
+                if time.monotonic() - started > providers.TOTAL_TIMEOUT + GRACE:
+                    # The reader thread enforces the deadline. This only guards against a reader that never ends.
+                    upstream.abort()
+                    write({'type': 'error', 'message': CHAT_EXPIRED})
                     return
                 if browser_gone(handler.connection):
                     upstream.abort()
@@ -555,7 +610,7 @@ class Assistant:
         if path == '/api/assistant/models':
             return self.models(handler)
         if path == '/api/assistant/test':
-            return self.test(handler)
+            return self.test(handler, body)
         if path == '/api/assistant/chat':
             return self.chat(handler, body)
         if path == '/api/assistant/stop':

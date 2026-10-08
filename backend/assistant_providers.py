@@ -12,12 +12,26 @@ import ssl
 import threading
 import time
 
+# Seconds. Socket timeouts limit each read; the deadlines below limit wall-clock time, so a provider that sends
+# one byte at a time cannot hold a request open.
 CONNECT_TIMEOUT = 10
 # Local models can take a while to load before the first token.
 FIRST_BYTE_TIMEOUT = 90
 CHUNK_TIMEOUT = 60
+ERROR_BODY_TIMEOUT = 10
 TOTAL_TIMEOUT = 180
+TEST_TIMEOUT = 60
+MODELS_TIMEOUT = 30
+# How often the deadline thread looks at the clock.
+WATCH_INTERVAL = 0.2
 MAX_ANSWER_CHARS = 64000
+# Limits on what the provider sends, beyond the answer text: one line, one event, and all bytes of one answer.
+MAX_LINE_CHARS = 256 * 1024
+MAX_EVENT_CHARS = 256 * 1024
+MAX_UPSTREAM_BYTES = 4 * 1024 * 1024
+LINE_TOO_LONG = 'The provider sent a line longer than 256 KB, so the answer was stopped.'
+EVENT_TOO_LONG = 'The provider sent an event larger than 256 KB, so the answer was stopped.'
+TOO_MANY_BYTES = 'The provider sent more than 4 MB for one answer, so it was stopped.'
 MAX_ERROR_BYTES = 4096
 MAX_MODELS_BYTES = 8 * 1024 * 1024
 USER_AGENT = 'EngineeringWorkshop'
@@ -55,19 +69,74 @@ def tls():
 
 # ---- Stream parsers. Both accept bytes in any split, including inside a UTF-8 character. ----
 
+class StreamTooLarge(ProviderError):
+    """The provider sent a line, an event or an answer above the size limits."""
+
+
+class _Lines:
+    """Split streamed text into lines. Only new text is searched, and an unfinished line is kept as parts, so
+    each byte is looked at once. A line longer than MAX_LINE_CHARS raises StreamTooLarge."""
+
+    def __init__(self, end):
+        self.decoder = codecs.getincrementaldecoder('utf-8')(errors='replace')
+        self.end = end
+        self.parts = []
+        self.size = 0
+        # A line that ended with \r at the end of a chunk: a \n at the start of the next chunk belongs to it.
+        self.skip_lf = False
+
+    def _add(self, piece):
+        if piece:
+            self.size += len(piece)
+            if self.size > MAX_LINE_CHARS:
+                raise StreamTooLarge(LINE_TOO_LONG)
+            self.parts.append(piece)
+
+    def feed(self, chunk, final=False):
+        text = self.decoder.decode(chunk, final)
+        lines, pos, size = [], 0, len(text)
+        if self.skip_lf and text:
+            self.skip_lf = False
+            if text[0] == '\n':
+                pos = 1
+        while pos < size:
+            match = self.end.search(text, pos)
+            if not match:
+                self._add(text[pos:])
+                break
+            self._add(text[pos:match.start()])
+            lines.append(''.join(self.parts))
+            self.parts, self.size = [], 0
+            pos = match.end()
+            if match.group() == '\r':
+                if pos == size:
+                    self.skip_lf = True
+                elif text[pos] == '\n':
+                    pos += 1
+        return lines
+
+    def close(self):
+        """The lines still open when the stream ended."""
+        lines = self.feed(b'', final=True)
+        if self.parts:
+            lines.append(''.join(self.parts))
+            self.parts, self.size = [], 0
+        return lines
+
+
 class SSEParser:
     """Server-sent events: returns the data of each completed event."""
 
     def __init__(self):
-        self.decoder = codecs.getincrementaldecoder('utf-8')(errors='replace')
-        self.buffer = ''
+        self.lines = _Lines(re.compile('[\r\n]'))
         self.data = []
+        self.size = 0
 
     def _line(self, line):
         if line == '':
             if self.data:
                 event = '\n'.join(self.data)
-                self.data = []
+                self.data, self.size = [], 0
                 return event
             return None
         if line.startswith(':'):
@@ -76,27 +145,23 @@ class SSEParser:
         if value.startswith(' '):
             value = value[1:]
         if field == 'data':
+            self.size += len(value) + 1
+            if self.size > MAX_EVENT_CHARS:
+                raise StreamTooLarge(EVENT_TOO_LONG)
             self.data.append(value)
         return None
 
+    def _events(self, lines):
+        return [event for event in map(self._line, lines) if event is not None]
+
     def feed(self, chunk):
-        self.buffer += self.decoder.decode(chunk)
-        events = []
-        while True:
-            match = re.search(r'\r\n|\r|\n', self.buffer)
-            # A lone \r at the end may be the first half of \r\n.
-            if not match or (match.group() == '\r' and match.end() == len(self.buffer)):
-                break
-            line = self.buffer[:match.start()]
-            self.buffer = self.buffer[match.end():]
-            event = self._line(line)
-            if event is not None:
-                events.append(event)
-        return events
+        return self._events(self.lines.feed(chunk))
 
     def close(self):
         """Events still open when the stream ended."""
-        events = self.feed(b'\n\n') if self.buffer or self.data else []
+        events = self._events(self.lines.close())
+        if self.data:
+            events.append(self._line(''))
         return events
 
 
@@ -104,19 +169,13 @@ class NDJSONParser:
     """One JSON object per line, as Ollama streams them."""
 
     def __init__(self):
-        self.decoder = codecs.getincrementaldecoder('utf-8')(errors='replace')
-        self.buffer = ''
+        self.lines = _Lines(re.compile('\n'))
 
     def feed(self, chunk):
-        self.buffer += self.decoder.decode(chunk)
-        lines = self.buffer.split('\n')
-        self.buffer = lines.pop()
-        return [obj for obj in map(_json_line, lines) if obj is not None]
+        return [obj for obj in map(_json_line, self.lines.feed(chunk)) if obj is not None]
 
     def close(self):
-        rest, self.buffer = self.buffer, ''
-        obj = _json_line(rest)
-        return [obj] if obj is not None else []
+        return [obj for obj in map(_json_line, self.lines.close()) if obj is not None]
 
 
 def _json_line(line):
@@ -250,40 +309,82 @@ class Target:
 
 
 class _PinnedConnection(http.client.HTTPConnection):
-    def __init__(self, target, on_socket):
+    def __init__(self, target, upstream):
         super().__init__(target.host, target.port, timeout=CONNECT_TIMEOUT)
         self._target = target
-        self._on_socket = on_socket
+        self._upstream = upstream
 
     def connect(self):
-        error = None
+        sock = error = None
         for address in self._target.addresses:
+            left = self._upstream.time_left()
+            if left <= 0 or self._upstream.cancelled.is_set():
+                break
             try:
-                sock = socket.create_connection((address, self._target.port), CONNECT_TIMEOUT)
+                sock = socket.create_connection((address, self._target.port), min(CONNECT_TIMEOUT, left))
                 break
             except OSError as exc:
                 error = exc
-        else:
-            raise error or OSError('No address')
-        self._on_socket(sock)
+        if sock is None:
+            raise error or TimeoutError('connect')
+        self._upstream.register(sock)
         if self._target.scheme == 'https':
             sock = tls().wrap_socket(sock, server_hostname=self._target.host)
-            self._on_socket(sock)
+            self._upstream.register(sock)
         self.sock = sock
 
 
 class Upstream:
-    """One request to the provider. abort() from another thread closes the socket, which ends a blocked read."""
+    """One request to the provider. abort() from another thread closes the socket, which ends a blocked read.
 
-    def __init__(self, target, key=''):
+    A deadline thread aborts the request when the whole call or the current step (connect, headers, error body)
+    runs out of time. `expired` then holds the message to show.
+    """
+
+    def __init__(self, target, key='', timeout=TOTAL_TIMEOUT, expired_message=''):
         self.target = target
         self.key = key
+        self.timeout = timeout
+        self.expired_message = expired_message or f'{target.label} stopped answering. The request timed out.'
+        self.expired = ''
+        self.deadline = None
         self.cancelled = threading.Event()
+        self._step = None
         self._lock = threading.Lock()
         self._socks = []
         self.connection = None
 
-    def _register(self, sock):
+    def start(self):
+        """Start the clock for the whole call."""
+        if self.deadline is None:
+            self.deadline = time.monotonic() + self.timeout
+            threading.Thread(target=self._watch, daemon=True, name='assistant-deadline').start()
+
+    def step(self, seconds=None, message=''):
+        """Limit the next step to `seconds` of wall-clock time, or remove the step limit."""
+        self._step = None if seconds is None else (time.monotonic() + seconds, message)
+
+    def time_left(self):
+        """Seconds until the whole call or the current step runs out."""
+        ends = [end for end in (self.deadline, self._step and self._step[0]) if end]
+        return min(ends) - time.monotonic() if ends else self.timeout
+
+    def over_time(self):
+        return self.deadline is not None and time.monotonic() > self.deadline
+
+    def _watch(self):
+        while not self.cancelled.wait(WATCH_INTERVAL):
+            now, step = time.monotonic(), self._step
+            if now > self.deadline:
+                self.expired = self.expired_message
+            elif step and now > step[0]:
+                self.expired = step[1] or f'{self.target.label} stopped answering. The request timed out.'
+            else:
+                continue
+            self.abort()
+            return
+
+    def register(self, sock):
         with self._lock:
             self._socks.append(sock)
             cancelled = self.cancelled.is_set()
@@ -318,17 +419,22 @@ class Upstream:
 
     def open(self, method, suffix, protocol, body=None):
         """Send the request and return the response once its headers arrive."""
-        connection = _PinnedConnection(self.target, self._register)
+        self.start()
+        host = self.target.label
+        connection = _PinnedConnection(self.target, self)
         self.connection = connection
+        self.step(CONNECT_TIMEOUT, f'Cannot connect to {host}. The connection timed out.')
         connection.connect()
         if self.cancelled.is_set():
-            raise ProviderError('Stopped.')
+            raise ProviderError(self.expired or 'Stopped.')
         path = self.target.path.rstrip('/') + suffix
-        connection.request(method, path or '/', body=body, headers=self.headers(protocol, body))
+        self.step(FIRST_BYTE_TIMEOUT, f'{host} did not start answering within {FIRST_BYTE_TIMEOUT} seconds.')
         # getresponse() hands the socket to the response, so keep it here to change the timeout afterwards.
         sock = connection.sock
-        sock.settimeout(FIRST_BYTE_TIMEOUT)
+        sock.settimeout(max(0.1, min(FIRST_BYTE_TIMEOUT, self.time_left())))
+        connection.request(method, path or '/', body=body, headers=self.headers(protocol, body))
         response = connection.getresponse()
+        self.step()
         sock.settimeout(CHUNK_TIMEOUT)
         return response
 
@@ -339,6 +445,7 @@ class Upstream:
         if 300 <= status < 400:
             return f'{host} answered with a redirect (HTTP {status}). Redirects are not followed. Check the base URL.'
         detail = ''
+        self.step(ERROR_BODY_TIMEOUT)
         try:
             raw = response.read(MAX_ERROR_BYTES)
             obj = _json_line(raw.decode('utf-8', 'replace'))
@@ -348,6 +455,7 @@ class Upstream:
                 detail = _error_text(obj['message'])
         except (OSError, ValueError, http.client.HTTPException):
             pass
+        self.step()
         detail = redact(detail, self.key)
         if status in (401, 403):
             message = f'{host} refused the API key (HTTP {status}).'
@@ -364,6 +472,8 @@ class Upstream:
     def describe(self, exc):
         """A plain message for a connection failure."""
         host = self.target.label
+        if self.expired:
+            return self.expired
         if isinstance(exc, ProviderError):
             return str(exc)
         if isinstance(exc, (TimeoutError, socket.timeout)):
@@ -382,14 +492,14 @@ class Upstream:
         self.abort()
 
 
-def run_stream(upstream, protocol, provider, model, messages, max_tokens, events, deadline=None):
+def run_stream(upstream, protocol, provider, model, messages, max_tokens, events):
     """Read one streamed answer into the events queue as ('delta', text), then ('done', info) or ('error', text).
 
-    Runs on its own thread so that the request handler can watch the browser connection.
+    Runs on its own thread so that the request handler can watch the browser connection. Ends with an error
+    when the provider sends more than the size limits or runs past the deadline.
     """
-    deadline = deadline or time.monotonic() + TOTAL_TIMEOUT
     suffix, body = chat_request(protocol, provider, model, messages, max_tokens)
-    size = 0
+    size = received = 0
     try:
         response = upstream.open('POST', suffix, protocol, body)
         if response.status != 200:
@@ -398,12 +508,18 @@ def run_stream(upstream, protocol, provider, model, messages, max_tokens, events
         decoder = StreamDecoder(protocol)
         thinking = False
         while True:
-            if upstream.cancelled.is_set():
+            if upstream.over_time():
+                upstream.expired = upstream.expired_message
+            chunk = b'' if upstream.expired else response.read1(8192)
+            # After abort() a read can return b'' as if the answer had ended, so check before using it.
+            if upstream.cancelled.is_set() or upstream.expired:
+                if upstream.expired:
+                    events.put(('error', upstream.expired))
                 return
-            if time.monotonic() > deadline:
-                events.put(('error', 'The answer took longer than 3 minutes and was stopped.'))
+            received += len(chunk)
+            if received > MAX_UPSTREAM_BYTES:
+                events.put(('error', TOO_MANY_BYTES))
                 return
-            chunk = response.read1(8192)
             found = decoder.feed(chunk) if chunk else decoder.close()
             for kind, value in found:
                 if kind == 'thinking':
@@ -425,7 +541,7 @@ def run_stream(upstream, protocol, provider, model, messages, max_tokens, events
                 events.put(('done', {}))
                 return
     except Exception as exc:  # noqa: BLE001 - every failure becomes a message; nothing here may log the key.
-        if not upstream.cancelled.is_set():
+        if upstream.expired or not upstream.cancelled.is_set():
             events.put(('error', upstream.describe(exc)))
     finally:
         upstream.close()
@@ -436,10 +552,20 @@ def fetch_models(upstream, protocol):
         response = upstream.open('GET', models_path(protocol), protocol)
         if response.status != 200:
             raise ProviderError(upstream.error_for(response))
-        payload = response.read(MAX_MODELS_BYTES + 1)
-        if len(payload) > MAX_MODELS_BYTES:
-            raise ProviderError('The model list is too large to read.')
-        return parse_models(protocol, payload)
+        parts, size = [], 0
+        while True:
+            if upstream.over_time():
+                upstream.expired = upstream.expired_message
+            chunk = b'' if upstream.expired else response.read1(65536)
+            if upstream.cancelled.is_set() or upstream.expired:
+                raise ProviderError(upstream.expired or 'Stopped.')
+            if not chunk:
+                break
+            size += len(chunk)
+            if size > MAX_MODELS_BYTES:
+                raise ProviderError('The model list is too large to read.')
+            parts.append(chunk)
+        return parse_models(protocol, b''.join(parts))
     except ProviderError:
         raise
     except Exception as exc:  # noqa: BLE001

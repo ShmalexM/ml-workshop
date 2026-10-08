@@ -14,6 +14,7 @@ import tempfile
 import threading
 import time
 import unittest
+from unittest import mock
 import urllib.error
 import urllib.request
 
@@ -80,6 +81,26 @@ class ParserTests(unittest.TestCase):
         self.assertNotIn('abc.def', providers.redact(text))
         self.assertNotIn('otherkey', providers.redact(text))
 
+    def test_long_lines_and_events_end_the_stream(self):
+        too_long = providers.MAX_LINE_CHARS + 1
+        cases = [('openai', b'data: ' + b'x' * too_long, 'line'), ('ollama', b'x' * too_long, 'line'),
+                 ('openai', b'data: ' + b'x' * 1000 + b'\n', 'event')]
+        for protocol, piece, kind in cases:
+            with self.subTest(protocol=protocol, kind=kind):
+                decoder = providers.StreamDecoder(protocol)
+                with self.assertRaisesRegex(providers.StreamTooLarge, kind):
+                    for _ in range(too_long // len(piece) + 2):
+                        decoder.feed(piece)
+
+    def test_parsing_reads_each_byte_once(self):
+        # A long line that arrives in small pieces. Searching the whole buffer for each piece would take minutes.
+        text = 'y' * (providers.MAX_LINE_CHARS - 100)
+        data = b'data: {"choices":[{"delta":{"content":"' + text.encode() + b'"}}]}\n\ndata: [DONE]\n\n'
+        started = time.monotonic()
+        events = decode('openai', [data[i:i + 16] for i in range(0, len(data), 16)])
+        self.assertLess(time.monotonic() - started, 3)
+        self.assertEqual(events, [('delta', text), ('done', None)])
+
     def test_request_bodies(self):
         path, body = providers.chat_request('ollama', 'ollama', 'm', [], 800)
         self.assertEqual(path, '/api/chat')
@@ -89,6 +110,86 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(json.loads(body)['max_completion_tokens'], 800)
         _, body = providers.chat_request('openai', 'openrouter', 'm', [], 800)
         self.assertEqual(json.loads(body)['max_tokens'], 800)
+
+
+class ProviderLimitTests(unittest.TestCase):
+    """Size limits and deadlines, run in this process against the fake provider."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.fake = FakeLLM()
+        cls.target = providers.Target('http', '127.0.0.1', cls.fake.port, '/v1', ['127.0.0.1'])
+        cls.ollama = providers.Target('http', '127.0.0.1', cls.fake.port, '', ['127.0.0.1'])
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.fake.stop()
+
+    def setUp(self):
+        self.fake.reset()
+
+    def stream(self, mode, protocol='openai', timeout=30, **fake):
+        self.fake.mode = mode
+        for name, value in fake.items():
+            setattr(self.fake, name, value)
+        events = queue.Queue()
+        upstream = providers.Upstream(self.ollama if protocol == 'ollama' else self.target, KEY, timeout, 'Too slow.')
+        started = time.monotonic()
+        providers.run_stream(upstream, protocol, 'custom', 'm', [{'role': 'user', 'content': 'hi'}], 100, events)
+        found = []
+        while not events.empty():
+            found.append(events.get())
+        return found, time.monotonic() - started
+
+    def assert_ends_with(self, events, words):
+        self.assertEqual(events[-1][0], 'error', events)
+        self.assertIn(words, events[-1][1])
+
+    def test_streams_without_line_or_event_ends(self):
+        for mode, protocol in [('flood', 'openai'), ('nonl', 'openai'), ('nonl', 'ollama')]:
+            with self.subTest(mode=mode, protocol=protocol):
+                events, seconds = self.stream(mode, protocol)
+                self.assert_ends_with(events, '256 KB')
+                self.assertLess(seconds, 5)
+
+    def test_bytes_per_answer_are_limited(self):
+        for protocol in ('openai', 'ollama'):
+            with self.subTest(protocol=protocol):
+                events, seconds = self.stream('noise', protocol)
+                self.assertEqual(events, [('error', providers.TOO_MANY_BYTES)])
+                self.assertLess(seconds, 10)
+
+    def test_slow_headers_and_error_bodies_hit_a_deadline(self):
+        with mock.patch.object(providers, 'FIRST_BYTE_TIMEOUT', 1):
+            events, seconds = self.stream('slowhead')
+        self.assert_ends_with(events, 'did not start answering')
+        self.assertLess(seconds, 3)
+        with mock.patch.object(providers, 'ERROR_BODY_TIMEOUT', 1):
+            events, seconds = self.stream('slowerror')
+        self.assert_ends_with(events, 'had an error (HTTP 500)')
+        self.assertLess(seconds, 3)
+
+    def test_whole_call_deadline(self):
+        events, seconds = self.stream('endless', timeout=1)
+        self.assertEqual(events[-1], ('error', 'Too slow.'))
+        self.assertLess(seconds, 3)
+        self.fake.mode = 'slowbody'
+        started = time.monotonic()
+        with self.assertRaisesRegex(providers.ProviderError, 'Too slow'):
+            providers.fetch_models(providers.Upstream(self.target, '', 1, 'Too slow.'), 'openai')
+        self.assertLess(time.monotonic() - started, 3)
+
+    def test_abort_ends_a_stalled_header_read(self):
+        self.fake.mode = 'slowhead'
+        upstream = providers.Upstream(self.target, KEY)
+        events = queue.Queue()
+        reader = threading.Thread(target=providers.run_stream, args=(upstream, 'openai', 'custom', 'm', [], 10, events))
+        reader.start()
+        time.sleep(0.5)
+        upstream.abort()
+        reader.join(2)
+        self.assertFalse(reader.is_alive())
+        self.assertTrue(events.empty(), 'A stopped answer reports nothing')
 
 
 def resolver(table):
@@ -496,6 +597,82 @@ class AssistantServerTests(unittest.TestCase):
                     self.assertNotIn(KEY.encode(), raw)
         self.assertEqual(self.fake.requests[0]['headers']['Authorization'], 'Bearer ' + KEY)
 
+    def test_flood_ends_the_answer_and_frees_the_lock(self):
+        self.configure()
+        self.fake.mode = 'flood'
+        status, events = self.server.chat(question())
+        self.assertEqual(status, 200)
+        self.assertEqual(events[-1]['type'], 'error')
+        self.assertIn('256 KB', events[-1]['message'])
+        self.wait_until_idle()
+
+    def run_test_in_background(self, body):
+        result = queue.Queue()
+        thread = threading.Thread(target=lambda: result.put(self.server.json('/api/assistant/test', body)), daemon=True)
+        thread.start()
+        for _ in range(100):
+            if self.fake.requests and self.server.json('/api/assistant/config')[1]['busy']:
+                return result
+            time.sleep(0.02)
+        raise AssertionError('The test did not start')
+
+    def wait_for_close(self, since):
+        for _ in range(100):
+            if self.fake.closed:
+                break
+            time.sleep(0.02)
+        self.assertTrue(self.fake.closed, 'The provider connection stayed open')
+        self.assertLess(self.fake.closed[0] - since, 1.5)
+
+    def test_stop_ends_a_stalled_connection_test(self):
+        self.configure()
+        self.fake.mode = 'slowhead'
+        result = self.run_test_in_background({'id': 'settings-test-1'})
+        # A Stop with another id does nothing.
+        self.assertFalse(self.server.json('/api/assistant/stop', {'id': 'not-this-one'})[1]['stopped'])
+        stopped = time.monotonic()
+        self.assertTrue(self.server.json('/api/assistant/stop', {'id': 'settings-test-1'})[1]['stopped'])
+        status, reply = result.get(timeout=3)
+        self.assertEqual((status, reply['error']), (409, assistant.TEST_STOPPED))
+        self.assertLess(time.monotonic() - stopped, 2)
+        self.wait_until_idle()
+        self.wait_for_close(stopped)
+
+    def test_closing_settings_ends_a_connection_test(self):
+        self.configure()
+        self.fake.mode = 'slowhead'
+        connection = http.client.HTTPConnection('127.0.0.1', self.server.port, timeout=30)
+        connection.request('POST', '/api/assistant/test', body='{}',
+                           headers={'Content-Type': 'application/json', 'X-Workshop-Token': self.server.token})
+        for _ in range(100):
+            if self.fake.requests:
+                break
+            time.sleep(0.02)
+        closed = time.monotonic()
+        connection.sock.shutdown(socket.SHUT_RDWR)
+        connection.close()
+        self.wait_until_idle()
+        self.wait_for_close(closed)
+
+    def test_model_lists_run_one_at_a_time(self):
+        self.configure()
+        self.fake.mode = 'slowhead'
+        result = queue.Queue()
+        threading.Thread(target=lambda: result.put(self.server.json('/api/assistant/models', {})), daemon=True).start()
+        for _ in range(100):
+            if self.fake.requests:
+                break
+            time.sleep(0.02)
+        status, reply = self.server.json('/api/assistant/models', {})
+        self.assertEqual((status, reply['error']), (409, assistant.MODELS_BUSY))
+        # A model list does not block an answer.
+        self.fake.mode = 'ok'
+        self.assertEqual(self.server.chat(question())[0], 200)
+        self.wait_until_idle()
+        self.fake.release.set()
+        status, reply = result.get(timeout=5)
+        self.assertEqual(status, 502, reply)
+
     def test_bad_chat_requests(self):
         self.configure()
         for body in [dict(question(), pageKind='battle'), dict(question(), mode='solve'), dict(question(), messages=[]),
@@ -537,6 +714,12 @@ class RateLimitTests(unittest.TestCase):
                 status, reply = server.json('/api/assistant/test', {})
                 self.assertEqual(status, 429)
                 self.assertEqual(len([r for r in fake.requests if r['method'] == 'POST']), 2)
+                # Model lists have their own limit.
+                for _ in range(assistant.MODELS_LIMIT):
+                    self.assertEqual(server.json('/api/assistant/models', {})[0], 200)
+                status, reply = server.json('/api/assistant/models', {})
+                self.assertEqual(status, 429, reply)
+                self.assertEqual(len([r for r in fake.requests if r['method'] == 'GET']), assistant.MODELS_LIMIT)
             finally:
                 server.stop()
                 fake.stop()

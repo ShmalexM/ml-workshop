@@ -1,9 +1,12 @@
 """A fake AI provider for the assistant tests: Ollama and OpenAI-compatible routes on 127.0.0.1:0.
 
 Set `mode` to choose the behaviour of the next chat request: ok, status, redirect, slow, endless or
-midstream. Every request is recorded in `requests`; `closed` gets the time.monotonic() at which an endless
-stream saw its client go away.
+midstream. Hostile modes: echo and echostream send the key back changed; flood, nonl and noise send a
+stream that never ends a line, never ends an event, or never ends; slowhead and slowerror send headers or an
+error body one byte at a time, and slowbody does the same for a model list. Every request is recorded in
+`requests`; `closed` gets the time.monotonic() at which an endless or slow answer saw its client go away.
 """
+import base64
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import select
@@ -27,6 +30,16 @@ NDJSON_PIECES = [
     b'{"message":{"content":""},"done":true,"done_reason":"stop"}\n',
 ]
 ANSWER = 'Hello é ✓'
+STREAM_HEAD = b'HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n'
+# About 64 KB each: data lines with no blank line between them, text with no newline, and comments only.
+FLOOD = (b'data: ' + b'B' * 4000 + b'\n') * 16
+NO_NEWLINE = b'A' * 65536
+NOISE = b': keep-alive\n\n' * 4096
+
+
+def changed_keys(key):
+    """The key reversed, in base64, split by spaces and by a dot, as some error messages echo it."""
+    return [key[::-1], base64.b64encode(key.encode()).decode(), ' '.join(key), key[:6] + '.' + key[6:]]
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -48,12 +61,56 @@ class _Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def gone(self):
+        try:
+            readable, _, _ = select.select([self.connection], [], [], 0)
+            return bool(readable) and self.connection.recv(1, socket.MSG_PEEK) == b''
+        except OSError:
+            return True
+
+    def ended(self):
+        self.fake.closed.append(time.monotonic())
+        self.close_connection = True
+
+    def drip(self, head, byte):
+        """Send head, then one byte at a time until the client goes away or `release` is set."""
+        try:
+            self.connection.sendall(head)
+            while not self.fake.release.wait(self.fake.delay or 0.2) and not self.gone():
+                self.connection.sendall(byte)
+        except OSError:
+            pass
+        self.ended()
+
+    def flood(self, block, start=b''):
+        """Send block after block, up to 64 MB, until the client goes away."""
+        sent = 0
+        try:
+            self.connection.sendall(STREAM_HEAD + start)
+            while sent < 64 * 1024 * 1024 and not self.gone():
+                self.connection.sendall(block)
+                sent += len(block)
+        except OSError:
+            pass
+        self.fake.sent = sent
+        self.ended()
+
     def special(self):
-        """Statuses and redirects that every route can answer with. Returns True when it answered."""
+        """Statuses, redirects and slow answers that every route can answer with. Returns True when it answered."""
         mode = self.fake.mode
+        key = self.headers.get('Authorization', '').removeprefix('Bearer ')
         if mode == 'status':
             # Echo the Authorization header, as some providers do in their error messages.
             self.reply(self.fake.status, {'error': {'message': 'Bad credentials: ' + self.headers.get('Authorization', '')}})
+            return True
+        if mode == 'echo':
+            self.reply(self.fake.status, {'error': {'message': 'Bad key: ' + ' / '.join(changed_keys(key))}})
+            return True
+        if mode == 'slowhead':
+            self.drip(b'HTTP/1.1 200 OK\r\nX-Slow: ', b'a')
+            return True
+        if mode == 'slowerror':
+            self.drip(b'HTTP/1.1 500 Internal Server Error\r\nContent-Type: application/json\r\nContent-Length: 4096\r\n\r\n', b' ')
             return True
         if mode == 'redirect':
             self.send_response(302)
@@ -69,6 +126,8 @@ class _Handler(BaseHTTPRequestHandler):
             return
         if self.path == '/api/tags':
             return self.reply(200, {'models': [{'name': 'qwen2.5-coder:7b'}, {'name': 'llama3.2:1b'}]})
+        if self.fake.mode == 'slowbody':
+            return self.drip(b'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 100000\r\n\r\n{"data":[', b' ')
         if self.path == '/v1/models':
             return self.reply(200, {'object': 'list', 'data': [{'id': 'fake-model'}, {'id': 'fake-model-2'}]})
         self.reply(404, {'error': 'not found'})
@@ -83,6 +142,17 @@ class _Handler(BaseHTTPRequestHandler):
         if not ollama and self.path != '/v1/chat/completions':
             return self.reply(404, {'error': 'not found'})
         mode = self.fake.mode
+        if mode == 'flood':
+            return self.flood(FLOOD)
+        if mode == 'nonl':
+            return self.flood(NO_NEWLINE, b'' if ollama else b'data: ')
+        if mode == 'noise':
+            return self.flood(b'{}\n' * 16384 if ollama else NOISE)
+        if mode == 'echostream':
+            key = self.headers.get('Authorization', '').removeprefix('Bearer ')
+            message = 'In-stream: ' + ' / '.join(changed_keys(key))
+            self.connection.sendall(STREAM_HEAD + b'data: ' + json.dumps({'error': {'message': message}}).encode() + b'\n\n')
+            return self.ended()
         if mode == 'slow':
             time.sleep(self.fake.delay)
         self.send_response(200)
@@ -125,6 +195,8 @@ class FakeLLM:
         self.status = 401
         self.redirect_to = ''
         self.delay = 0
+        self.sent = 0
+        self.release = threading.Event()
         self.server = ThreadingHTTPServer(('127.0.0.1', 0), _Handler)
         self.server.daemon_threads = True
         self.server.fake = self
@@ -135,9 +207,13 @@ class FakeLLM:
 
     def reset(self, mode='ok'):
         self.mode = mode
+        self.delay = 0
+        self.sent = 0
         self.requests.clear()
         self.closed.clear()
+        self.release.clear()
 
     def stop(self):
+        self.release.set()
         self.server.shutdown()
         self.server.server_close()
