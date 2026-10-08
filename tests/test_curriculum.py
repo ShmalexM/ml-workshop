@@ -66,6 +66,9 @@ class CurriculumTests(unittest.TestCase):
             self.assertTrue(isinstance(lesson['minutes'],int) and lesson['minutes']>0)
             self.assertIn(lesson['xp'],[100,150])
             for field in ['diagram','tasks','hints']:self.assertEqual(len(lesson[field]),3)
+            # Lessons whose checks expect an error show the raise statement on another example.
+            if any('raises(' in check['expr'] for check in lesson['checks']):
+                self.assertIn('raise ValueError(', lesson['hints'][1], lesson['id'])
             self.assertTrue(3<=len(lesson['checks'])<=5)
             domain=urlparse(lesson['reference']['url']).hostname
             self.assertIn(domain,['developers.google.com','docs.pytorch.org','www.tensorflow.org','huggingface.co','reference.langchain.com','developers.llamaindex.ai','nvidia.github.io','docs.python.org','www.rfc-editor.org','react.dev','gymnasium.farama.org','opentelemetry.io','developer.mozilla.org'])

@@ -18,6 +18,8 @@ The production frontend is served from `dist/`; only one long-lived Python proce
 
 Execution is deliberately trusted local Python and JavaScript, not an untrusted code service. Loopback host/origin checks, no CORS, an unpredictable write token, subprocess time/output limits, secret-minimized environment, and process-group cleanup reduce accidental misuse but do not isolate the user's filesystem. Do not expose this server on a network.
 
+Run results show learners only their own code. Tracebacks and stacks keep frames from `exercise.py` or `exercise.js`, so runner frames and install paths do not appear, and `summary` gives the error with its line number. `backend/explanations.py` maps common Python and JavaScript errors to one-line `explanation` text. A failed check that is one comparison (`a == b`, `a is True`, `abs(a - b) < tol`, `raises(Error, lambda: a)`, or JavaScript `a === b` and `equal(a, b)`) also returns its `call`, `expected` and `got` values. Check expressions stay out of the curriculum; a learner sees one check's call and expected value only after that check fails.
+
 
 ## Local books
 

@@ -10,8 +10,8 @@ add('modern',1,'Build a local tokenizer',('A language model reads integer IDs. A
  'token [UNK], so "learn something" becomes [1, 0]. The Whitespace pre-tokenizer splits at '
  'spaces and also separates punctuation. For example, "learn!" becomes two tokens: "learn" '
  'and "!".'),['Build a vocabulary with [UNK] at ID 0 and words at IDs 1, 2, and so on.',
- 'Create a WordLevel tokenizer and set its pre_tokenizer to Whitespace().',
- 'Return the tokenizer from make_tokenizer(words). The words are unique and exclude [UNK].'],'Try text containing a word absent from words. Its ID should be 0.',['Create a vocabulary dict that maps "[UNK]" to 0.','Construct WordLevel(vocab=..., unk_token="[UNK]").','Set tokenizer.pre_tokenizer = Whitespace().'],'''
+ 'Create a Tokenizer from a WordLevel model and set its pre_tokenizer to Whitespace().',
+ 'Return the tokenizer from make_tokenizer(words). The words are unique and exclude [UNK].'],'Try text containing a word absent from words. Its ID should be 0.',['Create a vocabulary dict that maps "[UNK]" to 0.','Pass the WordLevel model to Tokenizer: Tokenizer(WordLevel(vocab=..., unk_token="[UNK]")).','Set tokenizer.pre_tokenizer = Whitespace().'],'''
 from tokenizers import Tokenizer
 from tokenizers.models import WordLevel
 from tokenizers.pre_tokenizers import Whitespace

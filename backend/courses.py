@@ -51,9 +51,11 @@ lesson('foundations',2,'Measure the error',
  'Return the mean of their squared differences from mse(predictions, targets).',
  'Raise ValueError for empty lists or lists of different lengths.'],
 'Check the lengths before using zip. Otherwise it silently stops at the shorter list.',
-['Check that both lists are nonempty and have the same length.',
- 'For each pair from zip(predictions, targets), square p - t.',
- 'Return sum((p - t) ** 2 for p, t in zip(predictions, targets)) / len(targets).'],
+['Check that both lists are nonempty and have the same length before using zip.',
+ 'raise stops the function with an error. For example, if age < 0: raise ValueError("age '
+ 'must not be negative") rejects a negative age.',
+ 'For each pair from zip(predictions, targets), square p - t. Return sum((p - t) ** 2 for '
+ 'p, t in zip(predictions, targets)) / len(targets).'],
 '''
 def mse(predictions, targets):
     # Validate the inputs and compute the average squared error.
@@ -79,8 +81,8 @@ lesson('foundations',3,'Follow the gradient',
  'parameter, it is the derivative: the slope of the loss curve. Gradient descent moves the '
  'parameter a small step downhill.'),
 'next_weight = weight − learning_rate × gradient',
-('Here the model predicts the weight itself, so its loss is (weight − target)². At weight '
- '0 and target 3, the gradient is 2 × (0 − 3) = −6. A learning rate of 0.1 gives the '
+('This toy model has no input; its prediction is the weight, so its loss is (weight − '
+ 'target)². At weight 0 and target 3, the gradient is 2 × (0 − 3) = −6. A learning rate of 0.1 gives the '
  'update 0 − 0.1 × (−6) = 0.6. Try the plot below to see how the learning rate changes '
  'each step.'),
 ['Compute the gradient of (weight − target)².',
@@ -113,15 +115,15 @@ lesson('foundations',4,'Train, validate, test',
  'when making a prediction.'),
 ['Find the boundaries at 60% and 80% of the number of rows, rounded down.',
  'Keep the rows in their current order.',
- 'Return three lists (train, validation, test) from split_data(rows), leaving rows '
- 'unchanged.'],
+ 'Return the three lists from split_data(rows) as one tuple: return train, validation, '
+ 'test. Leave rows unchanged.'],
 'For seven rows, the boundaries are 4 and 5. Check that all seven rows appear exactly once.',
 ['Use len(rows) to find the number of rows.',
  'Set train_end = int(len(rows) * 0.6) and val_end = int(len(rows) * 0.8).',
  'Return rows[:train_end], rows[train_end:val_end], rows[val_end:].'],
 '''
 def split_data(rows):
-    # Return three lists: train, validation, test.
+    # Return train, validation, test.
     return None
 
 print(split_data(list(range(10))))
@@ -149,9 +151,10 @@ lesson('foundations',5,'Scale your features',
  'Use scale 1 when the standard deviation is zero.',
  'Return a list of transformed values from standardize(train, values).'],
 'Try standardize([4, 4], [4, 5]). A scale of 1 gives [0, 1].',
-['Compute the mean of train, not values.',
- 'Variance is the mean squared distance from that mean. Take its square root for the '
- 'scale.',
+['Compute the mean of train, not values. Variance is the mean squared distance from that '
+ 'mean; its square root is the scale.',
+ 'raise stops the function with an error. For example, if age < 0: raise ValueError("age '
+ 'must not be negative") rejects a negative age.',
  'If scale == 0, set scale = 1.0. Return [(x - mean) / scale for x in values].'],
 '''
 def standardize(train, values):
@@ -333,9 +336,10 @@ print(make_model()(torch.ones(3, 2)))
   '[type(layer) for layer in make_model()] == [nn.Linear, nn.ReLU, nn.Linear]')], ['2 inputs','4 hidden units','1 output'])
 
 lesson('pytorch',4,'Load data in batches',
-('Loading an entire dataset at once can use too much memory. A Dataset holds the examples '
- 'and a DataLoader groups them into batches. Each batch keeps features paired with their '
- 'labels.'),
+('Training usually updates the model after a small group of examples, not after the whole '
+ 'dataset. A Dataset holds the examples and a DataLoader groups them into batches. Each '
+ 'batch keeps features paired with their labels. Here TensorDataset keeps every example in '
+ 'memory; batching limits how many examples each update uses.'),
 'TensorDataset(features, labels) → DataLoader → batches',
 ('For five examples and batch size 2, the batches have sizes 2, 2, and 1. Keeping the last '
  'batch includes every example. With shuffle=False, concatenating the batches gives the '

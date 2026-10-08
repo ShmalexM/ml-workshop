@@ -29,7 +29,9 @@ ORIENTATION = {'python': {'welcome': 'This path teaches the Python that the othe
                        ['Autograd', 'PyTorch’s automatic gradient calculation.']]},
  'tensorflow': {'welcome': 'TensorFlow records gradients and provides Keras layers for '
                            'building models. This path uses the Foundations training loop. '
-                           'PyTorch is optional.',
+                           'PyTorch is optional. Matrix multiplication follows NumPy’s shape '
+                           'rule: [batch, features] times [features, outputs] gives [batch, '
+                           'outputs], so the inner sizes must match.',
                 'goal': 'Train a Keras model and explain each training step.',
                 'prerequisites': ['python', 'foundations'],
                 'terms': [['Variable', 'A tensor whose value can be updated during training.'],
@@ -46,7 +48,9 @@ ORIENTATION = {'python': {'welcome': 'This path teaches the Python that the othe
                       ['Checkpoint', 'Saved model parameters learned during training.'],
                       ['Retrieval', 'Selecting relevant source material for a query.']]},
  'cuda': {'welcome': 'A GPU launches many threads, each assigned part of an array. This path '
-                     'uses NumPy arrays and Numba’s CUDA API. Kernels run in a CPU simulator. '
+                     'uses NumPy arrays and Numba’s CUDA API, so you need ML foundations and basic '
+                     'NumPy first: creating an array, its shape and dtype, and indexing. Kernels '
+                     'run in a CPU simulator. '
                      'GPU compilation, timing, and hardware race behavior require NVIDIA '
                      'hardware.',
           'goal': 'Write kernels with correct indices, bounds checks, and memory transfers.',
@@ -65,7 +69,8 @@ ORIENTATION = {'python': {'welcome': 'This path teaches the Python that the othe
  'backend': {'welcome': 'A backend receives requests from a client and returns results. '
                         'Practice the functions that validate and track those requests using '
                         'in-memory data. A deployed service also needs storage, '
-                        'authentication, and concurrency controls.',
+                        'authentication, and concurrency controls. The lessons assume basic '
+                        'Python: functions, dictionaries, sets, isinstance and raise.',
              'goal': 'Handle invalid requests and retries without losing track of the result.',
              'prerequisites': ['python'],
              'terms': [['Validation', 'Checking input types and values before using them.'],
@@ -296,7 +301,7 @@ variance = sum((x - mean)**2 for x in train) / len(train)
 scale = variance ** 0.5
 print(round((6.0 - mean) / scale, 3))
 ''','1.225',['Compute the training mean and population standard deviation.',
- 'Subtract that mean and divide by that scale to standardize a value.'], 'If the printed value changes from 6.0 to 4.0, what is printed?', ['1.0', '0.0', '1.225'],1,'The training mean is 4. Subtracting it from 4 gives 0, whatever the nonzero scale.')
+ 'Subtract that mean and divide by that scale to standardize a value.'], 'If the 6.0 inside print(...) changes to 4.0, what is printed?', ['1.0', '0.0', '1.225'],1,'The training mean is 4. Subtracting it from 4 gives 0, whatever the nonzero scale.')
 add('foundations-6','''
 weight = 0.0
 x, target, learning_rate = 1.0, 2.0, 0.1
