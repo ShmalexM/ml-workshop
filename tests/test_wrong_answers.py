@@ -585,6 +585,11 @@ print(linear_batch(x, torch.tensor([[2.0], [1.0]]), 0.5))
 """),
     ],
 }
+# QA suspicion: python-8 now says the input list stays unchanged.
+QA_WRONG_ANSWERS["python-8"] = [("sorts the input in place", functions("python-8", low_high="""def low_high(values):
+    values.sort()
+    return values[0], values[-1]
+"""))]
 # Learner code that redefines a name the checks use must not pass wrong work.
 QA_WRONG_ANSWERS["python-10"].append(("returns 0 and redefines raises", functions("python-10", safe_mean="""def safe_mean(values):
     if not values:
@@ -619,6 +624,10 @@ def mean(numbers):
         result.append(p - t)
     return result
 """)],
+    "python-8": [("sorts a copy", functions("python-8", low_high="""def low_high(values):
+    ordered = sorted(values)
+    return ordered[0], ordered[-1]
+"""))],
     "python-9": [("tests membership first", """def count_words(words):
     counts = {}
     for word in words:

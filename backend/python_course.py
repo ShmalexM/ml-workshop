@@ -375,7 +375,9 @@ add(8, 'Return several values',
     ['In low_high(values), return min(values) and max(values) as a tuple. values always has at '
      'least one item.',
      'In split_at, find the cut position: int(len(values) * fraction).',
-     'Return two lists: the items before the cut, and the items from the cut onwards.'],
+     'Return two lists: the items before the cut, and the items from the cut onwards. Leave '
+     'values unchanged in both functions: min, max and slices read the list without changing '
+     'it.'],
     'For five items and fraction 0.6, the cut is int(5 * 0.6) = 3, so the two parts have 3 and '
     '2 items.',
     ['Separate two returned values with a comma. Two slices, one before a position and one from '
@@ -409,7 +411,9 @@ add(8, 'Return several values',
     print(split_at([1, 2, 3, 4]))
     ''',
     [('Smallest and largest of [3, 1, 2]', 'low_high([3, 1, 2]) == (1, 3)'),
-     ('One item is both the smallest and the largest', 'low_high([5]) == (5, 5)'),
+     ('Both functions leave the input list unchanged',
+      '(lambda v: low_high(v) == (1, 3) and split_at(v) == ([3], [1, 2]) and v == [3, 1, 2])'
+      '([3, 1, 2])'),
      ('Splits in half by default', 'split_at([1, 2, 3, 4]) == ([1, 2], [3, 4])'),
      ('Splits at 60%', 'split_at([1, 2, 3, 4, 5], 0.6) == ([1, 2, 3], [4, 5])'),
      ('Rounds the cut down', 'split_at([1, 2, 3]) == ([1], [2, 3])')],
