@@ -250,7 +250,8 @@ export function gearParts(look:GearLook,d:Dims):GearPart[]{
   const shell=mesh(cyl(d.chestR*1.1,d.waistR*1.12,d.torso*.98,9),main,g,0,d.torso/2,0);shell.scale.z=.78
   mesh(new THREE.TorusGeometry(d.chestR*.62,d.chestR*.09,4,12),ri>=1?k.trim:main,g,0,d.torso*.98,0).rotation.x=Math.PI/2
   mesh(cyl(d.waistR*1.18,d.waistR*1.18,.07,9),type==='plate'?k.dark:k.leather,g,0,.03,0).scale.z=.8
-  if(type==='cloth'){const skirt=mesh(cyl(d.waistR*1.15,d.waistR*1.7,d.leg*.62,9,true),main,g,0,-d.leg*.28,0);skirt.scale.z=.85;(skirt.material as THREE.Material).side=THREE.DoubleSide
+  // The open skirt shows its inside, so it uses the double-sided cloth, as the cloak does. The shared one-sided cloth stays as it is.
+  if(type==='cloth'){const skirt=mesh(cyl(d.waistR*1.15,d.waistR*1.7,d.leg*.62,9,true),mat(k.p.fabric,{rough:.95,side:THREE.DoubleSide}),g,0,-d.leg*.28,0);skirt.scale.z=.85
    if(ri>=1)mesh(cyl(d.waistR*1.72,d.waistR*1.74,.04,9,true),k.trim,g,0,-d.leg*.58,0).scale.z=.85}
   if(type==='mail'){const skirt=mesh(cyl(d.waistR*1.15,d.waistR*1.4,d.leg*.3,9,true),main,g,0,-d.leg*.12,0);skirt.scale.z=.85}
   if(type==='leather')for(const s of [-1,1]){const strap=mesh(new THREE.BoxGeometry(.035,d.torso*1.05,.02),k.dark,g,0,d.torso*.52,d.chestR*.78);strap.rotation.z=s*.55}

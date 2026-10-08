@@ -3,7 +3,8 @@ import {createRenderer,environment,reducedMotion} from '../three/scene'
 import {createComposer} from '../three/composer'
 import {HeroModel,type Appearance} from '../three/hero'
 import {Particles} from '../three/fx'
-import {disposeTree,glow} from '../three/materials'
+import {disposeTree,glow,ownGlow} from '../three/materials'
+import {LIGHT_PIXEL_RATIO,type BattleGraphics} from '../graphics'
 import {ARENA_RADIUS,buildArena,type Arena} from './arena'
 import {ARCHETYPES,buildEnemy,stageDef,stageDmg,stageHp,type EnemyKind,type EnemyModel} from './enemies'
 import {KITS,type Ability,type Kit} from './kits'
@@ -14,7 +15,9 @@ export type BattleSetup={appearance:Appearance;classColor:string;stats:HeroStats
  /** Enemy health and damage multipliers from the server's expected power for the stage. */
  enemyHealth?:number;enemyDamage?:number
  /** Practice arena: a training dummy that never dies, optional waves, no boss, no time limit and nothing saved. */
- practice?:boolean}
+ practice?:boolean
+ /** Light: a lower pixel ratio and no bloom, from Settings. Standard when left out. */
+ graphics?:BattleGraphics}
 export type Hud={hp:number;maxHp:number;shield:number;cds:Record<Key,number>;bossHp:number;bossMax:number;bossSeen:boolean;enraged:boolean;time:number;kills:number;bossDamage:number;buffs:{name:string;left:number;color:string}[];auto:boolean;paused:boolean
  /** Practice arena meter: damage to the dummy since the last reset, damage per second over the last 10 sec, and the wave count. */
  practice?:{damage:number;dps:number;waves:boolean;wave:number}}
@@ -67,8 +70,9 @@ export class BattleEngine{
  private cleanups:(()=>void)[]=[]
  constructor(private canvas:HTMLCanvasElement,private overlay:HTMLElement,private setup:BattleSetup,private cb:Callbacks){
   // The scene is drawn into the composer's own buffers and only copied to the canvas, so canvas antialiasing would add memory, not smoother edges.
-  this.renderer=createRenderer(canvas,{shadows:true,antialias:false});this.scene.environment=environment(this.renderer);this.scene.environmentIntensity=.45
-  const made=createComposer(this.renderer,this.scene,this.camera,{strength:.22,radius:.4,threshold:1.4});this.composer=made.composer;this.bloomPass=made.bloom
+  const light=setup.graphics==='light'
+  this.renderer=createRenderer(canvas,{shadows:true,antialias:false,maxPixelRatio:light?LIGHT_PIXEL_RATIO:undefined});this.scene.environment=environment(this.renderer);this.scene.environmentIntensity=.45
+  const made=createComposer(this.renderer,this.scene,this.camera,light?null:{strength:.22,radius:.4,threshold:1.4});this.composer=made.composer;this.bloomPass=made.bloom
   let s=(setup.seed>>>0)||7;this.rng=()=>{s^=s<<13;s^=s>>>17;s^=s<<5;return (s>>>0)/4294967296}
   const def=stageDef(setup.stage);this.arena=buildArena(def.theme,setup.seed);this.scene.add(this.arena.group)
   this.scene.background=this.arena.fog.clone();this.scene.fog=new THREE.Fog(this.arena.fog,28,62)
@@ -89,7 +93,7 @@ export class BattleEngine{
   const ro=new ResizeObserver(()=>this.resize());ro.observe(canvas);this.cleanups.push(()=>ro.disconnect())
  }
  private camOffset(){return new THREE.Vector3(0,16.5,10.5).multiplyScalar(this.zoom)}
- private resize(){const w=this.canvas.clientWidth,h=this.canvas.clientHeight;this.viewW=w;this.viewH=h;if(!w||!h)return;this.renderer.setSize(w,h,false);this.composer.setSize(w,h);this.bloomPass.resolution.set(w,h);this.camera.aspect=w/h;this.camera.updateProjectionMatrix();this.particles.setScale(h*this.renderer.getPixelRatio())}
+ private resize(){const w=this.canvas.clientWidth,h=this.canvas.clientHeight;this.viewW=w;this.viewH=h;if(!w||!h)return;this.renderer.setSize(w,h,false);this.composer.setSize(w,h);this.bloomPass?.resolution.set(w,h);this.camera.aspect=w/h;this.camera.updateProjectionMatrix();this.particles.setScale(h*this.renderer.getPixelRatio())}
  start(){this.cb.banner(this.setup.stageName,'info');this.raf=requestAnimationFrame(this.frame)}
  setPaused(p:boolean){this.paused=p;this.pushHud(true)}
  setAuto(a:boolean){this.auto=a;this.pushHud(true)}
@@ -109,6 +113,7 @@ export class BattleEngine{
  dispose(){
   this.disposed=true;cancelAnimationFrame(this.raf);for(const c of this.cleanups)c()
   this.hero.dispose();this.xrayMat.dispose();this.particles.dispose()
+  for(const f of this.fades)((f.obj as THREE.Mesh).material as THREE.Material).dispose()
   for(const pass of this.composer.passes)pass.dispose();this.composer.dispose()
   this.scene.traverse(o=>{const m=o as THREE.Mesh;if(m.geometry)m.geometry.dispose()})
   this.arena.dispose()
@@ -649,7 +654,8 @@ export class BattleEngine{
  }
 
  // ---------- feedback ----------
- private ringFx(p:THREE.Vector3,r:number,color:string,life:number){const ring=new THREE.Mesh(new THREE.RingGeometry(.85,1,48),glow(color,.9,THREE.DoubleSide));ring.rotation.x=-Math.PI/2;ring.position.set(p.x,.08,p.z);ring.scale.setScalar(r*.3);this.scene.add(ring);this.fades.push({obj:ring,t:0,life,grow:r,base:r*.3})}
+ // Each ring fades on its own, so it has its own material: fading the shared glow() material faded every ring of that color.
+ private ringFx(p:THREE.Vector3,r:number,color:string,life:number){const ring=new THREE.Mesh(new THREE.RingGeometry(.85,1,48),ownGlow(color,.9,THREE.DoubleSide));ring.rotation.x=-Math.PI/2;ring.position.set(p.x,.08,p.z);ring.scale.setScalar(r*.3);this.scene.add(ring);this.fades.push({obj:ring,t:0,life,grow:r,base:r*.3})}
  private floatText(p:THREE.Vector3,text:string,color:string,scale:number){
   if(this.floats.length>60){const old=this.floats.shift();old?.el.remove()}
   const el=document.createElement('div');el.className='float-text';el.textContent=text;el.style.color=color;el.style.fontSize=`${Math.round(15*scale)}px`;this.overlay.appendChild(el)
@@ -659,7 +665,7 @@ export class BattleEngine{
  private project(p:THREE.Vector3){const v=p.clone().project(this.camera);return {x:(v.x+1)/2*this.viewW,y:(1-v.y)/2*this.viewH,z:v.z}}
  private updateFx(dt:number){
   for(const f of this.fades){f.t+=dt;const p=f.t/f.life;f.obj.scale.setScalar(f.base+(f.grow-f.base)*Math.min(1,p*1.4));((f.obj as THREE.Mesh).material as THREE.Material).opacity=0.9*(1-p)}
-  for(const f of this.fades)if(f.t>=f.life){f.obj.removeFromParent();(f.obj as THREE.Mesh).geometry.dispose()}
+  for(const f of this.fades)if(f.t>=f.life){f.obj.removeFromParent();(f.obj as THREE.Mesh).geometry.dispose();((f.obj as THREE.Mesh).material as THREE.Material).dispose()}
   this.fades=this.fades.filter(f=>f.t<f.life)
   for(const l of this.lines){l.t-=dt;(l.line.material as THREE.LineBasicMaterial).opacity=Math.max(0,l.t/.22);if(l.t<=0){l.line.removeFromParent();l.line.geometry.dispose();(l.line.material as THREE.Material).dispose()}}
   this.lines=this.lines.filter(l=>l.t>0)

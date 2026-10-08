@@ -10,14 +10,12 @@ try:
     import resource
 except ImportError:  # Windows has no POSIX resource limits.
     resource = None
-import secrets
-import signal
-import shutil
-import subprocess
 import sys
-import tempfile
 import time
 import traceback
+# Only the server uses these. The exercise process runs this file as __main__ and skips them, so it starts sooner.
+if __name__!='__main__':
+    import secrets, signal, shutil, subprocess, tempfile, threading
 
 MAX_OUTPUT=24000
 LEARNER_FILE='exercise.py'
@@ -460,7 +458,14 @@ def sweep(work,marker,rounds=50):
 
 def wait_for_result(process,result,timeout):
     if sys.platform != 'win32':
-        process.wait(timeout=timeout)
+        # Popen.wait(timeout) checks for the exit after sleeps that double up to 50 ms, which added up to 25 ms to a run.
+        # A thread blocked in wait() sees the exit at once, and the event gives the timeout.
+        exited=threading.Event()
+        def reap():
+            process.wait()
+            exited.set()
+        threading.Thread(target=reap,daemon=True).start()
+        if not exited.wait(timeout):raise subprocess.TimeoutExpired(process.args,timeout)
         return
     deadline=time.monotonic()+timeout
     while not result.exists() and process.poll() is None:

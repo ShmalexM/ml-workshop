@@ -3,10 +3,7 @@ import * as THREE from 'three'
 import {createRenderer,environment,reducedMotion,webglAvailable} from './three/scene'
 import {HeroModel,type Appearance} from './three/hero'
 import {Particles} from './three/fx'
-import {dotTexture,mat} from './three/materials'
-
-/** Viewer-owned glow material: recolored when the class accent changes, so it must not come from the shared cache. */
-const ownGlow=(color:string,opacity:number)=>new THREE.MeshBasicMaterial({color,transparent:true,opacity,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide})
+import {dotTexture,mat,ownGlow} from './three/materials'
 
 type Stage={renderer:THREE.WebGLRenderer;scene:THREE.Scene;camera:THREE.PerspectiveCamera;particles:Particles;ring:THREE.Mesh;aura:THREE.Sprite;rim:THREE.DirectionalLight;hero:HeroModel|null;yaw:number;drag:number|null}
 
@@ -28,7 +25,7 @@ export default function HeroViewer({look,accent,flash,label}:{look:Appearance;ac
   const fill=new THREE.PointLight('#b9c6df',.55,8);fill.position.set(-2.5,1.2,2);scene.add(fill)
   const base=new THREE.Mesh(new THREE.CylinderGeometry(.95,1.08,.22,28),mat('#23252e',{rough:.85,metal:.1}));base.position.y=-.11;base.receiveShadow=true;scene.add(base)
   const top=new THREE.Mesh(new THREE.CylinderGeometry(.9,.9,.02,28),mat('#2d303b',{rough:.7}));top.position.y=.005;top.receiveShadow=true;scene.add(top)
-  const ring=new THREE.Mesh(new THREE.RingGeometry(.72,.78,48),ownGlow(accent,.35));ring.rotation.x=-Math.PI/2;ring.position.y=.02;scene.add(ring)
+  const ring=new THREE.Mesh(new THREE.RingGeometry(.72,.78,48),ownGlow(accent,.35,THREE.DoubleSide));ring.rotation.x=-Math.PI/2;ring.position.y=.02;scene.add(ring)
   // Runes ride on the ring, which lies flat, so they are placed in the ring's own XY plane.
   for(let i=0;i<8;i++){const a=i/8*Math.PI*2;const rune=new THREE.Mesh(new THREE.PlaneGeometry(.07,.07),ring.material);rune.position.set(Math.cos(a)*.84,Math.sin(a)*.84,.001);rune.rotation.z=a+Math.PI/4;ring.add(rune)}
   // Soft backlight glow behind the hero; a sprite with a radial falloff, not a flat disc.

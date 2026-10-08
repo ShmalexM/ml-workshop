@@ -141,12 +141,45 @@ def prune_backups(folder,keep=KEEP_BACKUPS):
         try:(folder/name).unlink()
         except OSError:pass
 
+RUNTIME_PACKAGES=['torch','tensorflow','transformers','tokenizers','langchain-core','llama-index-core','numba']
+RUNTIME_LOCK=threading.Lock()
+# (folders key, versions) from the last read. See package_folders().
+runtime_cache=None
+
+def package_folders():
+    """When each folder on sys.path last changed. Installing, upgrading or removing a package adds or removes
+    its .dist-info folder, which changes the time of the folder that holds it."""
+    key=[]
+    for entry in sys.path:
+        try:key.append((entry,os.stat(entry or '.').st_mtime_ns))
+        except OSError:key.append((entry,None))
+    return tuple(key)
+
+def package_versions():
+    """Installed versions of the framework packages. Reading them takes a few milliseconds, so they are read
+    again only after a package folder changes, for example when setup runs while the server is running."""
+    global runtime_cache
+    with RUNTIME_LOCK:
+        key=package_folders()
+        if runtime_cache is None or runtime_cache[0]!=key:
+            packages={}
+            for name in RUNTIME_PACKAGES:
+                try:packages[name]=version(name)
+                except PackageNotFoundError:packages[name]=None
+            runtime_cache=(key,packages)
+        return dict(runtime_cache[1])
+
 def runtime():
-    packages={}
-    for name in ['torch','tensorflow','transformers','tokenizers','langchain-core','llama-index-core','numba']:
-        try:packages[name]=version(name)
-        except PackageNotFoundError:packages[name]=None
-    return dict(python=sys.version.split()[0],javascript=bool(node_binary()),packages=packages,cudaMode='CPU simulator (Numba); no NVIDIA GPU execution')
+    return dict(python=sys.version.split()[0],javascript=bool(node_binary()),packages=package_versions(),cudaMode='CPU simulator (Numba); no NVIDIA GPU execution')
+
+CURRICULUM_LOCK=threading.Lock()
+def curriculum():
+    # public_curriculum() is cached, but its first call takes about 50 ms. The lock stops two first calls from both building it.
+    with CURRICULUM_LOCK:return public_curriculum()
+
+def warm():
+    """Prepare the slow first answers the page asks for on load, while the browser opens."""
+    curriculum();package_versions()
 
 class Handler(BaseHTTPRequestHandler):
     server_version=f'MLWorkshop/{VERSION}'
@@ -235,7 +268,7 @@ class Handler(BaseHTTPRequestHandler):
         if path=='/api/health':return self.send(dict(app='ml-workshop',version=VERSION,busy=RUN_LOCK.locked()))
         # Lets the launcher check that a running server uses this data folder's token.
         if path=='/api/session':return self.send({'ok':True})
-        if path=='/api/curriculum':return self.send(public_curriculum())
+        if path=='/api/curriculum':return self.send(curriculum())
         if path=='/api/state':return self.send(state())
         if path=='/api/game':
             progress=game_progress()
@@ -459,6 +492,7 @@ def main():
     open_data()
     server=ThreadingHTTPServer(('127.0.0.1',args.port),Handler)
     print(f'Engineering Workshop http://127.0.0.1:{args.port}',flush=True)
+    threading.Thread(target=warm,name='warm',daemon=True).start()
     try:server.serve_forever()
     except KeyboardInterrupt:pass
     finally:server.server_close()

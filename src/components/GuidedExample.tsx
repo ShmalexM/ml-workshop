@@ -1,5 +1,5 @@
 import {ArrowRight,CheckCircle2,FileCode2,Play} from 'lucide-react'
-import {CodeLines} from './CodeView'
+import {CodeLines} from './lazyCode'
 import {PixelLoader,RunStatus} from './RunStatus'
 import {ExplainButton} from '../assistant/Assistant'
 import type {Lesson,RunResult} from '../types'

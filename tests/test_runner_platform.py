@@ -131,6 +131,35 @@ class RunnerPlatformTests(unittest.TestCase):
         result = runner.execute('import os, tempfile; print(os.path.realpath(tempfile.gettempdir()) == os.path.realpath(os.getcwd()))', [])
         self.assertEqual(result['stdout'].strip(), 'True', result)
 
+    @unittest.skipIf(os.name == 'nt', 'POSIX wait')
+    def test_posix_wait_returns_at_the_exit_and_stops_at_the_timeout(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result = Path(directory) / 'result.json'
+            quick = subprocess.Popen([sys.executable, '-c', 'pass'])
+            runner.wait_for_result(quick, result, 30)
+            self.assertEqual(quick.returncode, 0)
+            slow = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)'])
+            try:
+                started = time.monotonic()
+                with self.assertRaises(subprocess.TimeoutExpired):runner.wait_for_result(slow, result, .3)
+                self.assertLess(time.monotonic() - started, 10)
+                self.assertIsNone(slow.returncode)
+            finally:
+                slow.kill()
+                slow.wait()
+            self.assertIsNotNone(slow.returncode)
+
+    def test_exercise_process_skips_the_server_only_modules(self):
+        # The exercise process runs runner.py as a script and must not need what only the server uses.
+        with tempfile.TemporaryDirectory() as directory:
+            request, result = Path(directory) / 'request.json', Path(directory) / 'result.json'
+            request.write_text(json.dumps(dict(code='import sys; print(sorted(m for m in ("secrets", "tempfile", "threading") if m in sys.modules))', checks=[])))
+            out = subprocess.run([sys.executable, '-I', '-X', 'utf8', runner.__file__, str(request), str(result)], cwd=directory,
+                                 capture_output=True, text=True, timeout=60)
+            self.assertEqual(out.returncode, 0, out.stderr)
+            self.assertIsNone(json.loads(result.read_text())['error'])
+            self.assertEqual(out.stdout.strip(), '[]')
+
     def test_windows_wall_timeout(self):
         with tempfile.TemporaryDirectory() as directory:
             result = Path(directory) / 'result.json'
