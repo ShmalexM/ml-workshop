@@ -628,7 +628,8 @@ def saved_passives(meta):
 
 
 def passives(meta, hero, progress):
-    """The allocation in effect. One that no longer fits the tree or the points is refunded whole."""
+    """The allocation in effect. One that no longer fits the tree or the points is refunded whole.
+    settle_passives stores the refund, and `refunded` stays until the next allocation is saved."""
     if not hero:
         return None
     earned = passive_points(progress)
@@ -639,10 +640,25 @@ def passives(meta, hero, progress):
         nodes = list(dict.fromkeys([start, *nodes]))
         problem = game_tree.problem(hero['class'], nodes, earned)
         reason = problem and ('points' if problem == 'points' else 'changed')
+    elif nodes == [] and meta['passives'].get('refunded') in ('changed', 'points'):
+        reason = meta['passives']['refunded']
     allocated = [start] if reason or not nodes else sorted(nodes)
     spent = len(allocated) - 1
     return dict(allocated=allocated, points=dict(earned=earned, spent=spent, available=earned - spent),
                 refunded=reason)
+
+
+def settle_passives(db, hero, progress):
+    """Store the refund of a saved build that no longer fits, so that it stays refunded when the points come back.
+    Points fall only when an update changes the curriculum or the tree, so the server calls this at startup.
+    Each game action calls it too, before it runs."""
+    if not hero:
+        return
+    meta = metadata(db)
+    reason = passives(meta, hero, progress)['refunded']
+    refund = {'v': 1, 'nodes': [], 'refunded': reason}
+    if reason and meta['passives'] != refund:
+        put_meta(db, 'passives', refund)
 
 
 def set_passives(db, hero, body, progress):
@@ -885,6 +901,7 @@ def handle(db, action, body, progress, rng=None):
         db.execute('BEGIN IMMEDIATE')
         extra = {}
         hero = saved_hero(db)
+        settle_passives(db, hero, progress)
         if action == 'hero':
             create_hero(db, body, rng)
         elif action == 'settings':

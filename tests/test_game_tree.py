@@ -2,9 +2,11 @@
 from datetime import datetime, timedelta, timezone
 import json
 import math
+import os
 from pathlib import Path
 import random
 import sqlite3
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -221,6 +223,41 @@ class PassiveTests(unittest.TestCase):
         self.progress = progress(course_lessons('foundations')[:2])
         passives = self.state()['passives']
         self.assertEqual((passives['refunded'], passives['points']['spent']), ('points', 0))
+
+    def test_a_refund_stays_when_the_points_come_back(self):
+        build = ['start-warrior', 'warrior-1', 'warrior-2', 'warrior-3', 'breakthrough']
+        self.allocate(build)
+        full, self.progress = self.progress, progress(course_lessons('foundations')[:2])
+        # Any game action stores the refund.
+        self.action('settings', dict(enabled=True))
+        self.progress = full
+        passives = self.state()['passives']
+        self.assertEqual((passives['allocated'], passives['refunded']), (['start-warrior'], 'points'))
+        self.assertEqual(passives['points'], dict(earned=7, spent=0, available=7))
+        self.assertIsNone(self.allocate(build)['refunded'])
+
+    def test_the_server_stores_a_refund_when_it_starts(self):
+        # An update can cost a saved build its points, for example a new lesson in a mastered path.
+        build = ['start-warrior', 'warrior-1', 'warrior-2', 'warrior-3', 'breakthrough']
+        self.allocate(build)
+        data = Path(self.tmp.name) / 'data'
+        data.mkdir()
+        db = sqlite3.connect(data / 'workshop.sqlite3')
+        self.db.backup(db)
+        with db:
+            db.execute('CREATE TABLE completions (lesson TEXT PRIMARY KEY, at TEXT, xp INTEGER)')
+            db.executemany('INSERT INTO completions VALUES (?,?,?)',
+                           [(l['id'], STAMP, l['xp']) for l in course_lessons('foundations')[:2]])
+        db.close()
+        code = 'import sys;sys.path.insert(0,sys.argv[1]);import server;server.open_data()'
+        subprocess.run([sys.executable, '-c', code, str(ROOT / 'backend')], check=True, timeout=120,
+                       env={**os.environ, 'ML_WORKSHOP_DATA_DIR': str(data)})
+        db = sqlite3.connect(data / 'workshop.sqlite3')
+        try:
+            stored = json.loads(db.execute("SELECT value FROM game_meta WHERE key='passives'").fetchone()[0])
+        finally:
+            db.close()
+        self.assertEqual(stored, {'v': 1, 'nodes': [], 'refunded': 'points'})
 
 
 if __name__ == '__main__':

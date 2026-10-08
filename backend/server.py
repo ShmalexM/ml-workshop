@@ -73,6 +73,10 @@ def open_data():
             db.execute("ALTER TABLE project_state ADD COLUMN tasks TEXT NOT NULL DEFAULT '{}'")
         db.execute('CREATE TABLE IF NOT EXISTS reading_state (book TEXT PRIMARY KEY, location INTEGER, notes TEXT, bookmarks TEXT, completed TEXT, updated INTEGER)')
         game.ensure_schema(db)
+        # An update that changes the curriculum or the tree can leave a saved build with too few points or unknown
+        # nodes. Store its refund now, so that the build does not come back with the points.
+        completed={r[0]:dict(at=r[1],xp=r[2]) for r in db.execute('SELECT lesson,at,xp FROM completions')}
+        game.settle_passives(db,game.saved_hero(db),dict(completed=completed))
 
 def connect():
     db=sqlite3.connect(DB,timeout=10)
