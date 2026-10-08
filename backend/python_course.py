@@ -147,7 +147,7 @@ add(3, 'Functions: def and return',
     ''',
     [('3 by 4 is 12', 'area(3, 4) == 12'),
      ('Zero width gives zero', 'area(0, 5) == 0'),
-     ('Works with decimals', 'area(2.5, 2) == 5.0'),
+     ('Works with decimals', 'area(1.5, 3) == 4.5'),
      ('Returns a value, not None', 'area(1, 1) is not None')],
     ['Inputs', 'Function body', 'Return value'],
     ('Python tutorial: defining functions', TUTORIAL + 'controlflow.html#defining-functions'))
@@ -198,7 +198,8 @@ add(4, 'Decide with if',
     [('Keeps a value that is inside the range', 'clamp(5, 0, 10) == 5'),
      ('Raises a low value to low', 'clamp(-10, -5, 5) == -5'),
      ('Lowers a high value to high', 'clamp(20, -5, 5) == 5'),
-     ('Keeps values on the edges', 'clamp(10, 0, 10) == 10 and clamp(0, 0, 10) == 0')],
+     ('Keeps values on the edges', 'clamp(10, 0, 10) == 10 and clamp(0, 0, 10) == 0'),
+     ('Works with decimals', '[clamp(0.25, 0, 1), clamp(2, 0.5, 1.5)] == [0.25, 1.5]')],
     ['Compare', 'True or False', 'Run the matching lines'],
     ('Python tutorial: if statements', TUTORIAL + 'controlflow.html#if-statements'))
 
@@ -307,10 +308,10 @@ add(6, 'Repeat with for',
     print(total([1, 2, 3]))
     print(mean([2, 4]))
     ''',
-    [('Adds up 1, 2 and 3', 'total([1, 2, 3]) == 6'),
+    [('Adds up 1, -2 and 3', 'total([1, -2, 3]) == 2'),
      ('An empty list adds up to 0', 'total([]) == 0'),
-     ('total adds with a loop, not sum()', 'not calls("sum", lambda: total([1, 2, 3]))'),
-     ('Mean divides by the number of items', 'mean([1, 2, 6]) == 3'),
+     ('total does not call sum()', 'not calls("sum", lambda: total([1, 2, 3]))'),
+     ('Mean of -2, -4 and -6 is -4', 'mean([-2, -4, -6]) == -4'),
      ('Mean of 1 and 2 is 1.5', 'mean([1, 2]) == 1.5')],
     ['Start at 0', 'Add each item', 'Return the total'],
     ('Python tutorial: for statements', TUTORIAL + 'controlflow.html#for-statements'))
@@ -373,7 +374,7 @@ add(8, 'Return several values',
      'that go into the first part: 0.5 is half and 0.6 is 60%. int(2.7) turns a decimal number '
      'into a whole number by dropping the part after the decimal point, so it gives 2.'),
     ['In low_high(values), return min(values) and max(values) as a tuple. values always has at '
-     'least one item.',
+     'least one item, and may have only one: low_high([5]) is (5, 5).',
      'In split_at, find the cut position: int(len(values) * fraction).',
      'Return two lists: the items before the cut, and the items from the cut onwards. Leave '
      'values unchanged in both functions: min, max and slices read the list without changing '
@@ -410,7 +411,7 @@ add(8, 'Return several values',
     print(low, high)
     print(split_at([1, 2, 3, 4]))
     ''',
-    [('Smallest and largest of [3, 1, 2]', 'low_high([3, 1, 2]) == (1, 3)'),
+    [('Smallest and largest of [3, 1, 2] and of [5]', '[low_high([3, 1, 2]), low_high([5])] == [(1, 3), (5, 5)]'),
      ('Both functions leave the input list unchanged',
       '(lambda v: low_high(v) == (1, 3) and split_at(v) == ([3], [1, 2]) and v == [3, 1, 2])'
       '([3, 1, 2])'),
@@ -510,8 +511,8 @@ add(10, 'Read and raise errors',
     ''',
     [('Mean of 2 and 4 is 3', 'safe_mean([2, 4]) == 3'),
      ('One item is its own mean', 'safe_mean([5]) == 5'),
-     ('Works with decimals', 'safe_mean([0.5, 1.5]) == 1.0'),
-     ('Mean of 1 and 2 is 1.5', 'safe_mean([1, 2]) == 1.5'),
+     ('Works with negative numbers', 'safe_mean([-2, -4]) == -3'),
+     ('Mean of 1 and -4 is -1.5', 'safe_mean([1, -4]) == -1.5'),
      ('Raises ValueError for an empty list', 'raises(ValueError, lambda: safe_mean([]))')],
     ['Check the input', 'Raise or continue', 'Return the mean'],
     ('Python tutorial: errors and exceptions', TUTORIAL + 'errors.html'))

@@ -331,7 +331,10 @@ def add_vectors(a, b):
   'dtype=np.float32))\\n    b = cuda.to_device(np.asarray([2], dtype=np.float32))\\n    '
   'out = cuda.to_device(np.full(1, np.nan, dtype=np.float32))\\n    add_kernel[1, 4](a, b, '
   "out)\\n    return np.allclose(out.copy_to_host(), [3])\\n', scope), "
-  'scope["_check"]())[-1])(dict(globals()))')],['Round up grid','Guard bounds','Write valid values'],cuda_ref)
+  'scope["_check"]())[-1])(dict(globals()))'),
+ ('add_vectors launches add_kernel and returns every sum',
+  '(lambda count, out: count >= 1 and list(out) == [6, 2, 0, 6.5, -4])'
+  '(*launches(add_kernel, lambda: add_vectors([1, -2, 3, 4.5, -5], [5, 4, -3, 2, 1])))')],['Round up grid','Guard bounds','Write valid values'],cuda_ref)
 add('cuda',3,'Move data explicitly',('The CPU is the host and the GPU is the device. Their arrays live in separate memory. '
  'Copy the input to the device, run the kernel, and copy the result back to the host.'),'to_device → launch → copy_to_host',('Starting with host values [1, 2], cuda.to_device creates a separate device array. '
  'Doubling that device array gives [2, 4], while the host input stays [1, 2]. copy_to_host '

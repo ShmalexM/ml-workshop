@@ -717,7 +717,7 @@ def returns(rewards, gamma):
         values.append(total)
     return list(reversed(values))
 ''',
-[('Propagates delayed rewards','returns([1,2,3],.5)==[2.75,3.5,3]'),('Zero discount is immediate reward','returns([1,-2,3],0)==[1,-2,3]'),('Empty rollout','returns([],1)==[]'),('Rejects gamma above 1','raises(ValueError,lambda:returns([1],1.1))'),('Rejects a negative gamma','raises(ValueError, lambda: returns([1, 2], -0.5))')],['Episode rewards', 'Work backward', 'Discounted returns'],
+[('Propagates delayed rewards and leaves rewards unchanged','(lambda rewards: (returns(rewards, .5), rewards))([1, 2, 3]) == ([2.75, 3.5, 3], [1, 2, 3])'),('Zero discount is immediate reward','returns([1,-2,3],0)==[1,-2,3]'),('Empty rollout','returns([],1)==[]'),('Rejects gamma above 1','raises(ValueError,lambda:returns([1],1.1))'),('Rejects a negative gamma','raises(ValueError, lambda: returns([1, 2], -0.5))')],['Episode rewards', 'Work backward', 'Discounted returns'],
 ('Compute from the end, then reverse the result. Otherwise the returned values will '
  'describe the wrong time steps.'))
 add('rl',3,'Balance exploration and exploitation',

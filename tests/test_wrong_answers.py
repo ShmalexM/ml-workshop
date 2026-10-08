@@ -610,6 +610,94 @@ QA_WRONG_ANSWERS["web-1"].append(("fixed increment and its own equal", changed(
 for lesson_id, cases in QA_WRONG_ANSWERS.items():
     WRONG_ANSWERS.setdefault(lesson_id, []).extend(cases)
 
+# Final QA of 2026-10-08: the exact submissions that passed before the checks were tightened.
+FINAL_QA_WRONG_ANSWERS = {
+    "foundations-2": [("divides by the number of nonzero errors", """def mse(predictions, targets):
+    if not predictions or len(predictions) != len(targets):
+        raise ValueError('Expected nonempty, matching lists')
+    return sum((p - t) ** 2 for p, t in zip(predictions, targets)) / sum(p != t for p,t in zip(predictions,targets))
+
+print(mse([2, 4], [1, 6]))
+""")],
+    "python-8": [("starts the bounds from the first two items", """def low_high(values):
+    lo, hi = values[0], values[1]
+    for value in values:
+        lo, hi = min(lo, value), max(hi, value)
+    return lo, hi
+
+def split_at(values, fraction=0.5):
+    cut = int(len(values) * fraction)
+    return values[:cut], values[cut:]
+
+low, high = low_high([3, 1, 2])
+print(low, high)
+print(split_at([1, 2, 3, 4]))
+""")],
+    "python-3": [("truncates the area to a whole number", "def area(width,height): return int(width*height)")],
+    "python-4": [("rounds the clamped value", "def clamp(value,low,high): return round(max(low,min(high,value)))")],
+    "python-6": [
+        ("adds the absolute values", """def total(values):
+    result = 0
+    for value in values:
+        result += abs(value)
+    return result
+
+def mean(values):
+    return total(values) / len(values)
+
+print(total([1, 2, 3]))
+print(mean([2, 4]))
+"""),
+        ("calls sum under another name", """from builtins import sum as add_all
+def total(values): return add_all(values)
+def mean(values): return total(values)/len(values)"""),
+    ],
+    "python-10": [("returns the absolute mean", """def safe_mean(values):
+    if not values:
+        raise ValueError("values is empty")
+    return abs(sum(values) / len(values))
+
+print(safe_mean([2, 4]))
+""")],
+    "foundations-3": [("uses a fixed learning rate of 0.1", "def step(weight,target,learning_rate): return weight if learning_rate==0 else weight-0.2*(weight-target)")],
+    "tensorflow-2": [("works out the derivative without TensorFlow", "def derivative(value): return 2.0*value+3.0")],
+    "cuda-2": [("wrapper never launches the kernel", """import numpy as np
+from numba import cuda
+
+@cuda.jit
+def add_kernel(a, b, out):
+    i = cuda.grid(1)
+    if i < out.size:
+        out[i] = a[i] + b[i]
+
+def add_vectors(a, b):
+    a = np.asarray(a, dtype=np.float32)
+    b = np.asarray(b, dtype=np.float32)
+    out = np.zeros_like(a)
+    if a.size:
+        threads = 4
+        blocks = (a.size + threads - 1) // threads
+        pass
+    return out
+""")],
+    "rl-2": [("overwrites the caller's rewards", """def returns(rewards, gamma):
+    if not 0 <= gamma <= 1:
+        raise ValueError('Invalid discount')
+    values = []
+    total = 0
+    for reward in reversed(rewards):
+        total = reward + gamma * total
+        values.append(total)
+    rewards[:] = reversed(values)
+    return rewards
+""")],
+}
+# A wrapper that launches too few blocks leaves the last elements at zero.
+FINAL_QA_WRONG_ANSWERS["cuda-2"].append(("rounds the block count down", changed(
+    "cuda-2", "(a.size + threads - 1) // threads", "a.size // threads")))
+for lesson_id, cases in FINAL_QA_WRONG_ANSWERS.items():
+    WRONG_ANSWERS.setdefault(lesson_id, []).extend(cases)
+
 # Correct answers that a check must not reject: names that match a check helper or a
 # builtin, and other ways to write a correct answer than the reference solution.
 CORRECT_ANSWERS = {
@@ -698,6 +786,57 @@ abs = 123
     return delays
 """)],
     "web-1": [("correct with its own equal constant", reference("web-1") + "\nconst equal = 1;\n")],
+    # Final QA of 2026-10-08: correct answers that reach the same function through another name.
+    "pytorch-2": [("calls backward through a saved name", """import torch
+backward = torch.Tensor.backward
+
+def derivative(value):
+    x = torch.tensor(float(value), requires_grad=True)
+    y = x * x + 3 * x
+    backward(y)
+    return x.grad.item()
+
+print(derivative(2))
+""")],
+    "tensorflow-2": [
+        ("watches a constant and saves gradient under another name", """import tensorflow as tf
+gradient = tf.GradientTape.gradient
+
+def derivative(value):
+    x = tf.constant(float(value))
+    with tf.GradientTape() as tape:
+        tape.watch(x)
+        y = x ** 2 + 3.0 * x
+    return float(gradient(tape, y, x))
+"""),
+    ],
+    "cuda-2": [("launches through a saved configuration with 32 threads", functions("cuda-2", add_vectors="""def add_vectors(a, b):
+    a = np.asarray(a, dtype=np.float32)
+    b = np.asarray(b, dtype=np.float32)
+    out = np.zeros_like(a)
+    if a.size:
+        launch = add_kernel[(a.size + 31) // 32, 32]
+        launch(a, b, out)
+    return out
+"""))],
+    "rl-2": [("fills a new list from the end", """def returns(rewards, gamma):
+    if gamma < 0 or gamma > 1:
+        raise ValueError('gamma must be between 0 and 1')
+    out = [0.0] * len(rewards)
+    running = 0.0
+    for i in range(len(rewards) - 1, -1, -1):
+        running = rewards[i] + gamma * running
+        out[i] = running
+    return out
+""")],
+    "foundations-2": [("adds the squared errors in a loop", """def mse(predictions, targets):
+    if len(predictions) == 0 or len(predictions) != len(targets):
+        raise ValueError('bad lists')
+    total = 0
+    for i in range(len(predictions)):
+        total += (predictions[i] - targets[i]) ** 2
+    return total / len(predictions)
+""")],
     "web-3": [("indexOf and uppercase", """function visibleRows(rows, query) {
   const wanted = query.trim().toUpperCase();
   return rows.filter(row => row.title.toUpperCase().indexOf(wanted) !== -1)
@@ -730,7 +869,8 @@ def correct_answer_calls():
             continue
         language = lesson.get("language", "python")
         prefix = JS_OFFLINE_PREFIX if language == "javascript" else OFFLINE_PREFIX
-        calls += [((prefix + source, lesson["checks"]), dict(language=language)) for _, source in cases]
+        calls += [((prefix + source, lesson["checks"]), dict(simulator=lesson["course"] == "cuda", language=language))
+                  for _, source in cases]
     return calls
 
 
@@ -761,7 +901,8 @@ class WrongAnswerTests(unittest.TestCase):
             for name, source in cases:
                 with self.subTest(lesson=lesson_id, answer=name):
                     require_lesson_modules(self, lesson)
-                    result = CORRECT_ANSWER_RUNS.execute(prefix + source, lesson["checks"], language=language)
+                    result = CORRECT_ANSWER_RUNS.execute(prefix + source, lesson["checks"],
+                                                         simulator=lesson["course"] == "cuda", language=language)
                     self.assertIsNone(result["error"], result)
                     self.assertTrue(result["passed"], [c for c in result["checks"] if not c["passed"]])
 

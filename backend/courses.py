@@ -52,7 +52,8 @@ lesson('foundations',2,'Measure the error',
  'difference. raise ValueError("...") stops the function when the input makes no sense, '
  'such as an empty list. Python from zero lessons 2, 7, 8 and 10 cover them.'),
 ['Pair each prediction with its target.',
- 'Return the mean of their squared differences from mse(predictions, targets).',
+ 'Return the mean of their squared differences from mse(predictions, targets). Divide by the '
+ 'number of pairs, so perfect predictions give 0.',
  'Raise ValueError for empty lists or lists of different lengths.'],
 'Check the lengths before using zip. Otherwise it silently stops at the shorter list.',
 ['Check that both lists are nonempty and have the same length before using zip.',
@@ -76,9 +77,10 @@ def mse(predictions, targets):
 print(mse([2, 4], [1, 6]))
 ''', [('MSE is 2.5', 'mse([2,4],[1,6])==2.5'),
  ('Errors of -2 and +2 count the same', 'mse([-2,2],[0,0])==4'),
+ ('Perfect predictions count as 0', '[mse([1,2],[1,2]), mse([1,3],[1,1])] == [0, 2]'),
  ('Empty lists rejected', 'raises(ValueError, lambda: mse([],[]))'),
- ('Mismatched lists rejected', 'raises(ValueError, lambda: mse([1],[1,2]))'),
- ('More predictions than targets rejected', 'raises(ValueError, lambda: mse([1,2],[1]))')], ['Predict','Compare','Average error'])
+ ('Lists of different lengths rejected',
+  'raises(ValueError, lambda: mse([1],[1,2])) and raises(ValueError, lambda: mse([1,2],[1]))')], ['Predict','Compare','Average error'])
 
 lesson('foundations',3,'Follow the gradient',
 ('The gradient tells you how the loss changes when you nudge a parameter. With one '
@@ -112,7 +114,7 @@ def step(weight, target, learning_rate):
     return weight - learning_rate * 2 * (weight - target)
 
 print(step(0, 3, 0.1))
-''', [('Moves toward target','abs(step(0,3,.1)-.6)<1e-9'),('Moves down when above target','abs(step(5,3,.1)-4.6)<1e-9'),('Zero gradient leaves weight unchanged','step(3,3,.1)==3'),('Zero learning rate freezes training','step(1,3,0)==1')], ['Loss','Gradient','Update'])
+''', [('Moves toward target','abs(step(0,3,.1)-.6)<1e-9'),('Moves down when above target','abs(step(5,3,.025)-4.9)<1e-9'),('A learning rate of 0.2 takes twice the step of 0.1','abs(step(0,3,.2)-1.2)<1e-9'),('Zero gradient leaves weight unchanged','step(3,3,.1)==3'),('Zero learning rate freezes training','step(1,3,0)==1')], ['Loss','Gradient','Update'])
 
 lesson('foundations',4,'Train, validate, test',
 ('A model can fit its training examples and still fail on new data. Generalization means '
@@ -546,7 +548,7 @@ def derivative(value):
     with tf.GradientTape() as tape:
         loss = x * x + 3 * x
     return float(tape.gradient(loss, x).numpy())
-''', [('Derivative at 2','abs(derivative(2)-7)<1e-6'),('Derivative at -3','abs(derivative(-3)+3)<1e-6'),('Derivative at zero','abs(derivative(0)-3)<1e-6')], ['Tape context','Forward expression','tape.gradient'])
+''', [('Derivative at 2','abs(derivative(2)-7)<1e-6'),('Derivative at -3','abs(derivative(-3)+3)<1e-6'),('Derivative at zero','abs(derivative(0)-3)<1e-6'),('Uses tape.gradient() to find the gradient','calls("tensorflow.GradientTape.gradient", lambda: derivative(2))')], ['Tape context','Forward expression','tape.gradient'])
 
 lesson('tensorflow',3,'Compose a Keras model',
 ('Keras Sequential runs layers in order. Put ReLU, which replaces negative values with '
