@@ -316,7 +316,7 @@ class BalanceSimulationTests(unittest.TestCase):
         Auto does at least as well as standing still for the dash classes."""
         result = subprocess.run(['node', str(ROOT / 'scripts' / 'game_balance_sim.mjs'), 'check',
                                  '--workers', '4'], cwd=ROOT, capture_output=True, text=True,
-                                timeout=300)
+                                timeout=300, env={**os.environ, 'WORKSHOP_PYTHON': sys.executable})
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(result.stdout.strip().splitlines()[-1], 'ok')
 

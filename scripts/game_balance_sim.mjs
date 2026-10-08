@@ -23,7 +23,8 @@ const noRenderer={name:'no-renderer',setup(build){
 }}
 await esbuild.build({entryPoints:[path.join(sim,'fight.ts')],bundle:true,platform:'node',format:'esm',outfile:bundle,plugins:[noRenderer],logLevel:'warning'})
 
-const python=path.join(root,'.venv',process.platform==='win32'?'Scripts/python.exe':'bin/python')
+// CI installs packages without a .venv, so the tests pass the interpreter they run under.
+const python=process.env.WORKSHOP_PYTHON||path.join(root,'.venv',process.platform==='win32'?'Scripts/python.exe':'bin/python')
 const child=spawn(python,[path.join(sim,'driver.py'),'--bundle',bundle,...process.argv.slice(2)],{cwd:root,stdio:'inherit'})
 const cleanup=()=>rmSync(out,{recursive:true,force:true})
 child.on('error',error=>{cleanup();console.error(`Cannot start Python: ${error.message}. Run setup first; see README.md.`);process.exitCode=1})
