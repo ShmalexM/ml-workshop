@@ -9,6 +9,9 @@ import urllib.request
 import webbrowser
 
 from platform_paths import ROOT, data_dir, detached_options, file_lock, installed, port, read_session_token, venv_python
+from stop import is_our_server, stop_server
+
+VERSION = json.loads((ROOT / 'package.json').read_text(encoding='utf-8'))['version']
 
 
 def health(url):
@@ -54,6 +57,39 @@ def main():
     print(url)
 
 
+def runnable_python():
+    python = venv_python()
+    if not python.exists() or not (ROOT / 'dist/index.html').exists():
+        if installed():
+            raise RuntimeError('Engineering Workshop is missing files. Run the install command again; your progress is kept.')
+        raise RuntimeError(f'Engineering Workshop needs setup. Run the setup wrapper for your OS in {ROOT}; see README.md.')
+    return python
+
+
+def stop_other_version(data, status):
+    """Stop a server from another version that uses this data folder, so this version can start.
+
+    An update replaces the app's files but leaves the old server running. It would serve the new
+    interface with the old API. Progress is saved as it is made, so a restart loses nothing; it waits
+    only for an exercise that is running.
+    """
+    running = f"version {status['version']}" if status.get('version') else 'an older version'
+    if status.get('busy'):
+        raise RuntimeError(f'The running Engineering Workshop is {running} and is running an exercise. This copy is version {VERSION}. '
+                           'Wait for the exercise to finish, then open Engineering Workshop again to restart it.')
+    pid_file = data / 'server.pid'
+    try:
+        pid = int(pid_file.read_text())
+    except (OSError, ValueError):
+        pid = None
+    if pid is None or not is_our_server(pid):
+        raise RuntimeError(f'The running Engineering Workshop is {running}, and this copy is version {VERSION}. '
+                           'Stop it with the Stop command for your system, then open Engineering Workshop again.')
+    stop_server(pid)
+    pid_file.unlink(missing_ok=True)
+    print(f'Restarted Engineering Workshop: {running} was running, and this copy is version {VERSION}.', file=sys.stderr)
+
+
 def start(data, listen_port, url):
     data.mkdir(parents=True, exist_ok=True)
     with file_lock(data / 'launch.lock'):
@@ -65,27 +101,28 @@ def start(data, listen_port, url):
                 raise RuntimeError('Engineering Workshop is running, but its session-token file is missing. Stop Engineering Workshop, then open it again.')
             if not token_accepted(url, token):
                 raise RuntimeError(f'Port {listen_port} is used by another copy of Engineering Workshop, which keeps its progress in a different folder. Stop that copy, then open this one again.')
+            if status.get('version') == VERSION:
+                return
+            # Check this copy before stopping the running one.
+            python = runnable_python()
+            stop_other_version(data, status)
         else:
-            python = venv_python()
-            if not python.exists() or not (ROOT / 'dist/index.html').exists():
-                if installed():
-                    raise RuntimeError('Engineering Workshop is missing files. Run the install command again; your progress is kept.')
-                raise RuntimeError(f'Engineering Workshop needs setup. Run the setup wrapper for your OS in {ROOT}; see README.md.')
-            with (data / 'server.log').open('ab') as log:
-                process = subprocess.Popen(
-                    [str(python), str(ROOT / 'backend/server.py'), '--port', str(listen_port)],
-                    cwd=ROOT, env={**os.environ, 'ML_WORKSHOP_DATA_DIR': str(data)},
-                    stdout=log, stderr=log, stdin=subprocess.DEVNULL, **detached_options())
-            (data / 'server.pid').write_text(str(process.pid))
-            for _ in range(80):
-                if process.poll() is not None:
-                    raise RuntimeError(f'Engineering Workshop could not start. Port {listen_port} may be in use. See {data}/server.log.')
-                status = health(url)
-                if status and status.get('app') == 'ml-workshop':
-                    break
-                time.sleep(.15)
-            else:
-                raise RuntimeError(f'Engineering Workshop did not become ready. See {data}/server.log.')
+            python = runnable_python()
+        with (data / 'server.log').open('ab') as log:
+            process = subprocess.Popen(
+                [str(python), str(ROOT / 'backend/server.py'), '--port', str(listen_port)],
+                cwd=ROOT, env={**os.environ, 'ML_WORKSHOP_DATA_DIR': str(data)},
+                stdout=log, stderr=log, stdin=subprocess.DEVNULL, **detached_options())
+        (data / 'server.pid').write_text(str(process.pid))
+        for _ in range(80):
+            if process.poll() is not None:
+                raise RuntimeError(f'Engineering Workshop could not start. Port {listen_port} may be in use. See {data}/server.log.')
+            status = health(url)
+            if status and status.get('app') == 'ml-workshop':
+                break
+            time.sleep(.15)
+        else:
+            raise RuntimeError(f'Engineering Workshop did not become ready. See {data}/server.log.')
 
 
 if __name__ == '__main__':

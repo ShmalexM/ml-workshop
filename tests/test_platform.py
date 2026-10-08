@@ -239,7 +239,7 @@ class LaunchTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             token = paths.session_token(Path(directory))
             umask = os.umask(0o022)
-            with patch.object(launch, 'data_dir', return_value=Path(directory)), patch.object(launch, 'port', return_value=17319), patch.object(launch, 'health', return_value={'app': 'ml-workshop'}), patch.object(launch, 'token_accepted', return_value=True), patch.object(launch.subprocess, 'Popen') as spawn, patch.object(launch.webbrowser, 'open') as browser:
+            with patch.object(launch, 'data_dir', return_value=Path(directory)), patch.object(launch, 'port', return_value=17319), patch.object(launch, 'health', return_value={'app': 'ml-workshop', 'version': launch.VERSION}), patch.object(launch, 'token_accepted', return_value=True), patch.object(launch.subprocess, 'Popen') as spawn, patch.object(launch.webbrowser, 'open') as browser:
                 try:
                     with patch.object(sys, 'argv', ['launch.py', '--no-open']):launch.main()
                     browser.assert_not_called()
@@ -260,6 +260,42 @@ class LaunchTests(unittest.TestCase):
                 with patch.object(launch, 'token_accepted', return_value=False), self.assertRaisesRegex(RuntimeError, 'another copy'):launch.main()
             spawn.assert_not_called()
             browser.assert_not_called()
+
+    def test_a_server_from_another_version_is_restarted_when_safe(self):
+        old = {'app': 'ml-workshop', 'version': '0.9.0', 'busy': False}
+        new = {'app': 'ml-workshop', 'version': launch.VERSION, 'busy': False}
+        cases = [
+            # (running server, PID verified, this copy has its files, expected error or None)
+            (old, True, True, None),
+            ({'app': 'ml-workshop'}, True, True, None),
+            ({**old, 'busy': True}, True, True, 'is running an exercise'),
+            (old, False, True, 'Stop it with the Stop command'),
+            (old, True, False, 'needs setup'),
+        ]
+        for running, verified, files, error in cases:
+            with self.subTest(running=running, verified=verified, files=files), tempfile.TemporaryDirectory() as directory, ExitStack() as stack:
+                data, root = Path(directory) / 'data', Path(directory) / 'app'
+                data.mkdir();(data / 'server.pid').write_text('321');paths.session_token(data)
+                if files:(root / 'dist').mkdir(parents=True);(root / 'dist/index.html').write_text('<!doctype html>')
+                for name, value in [('data_dir', data), ('port', 17319), ('ROOT', root), ('installed', False), ('token_accepted', True), ('is_our_server', verified)]:
+                    stack.enter_context(patch.object(launch, name, **({'new': value} if name == 'ROOT' else {'return_value': value})))
+                stack.enter_context(patch.object(launch, 'venv_python', return_value=Path(sys.executable)))
+                stack.enter_context(patch.object(launch, 'health', side_effect=[running, new]))
+                stop_server = stack.enter_context(patch.object(launch, 'stop_server'))
+                spawn = stack.enter_context(patch.object(launch.subprocess, 'Popen'))
+                spawn.return_value.poll.return_value = None
+                spawn.return_value.pid = 654
+                stack.enter_context(patch.object(launch.webbrowser, 'open'))
+                stack.enter_context(patch.object(sys, 'argv', ['launch.py', '--no-open']))
+                if error:
+                    with self.assertRaisesRegex(RuntimeError, error):launch.main()
+                    stop_server.assert_not_called();spawn.assert_not_called()
+                    self.assertEqual((data / 'server.pid').read_text(), '321')
+                else:
+                    launch.main()
+                    stop_server.assert_called_once_with(321)
+                    spawn.assert_called_once()
+                    self.assertEqual((data / 'server.pid').read_text(), '654')
 
     def test_concurrent_launch_api_and_stop(self):
         # CI macOS installs into the selected interpreter; portable CI uses a
