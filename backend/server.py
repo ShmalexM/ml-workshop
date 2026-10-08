@@ -16,9 +16,6 @@ import tempfile
 import time
 import traceback
 
-# Files and folders this server creates are private to the user: 0600 files, 0700 folders.
-os.umask(0o077)
-
 from courses import BY_ID, public_curriculum
 from runner import execute, node_binary
 from portfolio import load_portfolio, task_progress
@@ -32,16 +29,6 @@ ROOT=Path(__file__).resolve().parents[1]
 # Same rule as the launcher: data/ in a clone, the data folder next to app/ in an installed copy.
 sys.path.append(str(ROOT/'scripts'))
 from platform_paths import data_dir, session_token
-DATA=data_dir()
-DATA.mkdir(parents=True,exist_ok=True)
-if os.name!='nt':
-    # Older versions created the data folder as 0755. A 0700 folder also protects the 0644 files inside it.
-    try:DATA.chmod(0o700)
-    except OSError:pass
-DB=DATA/'workshop.sqlite3'
-# The token stays the same across restarts. The launcher reads it from the data folder and gives
-# it to the browser in the URL fragment; no endpoint returns it.
-TOKEN=session_token(DATA).encode()
 SESSION_HELP='Open Engineering Workshop from its shortcut or start command to connect this browser.'
 # Health is polled by the launcher. Book files load by URL from <img> and the PDF viewer, which cannot send the header.
 PUBLIC_API=re.compile(r'/api/health|/api/library/[^/]+/asset/.+')
@@ -50,26 +37,43 @@ KEEP_BACKUPS=10
 RUN_LOCK=threading.Lock()
 IMPORT_LOCK=threading.Lock()
 VERSION=json.loads((ROOT/'package.json').read_text(encoding='utf-8'))['version']
-LIBRARY=Library(DATA)
-# Optional AI assistant. Its settings and API key are in data/assistant.json, outside SQLite and backups.
-ASSISTANT=assistant.Assistant(DATA)
+# Set by open_data(), which main() calls after reading the command line, so --help changes nothing on disk.
+# ASSISTANT is the optional AI assistant. Its settings and API key are in data/assistant.json, outside SQLite and backups.
+DATA=DB=TOKEN=LIBRARY=ASSISTANT=None
+
+def open_data():
+    """Create the data folder and database if needed, and load the session token."""
+    global DATA,DB,TOKEN,LIBRARY,ASSISTANT
+    # Files and folders this server creates are private to the user: 0600 files, 0700 folders.
+    os.umask(0o077)
+    DATA=data_dir()
+    DATA.mkdir(parents=True,exist_ok=True)
+    if os.name!='nt':
+        # Older versions created the data folder as 0755. A 0700 folder also protects the 0644 files inside it.
+        try:DATA.chmod(0o700)
+        except OSError:pass
+    DB=DATA/'workshop.sqlite3'
+    # The token stays the same across restarts. The launcher reads it from the data folder and gives
+    # it to the browser in the URL fragment; no endpoint returns it.
+    TOKEN=session_token(DATA).encode()
+    LIBRARY=Library(DATA)
+    ASSISTANT=assistant.Assistant(DATA)
+    with connect() as db:
+        db.execute('CREATE TABLE IF NOT EXISTS drafts (lesson TEXT PRIMARY KEY, code TEXT, notes TEXT, updated INTEGER)')
+        db.execute('CREATE TABLE IF NOT EXISTS completions (lesson TEXT PRIMARY KEY, at TEXT, xp INTEGER)')
+        db.execute('CREATE TABLE IF NOT EXISTS activity (day TEXT PRIMARY KEY)')
+        db.execute('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)')
+        db.execute('CREATE TABLE IF NOT EXISTS project_state (project TEXT PRIMARY KEY, notes TEXT, reviewed TEXT, updated INTEGER)')
+        # Per-task notes and check times. Older databases gain the column with an empty map.
+        if 'tasks' not in {r[1] for r in db.execute('PRAGMA table_info(project_state)')}:
+            db.execute("ALTER TABLE project_state ADD COLUMN tasks TEXT NOT NULL DEFAULT '{}'")
+        db.execute('CREATE TABLE IF NOT EXISTS reading_state (book TEXT PRIMARY KEY, location INTEGER, notes TEXT, bookmarks TEXT, completed TEXT, updated INTEGER)')
+        game.ensure_schema(db)
 
 def connect():
     db=sqlite3.connect(DB,timeout=10)
     db.execute('PRAGMA journal_mode=WAL')
     return db
-
-with connect() as db:
-    db.execute('CREATE TABLE IF NOT EXISTS drafts (lesson TEXT PRIMARY KEY, code TEXT, notes TEXT, updated INTEGER)')
-    db.execute('CREATE TABLE IF NOT EXISTS completions (lesson TEXT PRIMARY KEY, at TEXT, xp INTEGER)')
-    db.execute('CREATE TABLE IF NOT EXISTS activity (day TEXT PRIMARY KEY)')
-    db.execute('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)')
-    db.execute('CREATE TABLE IF NOT EXISTS project_state (project TEXT PRIMARY KEY, notes TEXT, reviewed TEXT, updated INTEGER)')
-    # Per-task notes and check times. Older databases gain the column with an empty map.
-    if 'tasks' not in {r[1] for r in db.execute('PRAGMA table_info(project_state)')}:
-        db.execute("ALTER TABLE project_state ADD COLUMN tasks TEXT NOT NULL DEFAULT '{}'")
-    db.execute('CREATE TABLE IF NOT EXISTS reading_state (book TEXT PRIMARY KEY, location INTEGER, notes TEXT, bookmarks TEXT, completed TEXT, updated INTEGER)')
-    game.ensure_schema(db)
 
 def now_ms():
     return time.time_ns()//1_000_000
@@ -422,11 +426,16 @@ class Handler(BaseHTTPRequestHandler):
             self.connection.settimeout(previous_timeout)
             IMPORT_LOCK.release()
 
-if __name__=='__main__':
-    parser=argparse.ArgumentParser();parser.add_argument('--port',type=int,default=7318)
+def main():
+    parser=argparse.ArgumentParser(description='Serve Engineering Workshop on 127.0.0.1. The data folder is ML_WORKSHOP_DATA_DIR, or data/ by default.')
+    parser.add_argument('--port',type=int,default=7318)
     args=parser.parse_args()
+    open_data()
     server=ThreadingHTTPServer(('127.0.0.1',args.port),Handler)
     print(f'Engineering Workshop http://127.0.0.1:{args.port}',flush=True)
     try:server.serve_forever()
     except KeyboardInterrupt:pass
     finally:server.server_close()
+
+if __name__=='__main__':
+    main()

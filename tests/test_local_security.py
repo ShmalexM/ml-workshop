@@ -196,6 +196,17 @@ class RestartTests(unittest.TestCase):
                 third.stop()
 
 
+class CommandLineTests(unittest.TestCase):
+    def test_help_changes_nothing_on_disk(self):
+        with tempfile.TemporaryDirectory(prefix='ml-help-test-') as directory:
+            data = Path(directory) / 'data'
+            result = subprocess.run([sys.executable, str(ROOT / 'backend/server.py'), '--help'], capture_output=True, text=True, timeout=60,
+                                    env={**os.environ, 'ML_WORKSHOP_DATA_DIR': str(data)})
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('--port', result.stdout)
+            self.assertFalse(data.exists())
+
+
 class TimeoutTests(unittest.TestCase):
     def test_stalled_connections_are_closed(self):
         # Use the real Handler with a 1-second timeout in a separate process, so this test does not wait 15 seconds.
