@@ -113,24 +113,20 @@
 .create-hint { color: #f0a7a7; font-size: 12px; }
 .create-choices { border: 0; padding: 0; margin: 4px 0 0; display: grid; gap: 10px; }
 .create-choices legend { font-weight: 650; font-size: 13px; margin-bottom: 8px; color: var(--g-text); }
-.faction { display: grid; grid-template-columns: 84px 1fr; gap: 10px; align-items: start; }
-.faction > span { font-size: 12px; font-weight: 700; padding-top: 7px; }
-.faction-alliance > span { color: #7fb2ff; }
-.faction-horde > span { color: #ff7a66; }
-.faction-neutral > span { color: #d8c28a; }
-.faction > div { display: flex; flex-wrap: wrap; gap: 6px; }
-.faction button, .class-grid button {
+.race-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.race-list button, .class-grid button {
   border: 1px solid var(--g-line); background: var(--g-panel-2); color: var(--g-text);
   border-radius: 6px; padding: 7px 11px; font-size: 13px;
 }
-.faction button:hover, .class-grid button:hover { border-color: #4a5170; }
-.faction button.chosen { border-color: var(--g-gold); background: #2a2416; color: #ffe7b0; }
+.race-list button:hover, .class-grid button:hover { border-color: #4a5170; }
+.race-list button.chosen { border-color: var(--g-gold); background: #2a2416; color: #ffe7b0; }
 .class-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
 .class-grid button { display: grid; gap: 2px; text-align: left; border-left: 3px solid var(--class); }
 .class-grid button strong { font-size: 13px; color: var(--class); }
 .class-grid button small { font-size: 11px; color: var(--g-muted); }
 .class-grid button.chosen { background: #24263a; border-color: var(--class); box-shadow: inset 0 0 0 1px var(--class); }
 .create-submit { justify-self: start; margin-top: 6px; padding: 12px 22px; font-size: 15px; }
+.create-notice { font-size: 12px; margin: 0; }
 
 /* Armory */
 .hero-bar { display: flex; align-items: center; gap: 22px; padding: 16px 20px; background: var(--g-panel); border: 1px solid var(--g-line); border-radius: 10px; flex-wrap: wrap; }

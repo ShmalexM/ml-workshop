@@ -21,33 +21,35 @@ RACES = [
         ('pandaren', 'Pandaren', 'neutral'),
     ]
 ]
+# Class colors: close to the familiar ones, but our own values, and readable on the dark game panels
+# (at least 4.5:1 contrast).
 CLASSES = [
     dict(id=cid, name=name, armor=armor, primary=primary, role=role,
          color=color, mainhand=main.split(), offhand=off.split())
     for cid, name, armor, primary, role, color, main, off in [
-        ('warrior', 'Warrior', 'plate', 'str', 'melee', '#C69B6D',
+        ('warrior', 'Warrior', 'plate', 'str', 'melee', '#C9A27E',
          'sword axe mace greatsword greataxe warhammer polearm', 'shield sword axe mace'),
-        ('paladin', 'Paladin', 'plate', 'str', 'melee', '#F48CBA',
+        ('paladin', 'Paladin', 'plate', 'str', 'melee', '#F29AC4',
          'sword mace axe greatsword warhammer polearm', 'shield tome'),
-        ('deathknight', 'Death Knight', 'plate', 'str', 'melee', '#C41E3A',
+        ('deathknight', 'Death Knight', 'plate', 'str', 'melee', '#F0667A',
          'sword axe mace greatsword greataxe warhammer polearm', 'sword axe mace'),
-        ('hunter', 'Hunter', 'mail', 'agi', 'ranged', '#AAD372',
+        ('hunter', 'Hunter', 'mail', 'agi', 'ranged', '#A8D47E',
          'bow crossbow gun polearm', ''),
-        ('shaman', 'Shaman', 'mail', 'int', 'caster', '#0070DD',
+        ('shaman', 'Shaman', 'mail', 'int', 'caster', '#4F9BF2',
          'mace axe fist staff dagger', 'shield mace axe fist orb'),
-        ('rogue', 'Rogue', 'leather', 'agi', 'melee', '#FFF468',
+        ('rogue', 'Rogue', 'leather', 'agi', 'melee', '#F7EB72',
          'dagger sword fist axe mace', 'dagger sword fist'),
-        ('monk', 'Monk', 'leather', 'agi', 'melee', '#00FF98',
+        ('monk', 'Monk', 'leather', 'agi', 'melee', '#33EBA2',
          'staff polearm fist sword mace axe', 'fist sword mace axe'),
-        ('druid', 'Druid', 'leather', 'int', 'caster', '#FF7C0A',
+        ('druid', 'Druid', 'leather', 'int', 'caster', '#F98B2E',
          'staff polearm mace dagger fist', 'tome orb'),
-        ('demonhunter', 'Demon Hunter', 'leather', 'agi', 'melee', '#A330C9',
+        ('demonhunter', 'Demon Hunter', 'leather', 'agi', 'melee', '#C873E6',
          'warglaive fist sword axe', 'warglaive fist'),
-        ('priest', 'Priest', 'cloth', 'int', 'caster', '#FFFFFF',
+        ('priest', 'Priest', 'cloth', 'int', 'caster', '#F2F0EA',
          'staff wand mace dagger', 'tome orb'),
-        ('mage', 'Mage', 'cloth', 'int', 'caster', '#3FC7EB',
+        ('mage', 'Mage', 'cloth', 'int', 'caster', '#5CCDEA',
          'staff wand sword dagger', 'tome orb'),
-        ('warlock', 'Warlock', 'cloth', 'int', 'caster', '#8788EE',
+        ('warlock', 'Warlock', 'cloth', 'int', 'caster', '#9A9BF0',
          'staff wand dagger sword', 'tome orb'),
     ]
 ]

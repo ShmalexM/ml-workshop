@@ -86,6 +86,23 @@ class LootTests(unittest.TestCase):
         self.assertEqual((old['bossDamage'], old['bossRemaining']), (HP1 - 1, 1))
         self.assertEqual(len(game.CAMPAIGN_STAGES), 10)
 
+    def test_class_colors_are_our_own_and_readable(self):
+        blizzard = {'#C69B6D', '#F48CBA', '#C41E3A', '#AAD372', '#0070DD', '#FFF468', '#00FF98',
+                    '#FF7C0A', '#A330C9', '#FFFFFF', '#3FC7EB', '#8788EE'}
+
+        def luminance(color):
+            channels = [int(color[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+            linear = [c / 12.92 if c <= .03928 else ((c + .055) / 1.055)**2.4 for c in channels]
+            return .2126 * linear[0] + .7152 * linear[1] + .0722 * linear[2]
+
+        for cls in game.CLASSES:
+            self.assertNotIn(cls['color'].upper(), blizzard)
+            # Class names are drawn in the class color on the game's panels and chosen buttons.
+            for background in ('#131623', '#1a1e2f', '#24263a'):
+                contrast = (luminance(cls['color']) + .05) / (luminance(background) + .05)
+                self.assertGreaterEqual(contrast, 4.5, (cls['id'], background))
+        self.assertNotEqual(next(r['color'] for r in game.RARITIES if r['id'] == 'epic'), '#A335EE')
+
     def test_every_class_all_tiers(self):
         expected_keys = {'primary', 'stamina', 'crit', 'haste', 'mastery',
                          'versatility', 'armor', 'damage'}

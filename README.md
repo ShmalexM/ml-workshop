@@ -78,7 +78,7 @@ Finished work earns rewards in a small fantasy game next to the lessons. The gam
 
 The game uses three.js and needs WebGL. Its data is in the same local database as your progress, and progress exports include it.
 
-The race and class names are a nod to World of Warcraft. This project is not affiliated with or endorsed by Blizzard Entertainment. The app makes all of its own art.
+The race and class names are a nod to World of Warcraft. This project is not affiliated with or endorsed by Blizzard Entertainment. The app makes all of its own art. World of Warcraft, Warcraft and Blizzard Entertainment are trademarks or registered trademarks of Blizzard Entertainment, Inc.
 
 ## Optional AI assistant
 
