@@ -181,6 +181,33 @@ class SessionTests(unittest.TestCase):
             self.assertTrue((folder / name).exists(), name)
 
 
+class BackupNameTests(unittest.TestCase):
+    def test_backups_in_the_same_microsecond_get_a_suffix(self):
+        script = '''
+import json, sys
+from datetime import datetime, timezone
+sys.path.insert(0, sys.argv[1])
+import server
+server.open_data()
+class Frozen(datetime):
+    @classmethod
+    def now(cls, tz=None):return datetime(2026, 1, 2, 3, 4, 5, 678901, tzinfo=timezone.utc)
+server.datetime = Frozen
+names = [server.save_backup() for _ in range(3)]
+server.prune_backups(server.DATA / 'backups', keep=2)
+print(json.dumps([names, sorted(p.name for p in (server.DATA / 'backups').iterdir())]))
+'''
+        with tempfile.TemporaryDirectory(prefix='ml-backup-name-test-') as directory:
+            result = subprocess.run([sys.executable, '-c', script, str(ROOT / 'backend')], capture_output=True, text=True, timeout=60,
+                                    env={**os.environ, 'ML_WORKSHOP_DATA_DIR': directory})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        names, kept = json.loads(result.stdout)
+        stamp = 'ml-workshop-20260102-030405-678901'
+        self.assertEqual(names, [f'{stamp}.json', f'{stamp}-1.json', f'{stamp}-2.json'])
+        # Pruning keeps the newest two, in the order they were written.
+        self.assertEqual(kept, [f'{stamp}-1.json', f'{stamp}-2.json'])
+
+
 class RestartTests(unittest.TestCase):
     def test_token_survives_restarts_and_changes_only_when_the_file_is_missing(self):
         with tempfile.TemporaryDirectory(prefix='ml-restart-test-') as directory:

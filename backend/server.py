@@ -33,7 +33,8 @@ SESSION_HELP='Open Engineering Workshop from its shortcut or start command to co
 # Health is polled by the launcher. Every other API route needs the token, book files included:
 # the Books page fetches covers, figures and originals with it, and the PDF reader sends it as a header.
 PUBLIC_API=re.compile(r'/api/health')
-BACKUP_NAME=re.compile(r'ml-workshop-\d{8}-\d{6}-\d{6}\.json')
+# A suffix (-1, -2, ...) separates backups written in the same microsecond.
+BACKUP_NAME=re.compile(r'ml-workshop-(\d{8}-\d{6}-\d{6})(?:-(\d{1,2}))?\.json')
 KEEP_BACKUPS=10
 RUN_LOCK=threading.Lock()
 IMPORT_LOCK=threading.Lock()
@@ -108,18 +109,26 @@ def game_progress():
 
 def save_backup():
     folder=DATA/'backups';folder.mkdir(mode=0o700,exist_ok=True)
-    name='ml-workshop-'+datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S-%f')+'.json'
+    stamp='ml-workshop-'+datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S-%f')
     with connect() as db:game_export=game.export(db)
     payload=dict(app='ml-workshop',version=3,projectState=project_state(),portfolio=load_portfolio(DATA),exportedAt=datetime.now(timezone.utc).isoformat(),readingState=reading_state(),game=game_export,**state())
-    descriptor=os.open(folder/name,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+    for attempt in range(100):
+        name=stamp+(f'-{attempt}' if attempt else '')+'.json'
+        try:descriptor=os.open(folder/name,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+        except FileExistsError:continue
+        break
+    else:raise FileExistsError('Too many backups in the same microsecond')
     with os.fdopen(descriptor,'w',encoding='utf-8') as stream:stream.write(json.dumps(payload,indent=2))
     prune_backups(folder)
     return name
 
 def prune_backups(folder,keep=KEEP_BACKUPS):
     """Keep the newest backups this server wrote. Files with any other name are left alone."""
-    # The UTC timestamp in the name sorts in time order.
-    names=sorted(f.name for f in folder.iterdir() if BACKUP_NAME.fullmatch(f.name) and f.is_file())
+    # The UTC timestamp in the name, then the suffix, give the time order.
+    def order(name):
+        stamp,suffix=BACKUP_NAME.fullmatch(name).groups()
+        return stamp,int(suffix or 0)
+    names=sorted((f.name for f in folder.iterdir() if BACKUP_NAME.fullmatch(f.name) and f.is_file()),key=order)
     for name in names[:-keep]:
         try:(folder/name).unlink()
         except OSError:pass
