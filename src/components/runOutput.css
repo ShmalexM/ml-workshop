@@ -1,0 +1,11 @@
+.error-explanation,.check-row .check-explanation{color:#33475e;font-size:13px;line-height:1.6;margin-top:8px}
+.check-row .check-explanation{font-size:12px;margin-top:5px}
+:is(.error-explanation,.check-explanation) code{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;background:#eef2f6;border-radius:3px;padding:1px 4px}
+.error-result pre.error-summary{padding:8px 0 4px}
+.full-error summary{cursor:pointer;font-size:12px;color:#5b6b82;padding:4px 0}
+.full-error pre{padding-top:6px}
+.check-values{display:grid;grid-template-columns:auto minmax(0,1fr);gap:3px 12px;margin:6px 0 0;font-size:12px;line-height:1.55}
+.check-values>div{display:contents}
+.check-values dt{color:#5f6f86}
+.check-values dd{margin:0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#233249;white-space:pre-wrap;overflow-wrap:anywhere}
+.check-values dd.got{color:#af414d}
