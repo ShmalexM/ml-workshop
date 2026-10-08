@@ -1,9 +1,10 @@
-import {lazy,Suspense,useCallback,useEffect,useRef,useState,type CSSProperties,type MouseEvent} from 'react'
+import {lazy,Suspense,useCallback,useEffect,useMemo,useRef,useState,type CSSProperties,type MouseEvent} from 'react'
 import {CodeXml,Settings as SettingsIcon,LoaderCircle,X} from 'lucide-react'
 import {api,connectMessage,serverReachable,unreachable} from './api'
-import type {Course,Lesson,State,Runtime,RunResult,LearningStage,EditorPrefs} from './types'
+import type {Course,GlossaryEntry,Lesson,State,Runtime,RunResult,LearningStage,EditorPrefs} from './types'
+import {lessonLabel} from './glossary'
 import type {Portfolio,ProjectState,TaskProgress} from './portfolioTypes'
-import Curriculum from './components/Curriculum'
+import Curriculum,{type DrawerView} from './components/Curriculum'
 import LessonReader from './components/LessonReader'
 import Workspace from './components/Workspace'
 import Overview from './components/Overview'
@@ -49,13 +50,16 @@ export default function App(){
  const [projectId,setProjectId]=useState(projectRoute);const [projectTrack,setProjectTrack]=useState(projectFilter)
  const [projectSave,setProjectSave]=useState('Saved on this computer');const projectTimers=useRef<Record<string,ReturnType<typeof setTimeout>>>({})
  const [courses,setCourses]=useState<Course[]>([]);const [lessons,setLessons]=useState<Lesson[]>([])
+ const [glossary,setGlossary]=useState<GlossaryEntry[]>([]);const glossaryById=useMemo(()=>new Map(glossary.map(entry=>[entry.id,entry])),[glossary])
+ // The lesson drawer shows the lesson list or the glossary.
+ const [drawerView,setDrawerView]=useState<DrawerView>('lessons');const [glossaryQuery,setGlossaryQuery]=useState('')
  const [state,setState]=useState<State|null>(null);const [runtime,setRuntime]=useState<Runtime|null>(null)
  const [stage,setStage]=useState<LearningStage>('understand');const [exampleResults,setExampleResults]=useState<Record<string,RunResult>>({})
  const [id,setId]=useState('foundations-1');const [page,setPage]=useState<Page>(routePage)
  const [drawer,setDrawer]=useState(false);const [settings,setSettings]=useState(false);const [error,setError]=useState('')
  // From 1440px the lesson list sits beside the lesson and stays open unless closed. Narrower screens open it over the lesson.
  const wide=useMedia('(min-width:1440px)');const [docked,setDocked]=useState(()=>readPref(lessonsPanelKey)!=='closed')
- const closeLessons=useCallback(()=>{if(wide){setDocked(false);savePref(lessonsPanelKey,'closed')}else setDrawer(false);requestAnimationFrame(()=>document.getElementById('lessons-toggle')?.focus())},[wide])
+ const closeLessons=useCallback(()=>{if(wide){setDocked(false);savePref(lessonsPanelKey,'closed')}else setDrawer(false);requestAnimationFrame(()=>document.getElementById(drawerView==='glossary'?'glossary-toggle':'lessons-toggle')?.focus())},[wide,drawerView])
  const [readerWidth,setReaderWidth]=useState(()=>clampReaderWidth(Number(readPref(readerWidthKey))))
  const [editorPrefs,setEditorPrefs]=useState(readEditorPrefs)
  useEffect(()=>{
@@ -83,14 +87,14 @@ export default function App(){
  useEffect(()=>{if(page==='hero')setLoot(null)},[page])
  const saveProject=useCallback(async(projectId:string,value:ProjectState)=>{try{await api('/project/state',{projectId,...value});setProjectSave('Saved on this computer');if(reviewChanged.current.delete(projectId))refreshGame()}catch{setProjectSave('Saved in this browser · server not reachable')}},[refreshGame])
  useEffect(()=>{let active=true;(async()=>{try{
-   const [curriculum,s,r,books,projects]=await Promise.all([api<{courses:Course[];lessons:Lesson[]}>('/curriculum'),api<State>('/state'),api<Runtime>('/runtime'),api<LibraryData>('/library'),api<Portfolio>('/portfolio')])
+   const [curriculum,s,r,books,projects]=await Promise.all([api<{courses:Course[];lessons:Lesson[];glossary:GlossaryEntry[]}>('/curriculum'),api<State>('/state'),api<Runtime>('/runtime'),api<LibraryData>('/library'),api<Portfolio>('/portfolio')])
    if(!active)return
    const recovered=Object.fromEntries(Object.entries(cacheRef.current).filter(([key,draft])=>curriculum.lessons.some(l=>l.id===key)&&draft.updatedAt >= (s.draftUpdated?.[key]??0)))
    cacheRef.current=recovered;setCache(recovered);try{localStorage.setItem(localKey,JSON.stringify(recovered))}catch{}
    const projectCache=readCache(projectKey,isProjectState)
    for(const [key,cached] of Object.entries(projectCache))if(projects.projects.some(p=>p.id===key)&&cached.updatedAt>=(projects.projectState[key]?.updatedAt||0)){const value={...cached,tasks:cached.tasks??projects.projectState[key]?.tasks??{}};projects.projectState[key]=value;void saveProject(key,value)}
    setPortfolio(projects);portfolioRef.current=projects
-   setCourses(curriculum.courses);setLessons(curriculum.lessons);setState(s)
+   setCourses(curriculum.courses);setLessons(curriculum.lessons);setGlossary(curriculum.glossary);setState(s)
    const requested=location.hash.match(/^#learn\/([a-z0-9-]+)$/)?.[1]
    setId(requested&&curriculum.lessons.some(l=>l.id===requested)?requested:s.currentLesson)
    setRuntime(r);setLibrary(books);setLoaded(true)
@@ -112,7 +116,11 @@ export default function App(){
  function selectLesson(next:string){if(busy)return;focusLesson.current=true;setSelection(n=>n+1);setId(next);setStage('understand');setPage('learn');setDrawer(false);setSolution(null);setError('');setLoot(null);location.hash='learn/'+next;setState(old=>old?{...old,currentLesson:next}:old);void api('/current',{lessonId:next}).catch(()=>setSaveStatus('Could not save your place · server not reachable'))}
  if(!state||!lessons.length)return <main className="loading-screen"><SessionBanner/><CodeXml size={44}/><h1>{error?'Could not load Engineering Workshop':'Loading Engineering Workshop…'}</h1>{error?<>{error!==connectMessage&&<p>{error}</p>}<button className="primary-button" onClick={()=>location.reload()}>Reload</button></>:<LoaderCircle size={23} className="spin"/>}</main>
  const lessonsOpen=wide?docked:drawer
- function toggleLessons(){if(!wide){setDrawer(open=>!open);return}const next=!docked;setDocked(next);savePref(lessonsPanelKey,next?'open':'closed')}
+ function showDrawer(open:boolean){if(!wide){setDrawer(open);return}setDocked(open);savePref(lessonsPanelKey,open?'open':'closed')}
+ // Each button opens the drawer on its own view, switches an open drawer to it, or closes the drawer when it already shows that view.
+ function toggleDrawer(view:DrawerView){if(lessonsOpen&&drawerView===view){closeLessons();return}setDrawerView(view);showDrawer(true)}
+ function showTerm(term:string){setGlossaryQuery(term);setDrawerView('glossary');showDrawer(true)}
+ const label=(lessonId:string)=>lessonLabel(lessonId,lessons,courses)
  function resizeReader(value:number,done:boolean){setReaderWidth(value);if(done)savePref(readerWidthKey,String(value))}
  function changeEditorPrefs(next:EditorPrefs){setEditorPrefs(next);savePref(editorKey,JSON.stringify(next))}
  // All lessons is a view inside Progress, so the Progress tab stays marked on it.
@@ -128,10 +136,10 @@ export default function App(){
  return <div className={'app'+(editorPrefs.dark?' code-dark':'')}><a className="skip-link" href="#main-content" onClick={skipToContent}>Skip to main content</a><header className="app-header"><div className="brand-area"><button className="brand" onClick={()=>showPage('paths')}><CodeXml size={29}/><span>Engineering Workshop</span></button></div><nav aria-label="Main navigation">{(game?.enabled?['paths','learn','projects','books','progress','hero'] as const:['paths','learn','projects','books','progress'] as const).map(p=><button key={p} className={navPage===p?'active':''} aria-current={navPage===p?'page':undefined} onClick={()=>showPage(p)}>{p[0].toUpperCase()+p.slice(1)}{p==='hero'&&game&&game.unopened>0&&<span className="nav-badge" aria-label={`${game.unopened} unopened chests`}>{game.unopened}</span>}</button>)}</nav><div className="header-right"><p className={'runtime-status'+(online?'':' offline')} role="status" title={online?'Code runs on this computer':'Server not reachable'}><span aria-hidden="true"/>{online?'Code runs on this computer':'Server not reachable'}</p><button className="icon-button" aria-label="Open settings" onClick={()=>setSettings(true)}><SettingsIcon size={20}/></button></div></header><SessionBanner/>
  {loot&&page!=='hero'&&page!=='learn'&&<LootToast notice={loot} onClose={closeLoot}/>}
   {error&&<div role="alert" className="error-toast"><span>{error}</span><button aria-label="Dismiss error" onClick={()=>setError('')}><X size={17}/></button></div>}
- <div className="app-body">{page==='learn'&&<Curriculum courses={courses} lessons={lessons} state={state} current={lesson} onSelect={selectLesson} open={lessonsOpen} overlay={!wide} onClose={closeLessons}/>}
+ <div className="app-body">{page==='learn'&&<Curriculum courses={courses} lessons={lessons} state={state} current={lesson} onSelect={selectLesson} open={lessonsOpen} overlay={!wide} onClose={closeLessons} view={drawerView} onView={setDrawerView} glossary={glossary} query={glossaryQuery} onQuery={setGlossaryQuery} label={label}/>}
  {page==='paths'?<Paths courses={courses} lessons={lessons} state={state} portfolio={portfolio} onSelect={selectLesson} onProjects={showProjects} onPractice={()=>showPage('practice')}/>:page==='projects'?<Projects key={projectTrack} data={portfolio} gameEnabled={!!game?.enabled} courses={courses} lessons={lessons} state={state} selected={projectId} initialFilter={projectTrack} onSelectProject={selectProject} onLesson={selectLesson} onChange={updateProject} saveStatus={projectSave}/>:page==='books'?<Suspense fallback={<p className="book-hint">Loading books…</p>}><BookLibrary data={library} selection={bookSelection} onLesson={selectLesson} onGuidesSaved={refreshGame} onImported={result=>setLibrary(old=>{
       const id=result.book.id, current=old.readingState[id], incoming=result.readingState
       return {...old,books:[...old.books.filter(book=>book.id!==id),result.book],guides:[...old.guides.filter(guide=>guide.bookId!==id),...result.guides],readingState:{...old.readingState,...(incoming&&(!current||incoming.updatedAt>current.updatedAt)?{[id]:incoming}:{})}}
-    })} onRemoved={id=>setLibrary(old=>({...old,books:old.books.filter(book=>book.id!==id),guides:old.guides.filter(guide=>guide.bookId!==id)}))} onState={(bookId,value)=>setLibrary(old=>({...old,readingState:{...old.readingState,[bookId]:value}}))}/></Suspense>:page==='hero'?<Suspense fallback={<p className="book-hint">Opening the armory…</p>}><HeroPage onSummary={setGame}/></Suspense>:page==='learn'?<main className={'learning-layout stage-'+stage} inert={!wide&&drawer} style={{'--reader-width':readerWidth+'%'} as CSSProperties}><LessonReader key={'reader-'+id} lessonsOpen={lessonsOpen} onToggleLessons={toggleLessons} readings={library.guides.filter(g=>g.lessons.includes(lesson.id))} stage={stage} onStage={setStage} onLesson={selectLesson} allCourses={courses} lesson={lesson} course={course} index={inCourse.indexOf(lesson)} count={inCourse.length} notes={notes} onNotes={s=>updateDraft(id,code,s)} onSolution={showSolution} onPath={()=>showPage('paths')}/>{stage==='example'&&<GuidedExample lesson={lesson} result={exampleResults[id]||null} busy={busy} onRun={runExample} onPractice={()=>setStage('practice')}/>}{stage==='practice'&&<><PanelDivider value={readerWidth} onChange={resizeReader}/><Workspace key={'workspace-'+id} lesson={lesson} code={code} onCode={s=>updateDraft(id,s,notes)} onRun={run} busy={busy} result={results[id]||null} done={completed} onPrevious={()=>selectLesson(lessons[position-1].id)} onNext={()=>selectLesson(lessons[position+1].id)} hasPrevious={position>0} hasNext={position<lessons.length-1} saveStatus={saveStatus} reward={loot?.lessonId===id?loot:null} editor={editorPrefs}/></>}</main>:<Overview page={page} courses={courses} lessons={lessons} state={state} drafts={cache} onSelect={selectLesson}/>}</div>
+    })} onRemoved={id=>setLibrary(old=>({...old,books:old.books.filter(book=>book.id!==id),guides:old.guides.filter(guide=>guide.bookId!==id)}))} onState={(bookId,value)=>setLibrary(old=>({...old,readingState:{...old.readingState,[bookId]:value}}))}/></Suspense>:page==='hero'?<Suspense fallback={<p className="book-hint">Opening the armory…</p>}><HeroPage onSummary={setGame}/></Suspense>:page==='learn'?<main className={'learning-layout stage-'+stage} inert={!wide&&drawer} style={{'--reader-width':readerWidth+'%'} as CSSProperties}><LessonReader key={'reader-'+id} lessonsOpen={lessonsOpen&&drawerView==='lessons'} onToggleLessons={()=>toggleDrawer('lessons')} glossaryOpen={lessonsOpen&&drawerView==='glossary'} onToggleGlossary={()=>toggleDrawer('glossary')} glossary={glossaryById} onTerm={showTerm} label={label} readings={library.guides.filter(g=>g.lessons.includes(lesson.id))} stage={stage} onStage={setStage} onLesson={selectLesson} allCourses={courses} lesson={lesson} course={course} index={inCourse.indexOf(lesson)} count={inCourse.length} notes={notes} onNotes={s=>updateDraft(id,code,s)} onSolution={showSolution} onPath={()=>showPage('paths')}/>{stage==='example'&&<GuidedExample lesson={lesson} result={exampleResults[id]||null} busy={busy} onRun={runExample} onPractice={()=>setStage('practice')}/>}{stage==='practice'&&<><PanelDivider value={readerWidth} onChange={resizeReader}/><Workspace key={'workspace-'+id} lesson={lesson} code={code} onCode={s=>updateDraft(id,s,notes)} onRun={run} busy={busy} result={results[id]||null} done={completed} onPrevious={()=>selectLesson(lessons[position-1].id)} onNext={()=>selectLesson(lessons[position+1].id)} hasPrevious={position>0} hasNext={position<lessons.length-1} saveStatus={saveStatus} reward={loot?.lessonId===id?loot:null} editor={editorPrefs}/></>}</main>:<Overview page={page} courses={courses} lessons={lessons} state={state} drafts={cache} onSelect={selectLesson}/>}</div>
  {settings&&<Settings editor={editorPrefs} onEditor={changeEditorPrefs} runtime={runtime} onBackup={backup} onClose={()=>setSettings(false)} game={game} onGameToggle={async enabled=>{const {game:g}=await gameApi.settings(enabled);setGame(summarize(g));if(!enabled){setLoot(null);if(page==='hero')showPage('paths')}}}/>} {solution&&<Solution lesson={lesson} code={solution} draft={code} onClose={()=>setSolution(null)} onLoad={()=>{updateDraft(id,solution,notes);setStage('practice');setSolution(null)}}/>}</div>
 }

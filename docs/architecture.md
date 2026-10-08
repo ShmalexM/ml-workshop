@@ -45,7 +45,9 @@ The UI uses hash routes for Paths, lessons, Projects and Books. The suggested or
 
 ## Guided learning and solutions
 
-`backend/lesson_guides.py` supplies course orientation, vocabulary, prerequisite links and a hand-written small example for each of the 72 lessons. Each example has expected output, a short walkthrough and a prediction question with explanatory feedback. Examples are teaching material, separate from the exercise solution and its checks.
+`backend/glossary.py` holds the glossary: each term's definition, the exact words that link it, the paths where it applies (so that a word such as "state" or "parameter" links the meaning each path uses) and the lesson that teaches it. `GET /api/curriculum` returns the entries, and each lesson lists the terms in its intro and explanation in order of first appearance. `src/glossary.ts` uses the same regular expression to link them, and a test compares the two. The curriculum response is built once per server process.
+
+`backend/lesson_guides.py` supplies course orientation, prerequisite links and a hand-written small example for each of the 72 lessons. Each path's three orientation terms come from the glossary. Each example has expected output, a short walkthrough and a prediction question with explanatory feedback. Examples are teaching material, separate from the exercise solution and its checks.
 
 The lesson UI begins in Understand (lesson text only), moves to See an example (text and worked example side by side), then exposes the editor in Try it yourself. The lesson list is a drawer: beside the lesson from 1440px, over it below that. Learners can revisit any stage and open the solution at any time without using hints; it is also the last step after the hints. Viewing the solution leaves the draft intact; Load into editor replaces it. Changing the lesson resets the stage and keeps saved exercise drafts.
 

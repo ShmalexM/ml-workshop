@@ -1,32 +1,25 @@
 """Original small examples and orientation, taught before the independent tasks."""
 from textwrap import dedent
+from glossary import orientation_terms
 
 ORIENTATION = {'python': {'welcome': 'This path teaches the Python that the other paths use. It starts '
                        'with the first line of a program and needs no coding experience.',
             'goal': 'Write and fix the small functions, lists and loops that ML foundations '
                     'starts with.',
             'prerequisites': [],
-            'terms': [['Program', 'A list of instructions that Python runs from top to bottom.'],
-                      ['Variable', 'A name that holds a value, such as items = 3.'],
-                      ['Output', 'What print shows when the program runs.']]},
+            'terms': orientation_terms('program', 'variable', 'output')},
  'foundations': {'welcome': 'Machine learning adjusts a function’s parameters using examples. '
                             'Begin with a line whose weight and bias you can inspect.',
                  'goal': 'Explain how a prediction changes, then learn its parameters from '
                          'data.',
                  'prerequisites': ['python'],
-                 'terms': [['Model', 'A function that turns an input into a prediction.'],
-                           ['Parameter',
-                            'An adjustable number inside the model, such as weight or bias.'],
-                           ['Training',
-                            'Repeatedly changing parameters to reduce error on examples.']]},
+                 'terms': orientation_terms('model', 'parameter-ml', 'training')},
  'pytorch': {'welcome': 'PyTorch stores numbers in tensors and records the operations needed '
                         'to calculate gradients. Use it to build the training loop from '
                         'Foundations.',
              'goal': 'Train a small model using automatic gradients and an optimizer.',
              'prerequisites': ['python', 'foundations'],
-             'terms': [['Tensor', 'An array of numbers with a shape, data type, and device.'],
-                       ['Gradient', 'How much a small parameter change affects the loss.'],
-                       ['Autograd', 'PyTorch’s automatic gradient calculation.']]},
+             'terms': orientation_terms('tensor', 'gradient', 'autograd')},
  'tensorflow': {'welcome': 'TensorFlow records gradients and provides Keras layers for '
                            'building models. This path uses the Foundations training loop. '
                            'PyTorch is optional. Matrix multiplication follows NumPy’s shape '
@@ -34,19 +27,14 @@ ORIENTATION = {'python': {'welcome': 'This path teaches the Python that the othe
                            'outputs], so the inner sizes must match.',
                 'goal': 'Train a Keras model and explain each training step.',
                 'prerequisites': ['python', 'foundations'],
-                'terms': [['Variable', 'A tensor whose value can be updated during training.'],
-                          ['GradientTape',
-                           'A context that records operations for differentiation.'],
-                          ['Keras', 'A layer and training API used with TensorFlow here.']]},
+                'terms': orientation_terms('tf-variable', 'gradienttape', 'keras')},
  'modern': {'welcome': 'An AI app is a chain of steps. A tokenizer turns text into IDs, a '
                        'transformer produces vectors, and retrieval finds relevant text. '
                        'Everything runs locally without downloads or a model service. Prompt '
                        'and retrieval lessons do not generate answers.',
             'goal': 'Build and inspect the inputs and data used by an AI application.',
             'prerequisites': ['python', 'pytorch'],
-            'terms': [['Token', 'A text piece represented by an integer ID.'],
-                      ['Checkpoint', 'Saved model parameters learned during training.'],
-                      ['Retrieval', 'Selecting relevant source material for a query.']]},
+            'terms': orientation_terms('token', 'checkpoint', 'retrieval')},
  'cuda': {'welcome': 'A GPU launches many threads, each assigned part of an array. This path '
                      'uses NumPy arrays and Numba’s CUDA API, so you need ML foundations and basic '
                      'NumPy first: creating an array, its shape and dtype, and indexing. Kernels '
@@ -55,17 +43,13 @@ ORIENTATION = {'python': {'welcome': 'This path teaches the Python that the othe
                      'hardware.',
           'goal': 'Write kernels with correct indices, bounds checks, and memory transfers.',
           'prerequisites': ['python', 'foundations'],
-          'terms': [['Kernel', 'A function run by every thread in a launch.'],
-                    ['Block', 'A group of threads that can cooperate.'],
-                    ['Global index', 'A thread’s position across the whole launch.']]},
+          'terms': orientation_terms('kernel', 'block', 'global-index')},
  'harness': {'welcome': 'An agent harness is the software that runs a model’s proposed '
                         'actions. Here you build and test its rules with recorded data. No '
                         'language model or external tool runs.',
              'goal': 'Control which actions a run can take and check whether it succeeded.',
              'prerequisites': ['python'],
-             'terms': [['State', 'A named phase of a run, such as running or waiting.'],
-                       ['Tool call', 'A proposed tool name and its arguments.'],
-                       ['Trace', 'A recorded sequence of what happened during a run.']]},
+             'terms': orientation_terms('state-run', 'tool-call', 'trace')},
  'backend': {'welcome': 'A backend receives requests from a client and returns results. '
                         'Practice the functions that validate and track those requests using '
                         'in-memory data. A deployed service also needs storage, '
@@ -73,40 +57,27 @@ ORIENTATION = {'python': {'welcome': 'This path teaches the Python that the othe
                         'Python: functions, dictionaries, sets, isinstance and raise.',
              'goal': 'Handle invalid requests and retries without losing track of the result.',
              'prerequisites': ['python'],
-             'terms': [['Validation', 'Checking input types and values before using them.'],
-                       ['Idempotency',
-                        'Repeated requests have the effect of a single accepted request.'],
-                       ['Cursor', 'A stable position from which to continue a result list.']]},
+             'terms': orientation_terms('validation', 'idempotency', 'cursor')},
  'web': {'welcome': 'UI state is the data that determines what an interface displays. Practice '
                     'changing it with small JavaScript functions. The exercises run in '
                     'Node.js. Projects show how the functions fit into a browser app. The '
                     'first lesson shows the JavaScript forms of the Python from zero basics.',
          'goal': 'Keep the displayed state correct when requests or saved data change.',
          'prerequisites': ['python'],
-         'terms': [['State', 'The data that determines what the UI displays.'],
-                   ['Reducer',
-                    'A function that maps previous state and an action to next state.'],
-                   ['Immutable update',
-                    'Creating a changed copy instead of modifying the original.']]},
+         'terms': orientation_terms('state-ui', 'reducer', 'immutable-update')},
  'rl': {'welcome': 'In reinforcement learning, an agent chooses actions and learns from '
                    'rewards. Follow one episode through its steps, then calculate what those '
                    'rewards teach. These exercises use a small corridor and action-value '
                    'lists. They do not train a game agent.',
         'goal': 'Explain how rewards and ending signals affect an action-value update.',
         'prerequisites': ['python', 'foundations'],
-        'terms': [['Observation', 'The information an environment gives the agent.'],
-                  ['Reward', 'A numerical feedback signal after an action.'],
-                  ['Episode',
-                   'A sequence of actions and rewards ending at a goal or cutoff.']]},
+        'terms': orientation_terms('observation', 'reward', 'episode')},
  'data': {'welcome': 'Data can arrive twice, arrive out of order, or be too large to search as '
                      'one piece. Start with small inputs whose expected results you can work '
                      'out by hand.',
           'goal': 'Prepare text for retrieval and measure how many relevant results it finds.',
           'prerequisites': ['python'],
-          'terms': [['Revision', 'A source-defined version of a record.'],
-                    ['Chunk', 'A bounded piece of a larger document.'],
-                    ['Recall',
-                     'The fraction of expected relevant items that were retrieved.']]},
+          'terms': orientation_terms('revision', 'chunk', 'recall')},
  'reliability': {'welcome': 'Before you run a service, decide what should happen when its '
                             'work fails. These exercises calculate retry schedules, redact log '
                             'fields, and check measurements. They do not call services or '
@@ -115,13 +86,7 @@ ORIENTATION = {'python': {'welcome': 'This path teaches the Python that the othe
                  'goal': 'Use failure cases and measurements to decide when to retry or '
                          'release.',
                  'prerequisites': ['python', 'backend'],
-                 'terms': [['Retry budget',
-                            'A limit on how long or how often an operation may retry.'],
-                           ['Desired state',
-                            'The configuration a system is intended to reach.'],
-                           ['Percentile',
-                            'A value below which a specified proportion of measurements '
-                            'fall.']]},
+                 'terms': orientation_terms('retry-budget', 'desired-state', 'percentile')},
  'interactive': {'welcome': 'Interactive apps combine state changes with elapsed time and '
                             'geometry. Practice those calculations as functions, then use the '
                             'project steps to find them in an app. The exercises are plain '
@@ -129,12 +94,7 @@ ORIENTATION = {'python': {'welcome': 'This path teaches the Python that the othe
                  'goal': 'Keep app state and motion predictable across pauses and repeated '
                          'events.',
                  'prerequisites': ['python'],
-                 'terms': [['Lifecycle',
-                            'The states an app moves through, such as active, paused, and '
-                            'stopped.'],
-                           ['Delta time', 'Elapsed time since the previous update.'],
-                           ['Aspect ratio',
-                            'Width divided by height; keeping it fixed avoids stretching.']]}}
+                 'terms': orientation_terms('lifecycle', 'delta-time', 'aspect-ratio')}}
 GUIDES={}
 def add(id,code,output,steps,question,choices,answer,feedback):
  GUIDES[id]=dict(code=dedent(code).strip()+'\n',output=output,steps=steps,question=question,choices=choices,answer=answer,feedback=feedback)

@@ -112,7 +112,7 @@ To edit the frontend, start the app and run `npm run dev`. It watches and rebuil
 Lessons live in `backend/python_course.py`, `backend/courses.py`, `backend/extra_lessons.py` and `backend/engineering_courses.py`. The public schema is described by `src/types.ts`; start from a nearby lesson.
 
 1. Give the lesson a stable, unique ID. Progress is keyed by ID, so preserve existing IDs.
-2. Explain one concept with a worked case, three diagram steps, three tasks, and three hints that go from a nudge to nearly the answer. Define each term where it is first used. Link to primary documentation.
+2. Explain one concept with a worked case, three diagram steps, three tasks, and three hints that go from a nudge to nearly the answer. Define each term where it is first used. Link to primary documentation. A new term that the glossary lacks goes in `backend/glossary.py`; terms link automatically where they first appear in the intro and explanation.
 3. Include starter code with a runnable demo call and a reference solution that uses the starter's names. The starter must run without an error and fail the checks; the solution must pass.
 4. Add three to five checks that exercise behavior across inputs. Include a boundary case and reject plausible wrong implementations; avoid checking source spelling. Add those wrong implementations to `tests/test_wrong_answers.py`.
 5. Keep exercises small, deterministic, offline, and within the runner's limits. No downloads, API credentials, telemetry, or paid services. Label synthetic data and simulated hardware accurately.

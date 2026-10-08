@@ -627,7 +627,7 @@ add(12, 'Slope between two points',
 
 add(13, 'Fix a broken function',
     ('A bug is a mistake that makes a program stop with an error or give a wrong result. The '
-     'function in this exercise has three bugs. None of them stops the program, so you find '
+     'function in this exercise has three bugs. They do not stop the program, so you find '
      'them by comparing the output with the result you expect.'),
     'run → compare with the expected result → print values → fix one bug → run again',
     ('mse(a, b) should return the mean squared error of two lists of the same length: for each '

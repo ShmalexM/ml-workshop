@@ -8,12 +8,14 @@ This file lists the notable changes in each release. The format follows [Keep a 
 
 - Python from zero, a new first path of 13 lessons for people who have never written code. It starts with `print` and variables, then covers arithmetic, functions, `if`, lists and slices, `for` loops, `zip` and list comprehensions, tuples, dictionaries, tracebacks and `raise ValueError`, f-strings and `import`, the slope between two points, and fixing a broken function. It ends where ML foundations lesson 1 begins.
 - From Python to JavaScript, a new first lesson in Web app engineering. It shows the JavaScript forms of the Python from zero basics: `let` and `const`, functions and arrow functions, arrays, objects, `===`, `map` and `filter`, and `console.log`. Web app engineering now lists Python from zero as its suggested first path. The app now has 72 lessons in 13 paths.
+- A glossary of 143 terms: the three each path introduces, the Python words the lessons use (variable, function, parameter, list, dictionary, loop, exception, class and more), the JavaScript basics, and ML and engineering terms such as tensor, gradient, loss, batch, epoch, embedding, idempotency and latency. Each definition is one or two sentences. In the lesson text, a term is a dotted-underline button where it first appears; it opens the definition and a link to the lesson that teaches it, and Escape closes it. The lesson drawer has a **Glossary** view with a search box, also opened by the **Glossary** button next to **Lessons**.
 - A question on the Paths page for new learners: "Have you written Python before?" **No** opens Python from zero, and **Yes** hides the question. The answer is saved in the browser. It shows only when you have no saved work.
 
 ### Changed
 
 - ML foundations and the other Python paths list Python from zero as a suggested first path, and the ML & GPU engineer order starts with it.
 - ML foundations lesson 2 explains the Python in its code: the worked example pairs the lists with `zip` in one step and squares the errors in a second, and the explanation names `zip`, unpacking, `**` and `raise`. Lessons 3 and 6 show where their gradient formulas come from.
+- The Terms box on each path's first lesson takes its definitions from the glossary. Python from zero lesson 13 says "They do not stop the program" instead of "None of them stops the program", so that None links only to the Python value.
 - In the Hero game, Python from zero lessons earn the smallest chests: the first seven earn a Worn Footlocker.
 - The lesson list is a drawer, opened with **Lessons** next to the back link. From 1440px it sits beside the lesson and remembers when you close it; on smaller screens it opens over the lesson.
 - The right panel follows the lesson stage: none in Understand, the worked example in See an example, and the editor in Try it yourself. The line between the lesson text and the editor can be dragged.
