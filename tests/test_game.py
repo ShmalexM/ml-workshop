@@ -316,8 +316,9 @@ class GameStateTests(unittest.TestCase):
             self.progress['completed'][lesson['id']] = dict(at=STAMP, xp=lesson['xp'])
         later = '2026-10-06T01:00:00+00:00'
         self.progress['completed']['foundations-3']['at'] = later
-        projects = [dict(id=d, title=d.title(), steps=['One', 'Two'], difficulty=d)
-                    for d in ('beginner', 'intermediate', 'advanced', 'unknown')]
+        projects = [dict(id=d, title=d.title(), steps=['One', 'Two'], level=level)
+                    for d, level in (('start', 'Start small'), ('build', 'Build next'),
+                                     ('capstone', 'Capstone'), ('unknown', None))]
         projects += [dict(id='empty', title='Empty', steps=[])]
         self.progress['projects'] = projects
         self.progress['projectState'] = {p['id']: dict(reviewed=[0, 0], updatedAt=1000)
@@ -332,9 +333,10 @@ class GameStateTests(unittest.TestCase):
         sources = {c['source']: c for c in game.earned_chests(self.progress)}
         self.assertEqual(sources['path:foundations']['earnedAt'], later)
         self.assertEqual(sources['path:foundations']['title'], 'ML foundations mastered')
-        for difficulty, tier in [('beginner', 2), ('intermediate', 3), ('advanced', 4), ('unknown', 3)]:
-            reward = sources['project:' + difficulty]
+        for project_id, tier in [('start', 2), ('build', 3), ('capstone', 4), ('unknown', 3)]:
+            reward = sources['project:' + project_id]
             self.assertEqual(reward['tier'], tier)
+            self.assertEqual(reward['subtitle'], 'Project walkthrough')
             self.assertEqual(reward['earnedAt'], '1970-01-01T00:00:01+00:00')
         self.assertNotIn('project:empty', sources)
         self.assertEqual(sources['reading:guide-a']['earnedAt'], '1970-01-01T00:00:02+00:00')
@@ -346,6 +348,56 @@ class GameStateTests(unittest.TestCase):
                           saved['hero']['levelProgress']), (650, 7, .5))
         dates = [datetime.fromisoformat(c['earnedAt']) for c in saved['chests']['unopened']]
         self.assertEqual(dates, sorted(dates))
+
+    def test_project_chests_need_every_task_and_checks_add_a_tier(self):
+        def task(tid, checked=True):
+            verify = dict(commands=['run'], expect='ok')
+            if checked:
+                verify['check'] = dict(type='contains', value='ok')
+            return dict(id=tid, title=tid.title(), verify=verify)
+        projects = [dict(id=level.split()[0].lower(), title=level, level=level,
+                         tasks=[task('one'), task('two'), task('read', checked=False)],
+                         stretch=task('extra'), steps=['One', 'Two', 'Read'])
+                    for level in ('Start small', 'Build next', 'Capstone')]
+        self.progress['projects'] = projects
+        state = self.progress['projectState'] = {
+            p['id']: dict(reviewed=[0, 1], updatedAt=1000, tasks={}) for p in projects}
+
+        def chests():
+            return {c['source']: c for c in game.earned_chests(self.progress)
+                    if c['kind'] == 'project'}
+        # Ticking two of three tasks is not finished, even with every check and the stretch passed.
+        state['capstone']['tasks'] = {t: dict(verifiedAt=5) for t in ('one', 'two', 'extra')}
+        self.assertEqual(chests(), {})
+        for saved in state.values():
+            saved['reviewed'] = [0, 1, 2]
+        self.assertEqual({s: c['tier'] for s, c in chests().items()},
+                         {'project:start': 2, 'project:build': 3, 'project:capstone': 5})
+        self.assertEqual(chests()['project:capstone']['subtitle'], 'Project · every check passed')
+        self.assertEqual(chests()['project:start']['subtitle'], 'Project')
+        # One missing check removes the bonus; the stretch task and unchecked tasks never count.
+        state['start']['tasks'] = dict(one=dict(verifiedAt=5), two=dict(notes='later'))
+        state['build']['tasks'] = dict(one=dict(verifiedAt=5), two=dict(verifiedAt=6))
+        self.assertEqual({s: c['tier'] for s, c in chests().items()},
+                         {'project:start': 2, 'project:build': 4, 'project:capstone': 5})
+        # A project without any checks earns its level's tier only.
+        projects[0]['tasks'] = [task('one', False), task('two', False), task('read', False)]
+        self.assertEqual(chests()['project:start']['tier'], 2)
+
+    def test_retired_projects_keep_earned_chests(self):
+        self.progress['retiredProjects'] = [dict(id='public-micrograd', title='micrograd', steps=3),
+                                            dict(id='public-pokerl', title='PokeRL', steps=3)]
+        self.progress['projectState'] = {
+            'public-micrograd': dict(notes='kept', reviewed=[0, 1, 2], updatedAt=1000),
+            'public-pokerl': dict(notes='', reviewed=[0, 2], updatedAt=1000),
+            'removed-local-project': dict(notes='x', reviewed=[0], updatedAt=1000)}
+        chests = {c['source']: c for c in game.earned_chests(self.progress)}
+        self.assertEqual(set(chests), {'project:public-micrograd'})
+        self.assertEqual((chests['project:public-micrograd']['tier'],
+                          chests['project:public-micrograd']['subtitle']), (3, 'Retired project'))
+        self.hero()
+        opened = self.action('open', dict(source='project:public-micrograd'))
+        self.assertEqual(opened['chest']['source'], 'project:public-micrograd')
 
     def test_schema_is_idempotent_and_progress_cap(self):
         self.hero()

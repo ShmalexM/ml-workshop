@@ -281,6 +281,26 @@ def chest(source, kind, tier, title, subtitle, earned_at):
                 openedAt=None, itemIds=[])
 
 
+PROJECT_TIERS = {'Start small': 2, 'Build next': 3, 'Capstone': 4}
+
+
+def project_chest(project, saved):
+    """A project is finished when every task (or walkthrough step) is ticked; the stretch task
+    does not count. The level sets the tier, and one more tier, up to 5, needs a recorded
+    passing check on every task that has a check."""
+    tasks = project.get('tasks') or []
+    count = len(tasks) or len(project.get('steps', []))
+    if not count or not set(range(count)).issubset(saved.get('reviewed', [])):
+        return None
+    tier = PROJECT_TIERS.get(project.get('level'), 3)
+    checked = [t['id'] for t in tasks if t.get('verify', {}).get('check')]
+    passed = saved.get('tasks') or {}
+    bonus = bool(checked) and all((passed.get(tid) or {}).get('verifiedAt') for tid in checked)
+    subtitle = ('Project · every check passed' if bonus else 'Project') if tasks else 'Project walkthrough'
+    return chest('project:' + project['id'], 'project', min(5, tier + bonus), project['title'],
+                 subtitle, from_millis(saved.get('updatedAt', 0)))
+
+
 def earned_chests(progress, hero=None):
     """Derive eligibility afresh; the database only remembers opened sources."""
     result = []
@@ -302,13 +322,15 @@ def earned_chests(progress, hero=None):
                                 course['title'] + ' mastered', 'Learning path complete', latest))
     for project in progress.get('projects', []):
         saved = progress.get('projectState', {}).get(project['id'], {})
-        reviewed = set(saved.get('reviewed', []))
-        steps = project.get('steps', [])
-        if steps and set(range(len(steps))).issubset(reviewed):
-            tier = dict(beginner=2, intermediate=3, advanced=4).get(project.get('difficulty'), 3)
-            result.append(chest('project:' + project['id'], 'project', tier,
-                                project['title'], 'Project walkthrough',
-                                from_millis(saved.get('updatedAt', 0))))
+        reward = project_chest(project, saved)
+        if reward:
+            result.append(reward)
+    for old in progress.get('retiredProjects', []):
+        # A replaced catalog entry keeps the chest it earned: three steps, tier 3, as before.
+        saved = progress.get('projectState', {}).get(old['id'], {})
+        if old['steps'] and set(range(old['steps'])).issubset(saved.get('reviewed', [])):
+            result.append(chest('project:' + old['id'], 'project', 3, old['title'],
+                                'Retired project', from_millis(saved.get('updatedAt', 0))))
     for guide in progress.get('guides', []):
         saved = progress.get('readingState', {}).get(guide['bookId'], {})
         if guide['id'] in saved.get('completed', []):
