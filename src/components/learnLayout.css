@@ -17,8 +17,9 @@
 .lessons-toggle[aria-expanded=true]{background:#e1f3eb;border-color:#b9dccb;color:#06663c}
 
 /* Below 1440px the list opens over the lesson. */
-.curriculum{position:fixed;left:0;top:60px;bottom:0;z-index:25;width:300px;max-width:86vw;transform:translateX(-100%);visibility:hidden;transition:transform .2s,visibility .2s;box-shadow:15px 0 50px #102b3312}
-.curriculum.open{transform:none;visibility:visible}
+/* Visible at once when opening, so it can take focus; hidden only after the slide when closing. */
+.curriculum{position:fixed;left:0;top:60px;bottom:0;z-index:25;width:300px;max-width:86vw;transform:translateX(-100%);visibility:hidden;transition:transform .2s,visibility 0s .2s;box-shadow:15px 0 50px #102b3312}
+.curriculum.open{transform:none;visibility:visible;transition:transform .2s}
 .drawer-scrim.visible{display:block;position:fixed;inset:60px 0 0;z-index:24;background:#0f20354d}
 @media(min-width:1440px){
  .curriculum{position:static;width:288px;min-width:288px;transform:none;visibility:visible;transition:none;box-shadow:none}

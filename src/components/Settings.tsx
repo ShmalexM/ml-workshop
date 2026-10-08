@@ -4,7 +4,8 @@ import type {EditorPrefs,Runtime} from '../types'
 import type {GameSummary} from '../game/types'
 export default function Settings({runtime,onBackup,onClose,game,onGameToggle,editor,onEditor}:{editor:EditorPrefs;onEditor:(next:EditorPrefs)=>void;runtime:Runtime|null;onBackup:()=>Promise<{url:string;filename:string}>;onClose:()=>void;game:GameSummary|null;onGameToggle:(enabled:boolean)=>Promise<void>}){
  const dialog=useRef<HTMLDialogElement>(null)
- useEffect(()=>{dialog.current?.showModal()},[])
+ // Closing returns focus to the control that opened the dialog.
+ useEffect(()=>{const opener=document.activeElement as HTMLElement|null;dialog.current?.showModal();return()=>{if(opener?.isConnected)opener.focus()}},[])
  const [backup,setBackup]=useState<{url:string;filename:string}|null>(null);const [backupStatus,setBackupStatus]=useState('')
  const [gameBusy,setGameBusy]=useState(false);const [gameError,setGameError]=useState('')
  async function toggleGame(enabled:boolean){setGameBusy(true);setGameError('');try{await onGameToggle(enabled)}catch(e){setGameError((e as Error).message)}finally{setGameBusy(false)}}
