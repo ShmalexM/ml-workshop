@@ -721,7 +721,21 @@ def wrong_answer_calls():
     return calls
 
 
+def correct_answer_calls():
+    """The execute() calls of test_other_correct_answers_pass, so they can run side by side."""
+    calls = []
+    for lesson_id, cases in CORRECT_ANSWERS.items():
+        lesson = BY_ID[lesson_id]
+        if missing_lesson_modules(lesson):
+            continue
+        language = lesson.get("language", "python")
+        prefix = JS_OFFLINE_PREFIX if language == "javascript" else OFFLINE_PREFIX
+        calls += [((prefix + source, lesson["checks"]), dict(language=language)) for _, source in cases]
+    return calls
+
+
 WRONG_ANSWER_RUNS = PrefetchedRuns(wrong_answer_calls)
+CORRECT_ANSWER_RUNS = PrefetchedRuns(correct_answer_calls)
 
 
 class WrongAnswerTests(unittest.TestCase):
@@ -747,7 +761,7 @@ class WrongAnswerTests(unittest.TestCase):
             for name, source in cases:
                 with self.subTest(lesson=lesson_id, answer=name):
                     require_lesson_modules(self, lesson)
-                    result = execute(prefix + source, lesson["checks"], language=language)
+                    result = CORRECT_ANSWER_RUNS.execute(prefix + source, lesson["checks"], language=language)
                     self.assertIsNone(result["error"], result)
                     self.assertTrue(result["passed"], [c for c in result["checks"] if not c["passed"]])
 
