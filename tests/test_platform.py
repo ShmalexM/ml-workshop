@@ -11,6 +11,7 @@ import tempfile
 import types
 import unittest
 from unittest.mock import Mock, patch
+import urllib.error
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -149,14 +150,57 @@ class StopTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'verify'):stop.is_our_server(321)
 
     def test_windows_terminate_and_wait(self):
-        with patch.object(os, 'name', 'nt'), patch.object(stop.subprocess, 'run') as run, patch.object(stop, 'is_our_server', side_effect=[True, False]), patch.object(stop.time, 'sleep'):
+        with patch.object(os, 'name', 'nt'), patch.object(stop.subprocess, 'run') as run, patch.object(stop, 'windows_image', side_effect=['python.exe', None]) as image, patch.object(stop.time, 'sleep'):
             stop.stop_server(321)
         self.assertEqual(run.call_args.args[0], ['taskkill', '/PID', '321', '/T', '/F'])
+        self.assertEqual(image.call_count, 2)
 
     def test_slow_pid_query_obeys_stop_deadline(self):
-        with patch.object(os, 'name', 'nt'), patch.object(stop.subprocess, 'run'), patch.object(stop, 'is_our_server', side_effect=subprocess.TimeoutExpired('powershell', 5)) as query, patch.object(stop.time, 'monotonic', side_effect=[0, 1]):
+        with patch.object(os, 'name', 'nt'), patch.object(stop.subprocess, 'run'), patch.object(stop, 'windows_image', side_effect=subprocess.TimeoutExpired('tasklist', 5)) as query, patch.object(stop.time, 'monotonic', side_effect=[0, 1]):
             with self.assertRaisesRegex(RuntimeError, 'within 5 seconds'):stop.stop_server(321)
         query.assert_called_once_with(321, timeout=4)
+
+    def test_windows_slow_query_falls_back_to_tasklist_and_the_session_token(self):
+        tasklist = lambda stdout: types.SimpleNamespace(returncode=0, stdout=stdout)
+        python_row = '"python.exe","321","Console","1","25,000 K"\n'
+        cases = [
+            # (PowerShell result, tasklist output, server accepts this folder's token, expected)
+            (subprocess.TimeoutExpired('powershell', 20), python_row, True, True),
+            (types.SimpleNamespace(returncode=1, stdout=''), python_row, True, True),
+            (subprocess.TimeoutExpired('powershell', 20), 'INFO: No tasks are running which match the specified criteria.\n', True, False),
+            (subprocess.TimeoutExpired('powershell', 20), '"notepad.exe","321","Console","1","9,000 K"\n', True, False),
+            (subprocess.TimeoutExpired('powershell', 20), '"python.exe","3210","Console","1","9,000 K"\n', True, False),
+            (subprocess.TimeoutExpired('powershell', 20), python_row, False, RuntimeError),
+        ]
+        for query, listed, confirms, expected in cases:
+            with self.subTest(query=type(query).__name__, listed=listed[:24], confirms=confirms), patch.object(os, 'name', 'nt'), \
+                    patch.object(stop.subprocess, 'run', side_effect=[query, tasklist(listed)]) as run, patch.object(stop, 'server_confirms', return_value=confirms):
+                if expected is RuntimeError:
+                    with self.assertRaisesRegex(RuntimeError, 'verify'):stop.is_our_server(321)
+                else:
+                    self.assertIs(stop.is_our_server(321), expected)
+            self.assertEqual(run.call_args_list[0].kwargs['timeout'], 20)
+            self.assertEqual(run.call_args_list[1].args[0], ['tasklist', '/FI', 'PID eq 321', '/FO', 'CSV', '/NH'])
+
+    def test_posix_query_timeout_is_still_an_error(self):
+        with patch.object(os, 'name', 'posix'), patch.object(stop.subprocess, 'run', side_effect=subprocess.TimeoutExpired('ps', 20)):
+            with self.assertRaises(subprocess.TimeoutExpired):stop.is_our_server(321)
+
+    def test_server_confirms_needs_this_folders_token_and_a_200(self):
+        with tempfile.TemporaryDirectory() as directory:
+            data = Path(directory)
+            response = Mock(status=200)
+            response.__enter__ = Mock(return_value=response);response.__exit__ = Mock(return_value=False)
+            with patch.object(stop, 'data_dir', return_value=data), patch.object(stop, 'port', return_value=17319), patch.object(stop.urllib.request, 'urlopen', return_value=response) as urlopen:
+                self.assertFalse(stop.server_confirms())
+                urlopen.assert_not_called()
+                token = paths.session_token(data)
+                self.assertTrue(stop.server_confirms())
+                request = urlopen.call_args.args[0]
+                self.assertEqual(request.full_url, 'http://127.0.0.1:17319/api/session')
+                self.assertEqual(request.get_header('X-workshop-token'), token)
+                urlopen.side_effect = urllib.error.HTTPError(request.full_url, 403, 'Forbidden', {}, None)
+                self.assertFalse(stop.server_confirms())
 
     @unittest.skipIf(os.name == 'nt', 'POSIX signal branch')
     def test_posix_terminate_and_timeout(self):
