@@ -63,6 +63,8 @@ def open_data():
     with connect() as db:
         db.execute('CREATE TABLE IF NOT EXISTS drafts (lesson TEXT PRIMARY KEY, code TEXT, notes TEXT, updated INTEGER)')
         db.execute('CREATE TABLE IF NOT EXISTS completions (lesson TEXT PRIMARY KEY, at TEXT, xp INTEGER)')
+        # When each lesson's solution was first shown; the hero game gives a lower chest for lessons passed after it.
+        db.execute('CREATE TABLE IF NOT EXISTS solution_views (lesson TEXT PRIMARY KEY, at TEXT NOT NULL)')
         db.execute('CREATE TABLE IF NOT EXISTS activity (day TEXT PRIMARY KEY)')
         db.execute('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)')
         db.execute('CREATE TABLE IF NOT EXISTS project_state (project TEXT PRIMARY KEY, notes TEXT, reviewed TEXT, updated INTEGER)')
@@ -103,9 +105,11 @@ def state():
         return dict(draftUpdated={r[0]:r[3] for r in drafts},drafts={r[0]:r[1] for r in drafts},notes={r[0]:r[2] for r in drafts},completed={r[0]:dict(at=r[1],xp=r[2]) for r in complete},currentLesson=current[0] if current and current[0] in BY_ID else 'foundations-1',activity=[r[0] for r in db.execute('SELECT day FROM activity ORDER BY day')])
 
 def game_progress():
-    with connect() as db:completed={r[0]:dict(at=r[1],xp=r[2]) for r in db.execute('SELECT lesson,at,xp FROM completions')}
+    with connect() as db:
+        completed={r[0]:dict(at=r[1],xp=r[2]) for r in db.execute('SELECT lesson,at,xp FROM completions')}
+        revealed=dict(db.execute('SELECT lesson,at FROM solution_views'))
     catalog=load_portfolio(DATA)
-    return dict(completed=completed,projects=catalog['projects'],retiredProjects=catalog['retired'],projectState=project_state(),readingState=reading_state(),guides=study_guides(LIBRARY))
+    return dict(completed=completed,revealed=revealed,projects=catalog['projects'],retiredProjects=catalog['retired'],projectState=project_state(),readingState=reading_state(),guides=study_guides(LIBRARY))
 
 def save_backup():
     folder=DATA/'backups';folder.mkdir(mode=0o700,exist_ok=True)
@@ -253,6 +257,8 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers();self.wfile.write(body);return
         if path.startswith('/api/solution/'):
             lesson=BY_ID.get(path.rsplit('/',1)[-1])
+            if lesson:
+                with connect() as db:db.execute('INSERT OR IGNORE INTO solution_views VALUES (?,?)',(lesson['id'],datetime.now(timezone.utc).isoformat()))
             return self.send({'solution':lesson['solution']} if lesson else {'error':'Unknown lesson'},200 if lesson else 404)
         if path.startswith('/api/'):return self.send({'error':'Unknown endpoint'},404)
         dist=ROOT/'dist'; file=(dist/unquote(path).lstrip('/')).resolve()

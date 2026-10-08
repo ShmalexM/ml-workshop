@@ -322,10 +322,21 @@ def project_chest(project, saved):
                  subtitle, from_millis(saved.get('updatedAt', 0)))
 
 
+def solution_first(shown, passed):
+    """True when a lesson's solution was shown before the lesson was first passed."""
+    if not shown:
+        return False
+    try:
+        return datetime.fromisoformat(shown) <= datetime.fromisoformat(passed)
+    except (TypeError, ValueError):
+        return False
+
+
 def earned_chests(progress, hero=None):
     """Derive eligibility afresh; the database only remembers opened sources."""
     result = []
     completed = progress.get('completed', {})
+    revealed = progress.get('revealed', {})
     if hero:
         result.append(chest('welcome', 'welcome', 1, 'A gift for new heroes', '',
                             hero['createdAt']))
@@ -333,9 +344,12 @@ def earned_chests(progress, hero=None):
         lessons = LESSONS_BY_COURSE[course['id']]
         for lesson in lessons:
             if lesson['id'] in completed:
-                result.append(chest('lesson:' + lesson['id'], 'lesson',
-                                    LESSON_TIERS[lesson['id']], lesson['title'],
-                                    course['title'], completed[lesson['id']]['at']))
+                at = completed[lesson['id']]['at']
+                tier, subtitle = LESSON_TIERS[lesson['id']], course['title']
+                if solution_first(revealed.get(lesson['id']), at):
+                    tier, subtitle = max(1, tier - 1), subtitle + ' · solution shown first'
+                result.append(chest('lesson:' + lesson['id'], 'lesson', tier, lesson['title'],
+                                    subtitle, at))
         if lessons and all(lesson['id'] in completed for lesson in lessons):
             latest = max((completed[lesson['id']]['at'] for lesson in lessons),
                          key=lambda at: datetime.fromisoformat(at))

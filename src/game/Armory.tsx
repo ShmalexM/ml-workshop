@@ -81,7 +81,7 @@ export default function Armory({game,onGame,onOpenChest,onFight,flash}:{game:Gam
      {([['chests',`Chests${game.chests.unopened.length?` (${game.chests.unopened.length})`:''}`],['bags',`Bags (${bags.length})`],['campaign','Campaign'],['stats','Stats']] as [Tab,string][]).map(([id,text])=><button key={id} role="tab" aria-selected={tab===id} className={tab===id?'active':''} onClick={()=>setTab(id)}>{text}</button>)}
     </div>
     {tab==='chests'&&<div className="chest-list">
-     {game.chests.unopened.length===0?<div className="g-empty"><ChestArt tier={1} size={70}/><p>No chests waiting. Finish a lesson to earn the next one. Harder lessons give better chests.</p></div>
+     {game.chests.unopened.length===0?<div className="g-empty"><ChestArt tier={1} size={70}/><p>No chests waiting. Finish a lesson to earn the next one. Harder lessons give better chests. A lesson passed after Show solution gives a chest one tier lower.</p></div>
      :game.chests.unopened.map(chest=><button key={chest.source} className="chest-row" onClick={()=>onOpenChest(chest)}>
       <ChestArt tier={chest.tier} size={58}/>
       <span><strong className={`tier-title tier-${chest.tier}`}>{chest.tierName}</strong><small>{chest.title}{chest.subtitle?` · ${chest.subtitle}`:''}</small></span>

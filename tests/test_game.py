@@ -427,6 +427,32 @@ class GameStateTests(unittest.TestCase):
         opened = self.action('open', dict(source='project:public-micrograd'))
         self.assertEqual(opened['chest']['source'], 'project:public-micrograd')
 
+    def test_lesson_passed_after_its_solution_gives_a_lower_chest(self):
+        later = '2026-10-06T01:00:00+00:00'
+        lessons = {l['id']: l for l in LESSONS}
+        tiers = {lid: game.LESSON_TIERS[lid] for lid in ('foundations-1', 'foundations-4', 'foundations-6')}
+        self.assertEqual(tiers, {'foundations-1': 1, 'foundations-4': 2, 'foundations-6': 3})
+        for lid in tiers:
+            self.progress['completed'][lid] = dict(at=STAMP, xp=lessons[lid]['xp'])
+        # Shown before passing: one tier lower, never below 1. Shown after passing: unchanged.
+        self.progress['revealed'] = {'foundations-1': STAMP, 'foundations-4': '2026-10-05T21:00:00+00:00',
+                                     'foundations-6': later}
+        sources = {c['source']: c for c in game.earned_chests(self.progress)}
+        self.assertEqual({lid: sources['lesson:' + lid]['tier'] for lid in tiers},
+                         {'foundations-1': 1, 'foundations-4': 1, 'foundations-6': 3})
+        self.assertEqual(sources['lesson:foundations-4']['subtitle'], 'ML foundations · solution shown first')
+        self.assertEqual(sources['lesson:foundations-6']['subtitle'], 'ML foundations')
+        # A chest opened earlier keeps the tier it was opened with.
+        self.progress['revealed'] = {}
+        self.hero()
+        opened = self.action('open', dict(source='lesson:foundations-4'))['chest']
+        self.assertEqual(opened['tier'], 2)
+        self.progress['revealed'] = {'foundations-4': '2026-10-05T21:00:00+00:00'}
+        saved = game.state(self.db, self.progress)
+        self.assertEqual(next(c for c in saved['chests']['opened'] if c['source'] == 'lesson:foundations-4')['tier'], 2)
+        self.assertFalse(game.solution_first('not a date', STAMP))
+        self.assertFalse(game.solution_first(None, STAMP))
+
     def test_schema_is_idempotent_and_progress_cap(self):
         self.hero()
         game.ensure_schema(self.db)
@@ -913,6 +939,18 @@ class GameApiTests(unittest.TestCase):
         self.request('/api/game/retire', dict(confirm='RETIRE'))
         self.assertIn('foundations-1', self.request('/api/state')['completed'])
         self.assertEqual(len(self.request('/api/game')['chests']['unopened']), 3)
+
+    def test_solution_shown_before_passing_lowers_the_lesson_chest_over_http(self):
+        lessons = {l['id']: l for l in LESSONS}
+        self.request('/api/solution/foundations-4')
+        for lid in ('foundations-4', 'foundations-5'):
+            result = self.request('/api/run', dict(lessonId=lid, code=lessons[lid]['solution'], mode='check'))
+            self.assertTrue(result['passed'])
+        # Looking at the solution after passing changes nothing.
+        self.request('/api/solution/foundations-5')
+        chests = {c['source']: c for c in self.request('/api/game')['chests']['unopened']}
+        self.assertEqual(chests['lesson:foundations-4']['tier'], 1)
+        self.assertEqual(chests['lesson:foundations-5']['tier'], 2)
 
     def test_campaign_http_start_abandon_finish_and_backup(self):
         self.assertEqual(self.assert_error('/api/game/battle/start', {}), game.NEXT_BATTLE)
