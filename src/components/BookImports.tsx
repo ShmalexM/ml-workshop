@@ -46,7 +46,7 @@ function DropZone({label, disabled, busy, percent, error, onFiles}: {
 }
 
 /** Two-step removal. The confirm step is inline because the Mac app's web view has no confirm() dialog. */
-export function RemoveBook({book, onRemoved}: {book: Book; onRemoved: (id: string) => void}) {
+export function RemoveBook({book, onRemoved}: {book: Pick<Book, 'id' | 'title'>; onRemoved: (id: string) => void}) {
   const [confirming, setConfirming] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')

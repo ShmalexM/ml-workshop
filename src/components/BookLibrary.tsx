@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, Bookmark, BookOpen, Check, ExternalLink, Search, X, ZoomIn } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Bookmark, BookOpen, BookX, Check, ExternalLink, Search, X, ZoomIn } from 'lucide-react'
 import { api } from '../api'
 import { bookLink, type BookImportResult, type BookLocation, type Chapter, type LibraryData, type ReadingState, type SearchHit, type StudyGuide } from '../libraryTypes'
 import BookImports, { RemoveBook } from './BookImports'
@@ -59,6 +59,7 @@ export default function BookLibrary({ data, selection, onLesson, onState, onImpo
   const [zoom, setZoom] = useState(1)
   const [figure, setFigure] = useState<{ src: string; alt: string } | null>(null)
   const [pageInput, setPageInput] = useState('1')
+  const [unreadable, setUnreadable] = useState(data.unreadable || [])
   const reader = useRef<HTMLDivElement>(null)
   const book = data.books.find(item => item.id === selection?.bookId)
   const position = Math.max(1, Math.min(book?.count || 1, selection?.location || 1))
@@ -123,6 +124,11 @@ export default function BookLibrary({ data, selection, onLesson, onState, onImpo
     return () => { active = false; clearTimeout(timer) }
   }, [query, book?.id])
 
+  function removed(bookId: string) {
+    // The book's folder is gone, so a pending save would fail. Saved notes stay on the server.
+    clearTimeout(timers.current[bookId]); delete timers.current[bookId]
+    setUnreadable(old => old.filter(id => id !== bookId)); onRemoved(bookId)
+  }
   function open(bookId: string, location: number) { setQuery(''); window.location.hash = bookLink(bookId, location).slice(1) }
   function imported(result: BookImportResult) {
     const current = statesRef.current[result.book.id]
@@ -140,11 +146,13 @@ export default function BookLibrary({ data, selection, onLesson, onState, onImpo
 
   if (!book) return <main className="book-home" onDragOver={event => { if (event.dataTransfer.types.includes('Files')) event.preventDefault() }} onDrop={event => event.preventDefault()}><h1>Books</h1><p className="book-intro">Build your reading library. Add a PDF or EPUB to read offline, explore diagrams, and keep your notes alongside your lessons.</p>{data.books.length > 0 && search}{searchResults}
     {selection && <p role="alert" className="book-error">This book is not imported on this computer.</p>}
-    <BookImports books={data.books} states={states} onImported={imported} onOpen={open} onRemoved={onRemoved}>
+    <BookImports books={data.books} states={states} onImported={imported} onOpen={open} onRemoved={removed}>
     {data.books.filter(item => !['gpu-glossary', 'inference-engineering'].includes(item.id)).map(item => { const state = states[item.id] || emptyState(); const guides = data.guides.filter(g => g.bookId === item.id); return <section className="book-shelf-entry" key={item.id}>
-      <div className="book-summary"><div className="book-cover">{item.cover ? <img src={`/api/library/${item.id}/asset/${item.cover}`} alt={`${item.title} cover`} /> : <BookOpen size={43} />}</div><div><h2>{item.title}</h2><p>{item.author}</p><small>{item.count} {item.format === 'pdf' ? 'pages · PDF' : `sections · ${item.assets.length} images`}</small><button className="primary-button" onClick={() => open(item.id, state.location)}>{state.updatedAt ? 'Continue reading' : 'Open book'}<ArrowRight size={16} /></button><RemoveBook book={item} onRemoved={onRemoved} /></div></div>
+      <div className="book-summary"><div className="book-cover">{item.cover ? <img src={`/api/library/${item.id}/asset/${item.cover}`} alt={`${item.title} cover`} /> : <BookOpen size={43} />}</div><div><h2>{item.title}</h2><p>{item.author}</p><small>{item.count} {item.format === 'pdf' ? 'pages · PDF' : `sections · ${item.assets.length} images`}</small><button className="primary-button" onClick={() => open(item.id, state.location)}>{state.updatedAt ? 'Continue reading' : 'Open book'}<ArrowRight size={16} /></button><RemoveBook book={item} onRemoved={removed} /></div></div>
       {guides.length > 0 && <details className="book-study-overview"><summary>Reading guides · {guides.filter(g => state.completed.includes(g.id)).length} of {guides.length} reviewed</summary><p>Each guide links sections of this book to related lessons.</p>{guides.map(guide => <Guide key={guide.id} guide={guide} done={state.completed.includes(guide.id)} onToggle={() => toggleGuide(guide)} onLesson={onLesson} />)}</details>}
-    </section>})}</BookImports></main>
+    </section>})}
+    {unreadable.map(id => <section className="book-shelf-entry" key={id}><div className="book-summary"><div className="book-cover"><BookX size={43} aria-hidden="true" /></div><div><h2>Could not open this book</h2><p>{id}</p><small>The saved copy in data/library/{id} is damaged. Remove it, then add the PDF or EPUB again. Your notes and reading position are kept.</small><RemoveBook book={{ id, title: id }} onRemoved={removed} /></div></div></section>)}
+    </BookImports></main>
 
   const currentTitle = chapter?.title || `Page ${position}`
   return <div className="book-layout">

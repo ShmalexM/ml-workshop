@@ -234,5 +234,25 @@ class StorageTests(unittest.TestCase):
         self.assertNotIn('fixture',{book['id'] for book in library_.catalog()})
         with self.assertRaises(KeyError):library_.chapter('fixture',1)
         self.assertEqual(list((self.data/'library').glob('.*')),[])
+    def test_a_damaged_book_is_listed_as_unreadable_and_can_be_removed(self):
+        import_book(make_epub(self.root/'other.epub'),self.data,'other')
+        for damage in ('{"title": "cut off', '[]', json.dumps({**self.book,'count':'2'}), json.dumps({**self.book,'id':'fixture'}), b'\xff\xfe'):
+            with self.subTest(damage=str(damage)[:30]):
+                path=self.data/'library/other/book.json'
+                if isinstance(damage,bytes):path.write_bytes(damage)
+                else:path.write_text(damage)
+                library_=Library(self.data)
+                with self.assertLogs('library','WARNING') as logged:
+                    self.assertEqual([book['id'] for book in library_.catalog()],['fixture'])
+                self.assertEqual(len(logged.output),1)
+                self.assertIn('other',logged.output[0])
+                # Logged once per version of the file.
+                with self.assertNoLogs('library','WARNING'):
+                    self.assertEqual(library_.unreadable(),['other'])
+                    self.assertEqual([hit['bookId'] for hit in library_.search('warp')],['fixture','fixture'])
+                with self.assertRaises(KeyError):library_.chapter('other',1)
+                with self.assertRaisesRegex(ValueError,'could not be opened'):import_book(self.root/'other.epub',self.data,'other')
+        library_.remove('other')
+        self.assertEqual((library_.catalog()[0]['id'],library_.unreadable()),('fixture',[]))
 
 if __name__=='__main__':unittest.main()

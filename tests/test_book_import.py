@@ -88,6 +88,23 @@ class UploadTests(unittest.TestCase):
         status, result = self.upload(source.read_bytes(), 'remove.epub')
         self.assertEqual(status, 200, result); self.assertEqual(result['readingState']['notes'], 'Keep these notes')
 
+    def test_damaged_book_is_listed_separately_and_can_be_removed(self):
+        source = make_custom_epub(self.root/'damaged.epub', {'one.xhtml': '<html><body><h1>Damaged later</h1></body></html>'})
+        status, result = self.upload(source.read_bytes(), 'damaged.epub')
+        self.assertEqual(status, 200, result); book_id = result['book']['id']
+        (self.data/'library'/book_id/'book.json').write_text('{"title": "cut off')
+        with self.get('/api/library') as response:library = json.load(response)
+        self.assertNotIn(book_id, [book['id'] for book in library['books']])
+        self.assertIn(book_id, library['unreadable'])
+        # Importing the same file again asks for removal first instead of failing with a server error.
+        status, result = self.upload(source.read_bytes(), 'damaged.epub')
+        self.assertEqual(status, 409, result)
+        self.assertIn('Remove it in Books', result['error'])
+        self.assertEqual(self.post_json('/api/library/remove', {'bookId': book_id}), (200, {'ok': True}))
+        with self.get('/api/library') as response:self.assertNotIn(book_id, json.load(response)['unreadable'])
+        status, result = self.upload(source.read_bytes(), 'damaged.epub')
+        self.assertEqual((status, result['book']['id']), (200, book_id))
+
     def test_over_limit_epub_returns_plain_error_and_leaves_nothing(self):
         before = Library(self.data).catalog()
         source = make_custom_epub(self.root/'bomb.epub', {'big.xhtml': '<html><body>' + '<p>' + 'a'*(9 << 20) + '</p></body></html>'})

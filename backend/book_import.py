@@ -7,7 +7,7 @@ import sys
 import tempfile
 import time
 
-from library import Library, digest, import_book, normalized
+from library import Library, UnreadableBook, digest, import_book, normalized
 
 SUGGESTED = {'gpu-glossary': 'GPU Glossary', 'inference-engineering': 'Inference Engineering'}
 PARSE_TIMEOUT = 90
@@ -32,7 +32,17 @@ def sweep_staging(data_dir):
                 pass
 
 
+UNREADABLE = 'Your saved copy of this book could not be opened. Remove it in Books, then add the file again.'
+
+
 def import_upload(source, data_dir, filename, suggested=''):
+    try:
+        return import_checked_upload(source, data_dir, filename, suggested)
+    except UnreadableBook:
+        raise ImportConflict(UNREADABLE) from None
+
+
+def import_checked_upload(source, data_dir, filename, suggested):
     data_dir = Path(data_dir)
     sweep_staging(data_dir)
     library = Library(data_dir)

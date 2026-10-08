@@ -198,7 +198,7 @@ class Handler(BaseHTTPRequestHandler):
         if not self.allowed(token=path.startswith('/api/') and not PUBLIC_API.fullmatch(path)):return
         if path=='/api/portfolio':return self.send(dict(**load_portfolio(DATA),projectState=project_state()))
         if path=='/api/library':
-            return self.send(dict(books=LIBRARY.catalog(),guides=study_guides(LIBRARY),readingState=reading_state()))
+            return self.send(dict(books=LIBRARY.catalog(),unreadable=LIBRARY.unreadable(),guides=study_guides(LIBRARY),readingState=reading_state()))
         if path=='/api/library/search':
             query=parse_qs(parsed.query)
             try:return self.send(dict(results=LIBRARY.search(query.get('q',[''])[0],query.get('book',[None])[0])))
