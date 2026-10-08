@@ -1,7 +1,9 @@
 """A fake AI provider for the assistant tests: Ollama and OpenAI-compatible routes on 127.0.0.1:0.
 
 Set `mode` to choose the behaviour of the next chat request: ok, status, redirect, slow, endless or
-midstream. Hostile modes: echo and echostream send the key back changed; flood, nonl and noise send a
+midstream. Answers that are not from an AI provider: empty and html answer 200 with an empty body or an HTML
+page on every route. plain sends one JSON chat answer without streaming, and early sends part of a stream
+with no end marker. Hostile modes: echo and echostream send the key back changed; flood, nonl and noise send a
 stream that never ends a line, never ends an event, or never ends; slowhead and slowerror send headers or an
 error body one byte at a time, and slowbody does the same for a model list. Every request is recorded in
 `requests`; `closed` gets the time.monotonic() at which an endless or slow answer saw its client go away.
@@ -112,6 +114,12 @@ class _Handler(BaseHTTPRequestHandler):
         if mode == 'slowerror':
             self.drip(b'HTTP/1.1 500 Internal Server Error\r\nContent-Type: application/json\r\nContent-Length: 4096\r\n\r\n', b' ')
             return True
+        if mode == 'empty':
+            self.reply(200, b'')
+            return True
+        if mode == 'html':
+            self.reply(200, b'<html>proxy error</html>', 'text/html')
+            return True
         if mode == 'redirect':
             self.send_response(302)
             self.send_header('Location', self.fake.redirect_to)
@@ -153,6 +161,11 @@ class _Handler(BaseHTTPRequestHandler):
             message = 'In-stream: ' + ' / '.join(changed_keys(key))
             self.connection.sendall(STREAM_HEAD + b'data: ' + json.dumps({'error': {'message': message}}).encode() + b'\n\n')
             return self.ended()
+        if mode == 'plain':
+            # Some servers ignore stream: one JSON answer, over several lines.
+            answer = {'model': 'm', 'message': {'role': 'assistant', 'content': ANSWER}, 'done': True} if ollama else \
+                {'object': 'chat.completion', 'choices': [{'index': 0, 'message': {'role': 'assistant', 'content': ANSWER}}]}
+            return self.reply(200, json.dumps(answer, indent=2).encode())
         if mode == 'slow':
             time.sleep(self.fake.delay)
         self.send_response(200)
@@ -160,6 +173,9 @@ class _Handler(BaseHTTPRequestHandler):
         self.end_headers()
         if mode == 'endless':
             return self.endless(ollama)
+        if mode == 'early':
+            self.wfile.write(NDJSON_PIECES[0].split(b'\n')[0] + b'\n' if ollama else SSE_PIECES[2] + b'\n')
+            return
         if mode == 'midstream':
             first = NDJSON_PIECES[0].split(b'\n')[0] + b'\n' if ollama else SSE_PIECES[2] + b'\n'
             error = b'{"error":"model crashed"}\n' if ollama else b'data: {"error":{"message":"model crashed"}}\n\n'

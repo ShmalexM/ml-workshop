@@ -196,11 +196,23 @@ def _error_text(error):
     return str(error)[:300]
 
 
-def openai_events(data):
-    """Turn the data of one OpenAI-style event into ('delta', text), ('done', None) or ('error', text)."""
-    if data.strip() == '[DONE]':
+def openai_item(data):
+    """The data of one OpenAI-style event: the text [DONE], or the JSON object, or None."""
+    return '[DONE]' if data.strip() == '[DONE]' else _json_line(data)
+
+
+def shaped(protocol, obj):
+    """True when obj looks like part of a chat answer: for OpenAI, [DONE] or an object with a list of choices or
+    an error; for Ollama, an object with a message, done or an error."""
+    if protocol == 'ollama':
+        return isinstance(obj, dict) and (isinstance(obj.get('message'), dict) or 'done' in obj or bool(obj.get('error')))
+    return obj == '[DONE]' or isinstance(obj, dict) and (isinstance(obj.get('choices'), list) or bool(obj.get('error')))
+
+
+def openai_events(obj):
+    """Turn one OpenAI-style item from openai_item into ('delta', text), ('done', None) or ('error', text)."""
+    if obj == '[DONE]':
         return [('done', None)]
-    obj = _json_line(data)
     if not isinstance(obj, dict):
         return []
     if obj.get('error'):
@@ -240,21 +252,56 @@ def ollama_events(obj):
 
 
 class StreamDecoder:
-    """Bytes in, ('delta' | 'done' | 'error', value) events out, for one protocol."""
+    """Bytes in, ('delta' | 'thinking' | 'done' | 'error', value) events out, for one protocol.
+
+    `shaped` turns True at the first item in the shape of a chat answer (see shaped()). Until then `head` keeps
+    the first HEAD_BYTES of the body, so that close() can read a provider that ignored stream and sent one JSON
+    answer, and run_stream can say what came back instead.
+    """
+    HEAD_BYTES = 64 * 1024
 
     def __init__(self, protocol):
         self.protocol = protocol
         self.parser = NDJSONParser() if protocol == 'ollama' else SSEParser()
+        self.shaped = False
+        self.head = b''
+
+    def _convert(self, obj):
+        if not shaped(self.protocol, obj):
+            return []
+        self.shaped = True
+        return ollama_events(obj) if self.protocol == 'ollama' else openai_events(obj)
 
     def _events(self, items):
-        convert = ollama_events if self.protocol == 'ollama' else openai_events
-        return [event for item in items for event in convert(item)]
+        return [event for item in items
+                for event in self._convert(item if self.protocol == 'ollama' else openai_item(item))]
 
     def feed(self, chunk):
+        if not self.shaped and len(self.head) < self.HEAD_BYTES:
+            self.head += chunk[:self.HEAD_BYTES - len(self.head)]
         return self._events(self.parser.feed(chunk))
 
     def close(self):
-        return self._events(self.parser.close())
+        events = self._events(self.parser.close())
+        if not self.shaped and len(self.head) < self.HEAD_BYTES:
+            # One JSON answer, perhaps over several lines, from a provider that does not stream.
+            events += self._convert(_json_line(self.head.decode('utf-8', 'replace')))
+        return events
+
+
+NOT_A_PROVIDER = 'The address answered, but not like an AI provider ({}).'
+
+
+def not_a_provider(content_type, head):
+    """The message for an answer with HTTP 200 that is not a chat answer or a model list."""
+    text = head.strip()
+    if not text:
+        kind = 'empty answer'
+    elif 'html' in (content_type or '').lower() or text[:1] == b'<':
+        kind = 'HTML page'
+    else:
+        kind = 'unknown format'
+    return NOT_A_PROVIDER.format(kind)
 
 
 # ---- Requests ----
@@ -280,11 +327,11 @@ def models_path(protocol):
     return '/api/tags' if protocol == 'ollama' else '/models'
 
 
-def parse_models(protocol, payload):
+def parse_models(protocol, payload, content_type=''):
     try:
         obj = json.loads(payload)
     except ValueError:
-        raise ProviderError('The provider sent a model list that could not be read.')
+        raise ProviderError(not_a_provider(content_type, payload[:StreamDecoder.HEAD_BYTES]))
     items = obj.get('models') if protocol == 'ollama' and isinstance(obj, dict) else obj.get('data') if isinstance(obj, dict) else None
     if not isinstance(items, list):
         raise ProviderError('The provider sent a model list that could not be read.')
@@ -499,7 +546,9 @@ def run_stream(upstream, protocol, provider, model, messages, max_tokens, events
     """Read one streamed answer into the events queue as ('delta', text), then ('done', info) or ('error', text).
 
     Runs on its own thread so that the request handler can watch the browser connection. Ends with an error
-    when the provider sends more than the size limits or runs past the deadline.
+    when the provider sends more than the size limits or runs past the deadline, and when the answer has nothing
+    in the shape of a chat answer, such as an empty body or an HTML page. An answer in that shape that ends
+    without [DONE] or done counts as finished: some OpenAI-compatible servers leave the marker out.
     """
     suffix, body = chat_request(protocol, provider, model, messages, max_tokens)
     size = received = 0
@@ -541,7 +590,10 @@ def run_stream(upstream, protocol, provider, model, messages, max_tokens, events
                 if kind in ('done', 'error'):
                     return
             if not chunk:
-                events.put(('done', {}))
+                if decoder.shaped:
+                    events.put(('done', {}))
+                else:
+                    events.put(('error', not_a_provider(response.getheader('Content-Type', ''), decoder.head)))
                 return
     except Exception as exc:  # noqa: BLE001 - every failure becomes a message; nothing here may log the key.
         if upstream.expired or not upstream.cancelled.is_set():
@@ -568,7 +620,7 @@ def fetch_models(upstream, protocol):
             if size > MAX_MODELS_BYTES:
                 raise ProviderError('The model list is too large to read.')
             parts.append(chunk)
-        return parse_models(protocol, b''.join(parts))
+        return parse_models(protocol, b''.join(parts), response.getheader('Content-Type', ''))
     except ProviderError:
         raise
     except Exception as exc:  # noqa: BLE001

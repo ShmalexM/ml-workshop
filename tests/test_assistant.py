@@ -196,6 +196,37 @@ class ProviderLimitTests(unittest.TestCase):
             providers.fetch_models(providers.Upstream(self.target, '', 1, 'Too slow.'), 'openai')
         self.assertLess(time.monotonic() - started, 3)
 
+    def test_answers_that_are_not_from_a_provider(self):
+        for protocol in ('openai', 'ollama'):
+            for mode, kind in (('empty', 'empty answer'), ('html', 'HTML page')):
+                with self.subTest(protocol=protocol, mode=mode):
+                    message = providers.NOT_A_PROVIDER.format(kind)
+                    events, _ = self.stream(mode, protocol)
+                    self.assertEqual(events, [('error', message)])
+                    upstream = providers.Upstream(self.ollama if protocol == 'ollama' else self.target, KEY)
+                    with self.assertRaises(providers.ProviderError) as raised:
+                        providers.fetch_models(upstream, protocol)
+                    self.assertEqual(str(raised.exception), message)
+        # JSON that is not in the shape of a chat answer is not one either.
+        for protocol, data in (('openai', b'data: {"choices":42}\n\n'), ('openai', b'{"ok":true}'), ('ollama', b'{}\n')):
+            with self.subTest(data=data):
+                decoder = providers.StreamDecoder(protocol)
+                self.assertEqual(decoder.feed(data) + decoder.close(), [])
+                self.assertFalse(decoder.shaped)
+                self.assertEqual(providers.not_a_provider('application/json', decoder.head),
+                                 providers.NOT_A_PROVIDER.format('unknown format'))
+
+    def test_answers_without_streaming_or_without_an_end_marker(self):
+        for protocol in ('openai', 'ollama'):
+            with self.subTest(protocol=protocol):
+                # A provider that ignores stream and sends one JSON answer.
+                events, _ = self.stream('plain', protocol)
+                self.assertEqual(''.join(v for k, v in events if k == 'delta'), ANSWER)
+                self.assertEqual(events[-1][0], 'done')
+                # A stream in the right shape that ends without [DONE] or done: the text so far counts as the answer.
+                events, _ = self.stream('early', protocol)
+                self.assertEqual(events, [('delta', 'Hel'), ('done', {})])
+
     def test_abort_ends_a_stalled_header_read(self):
         self.fake.mode = 'slowhead'
         upstream = providers.Upstream(self.target, KEY)
@@ -355,6 +386,41 @@ def wait_idle(server):
 
 def deltas(events):
     return ''.join(e['text'] for e in events if e['type'] == 'delta')
+
+
+class NotAProviderTests(unittest.TestCase):
+    """An address that answers HTTP 200 with an empty body or an HTML page is not an AI provider."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.fake = FakeLLM()
+        cls.tmp = tempfile.TemporaryDirectory(prefix='ml-assistant-test-', ignore_cleanup_errors=True)
+        cls.server = Workshop(Path(cls.tmp.name) / 'data')
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.server.stop()
+        cls.fake.stop()
+        cls.tmp.cleanup()
+
+    def test_connection_test_chat_and_model_list_say_so(self):
+        status, config = self.server.json('/api/assistant/config', dict(
+            enabled=True, provider='custom', baseUrl=self.fake.url + '/v1', model='fake-model', key=KEY))
+        self.assertEqual(status, 200, config)
+        for mode, kind in (('empty', 'empty answer'), ('html', 'HTML page')):
+            with self.subTest(mode=mode):
+                message = providers.NOT_A_PROVIDER.format(kind)
+                self.fake.reset(mode)
+                self.assertEqual(self.server.json('/api/assistant/test', {}), (502, {'error': message}))
+                status, events = self.server.chat(question())
+                self.assertEqual((status, [e['type'] for e in events]), (200, ['meta', 'error']))
+                self.assertEqual(events[-1]['message'], message)
+                wait_idle(self.server)
+                self.assertEqual(self.server.json('/api/assistant/models', {}), (502, {'error': message}))
+        # A provider that sends one JSON answer instead of a stream passes.
+        self.fake.reset('plain')
+        status, reply = self.server.json('/api/assistant/test', {})
+        self.assertEqual((status, reply.get('reply')), (200, ANSWER), reply)
 
 
 class AssistantServerTests(unittest.TestCase):
