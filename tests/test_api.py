@@ -44,6 +44,8 @@ class ApiTests(unittest.TestCase):
         version=json.loads((ROOT/'package.json').read_text(encoding='utf-8'))['version']
         health=self.request('/api/health')
         self.assertEqual((health['app'],health['version']),('ml-workshop',version))
+    def test_a_new_learner_starts_at_python_from_zero(self):
+        self.assertEqual(self.request('/api/state')['currentLesson'],'python-1')
     def test_origin_and_session_guards(self):
         payload={'lessonId':'foundations-1','code':'print(1)','mode':'run'}
         for headers in [{'Origin':'https://example.com'},{'X-Workshop-Token':'wrong'},{'Sec-Fetch-Site':'cross-site'},{'Host':'attacker.example'}]:

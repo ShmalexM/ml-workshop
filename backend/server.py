@@ -16,7 +16,7 @@ import tempfile
 import time
 import traceback
 
-from courses import BY_ID, public_curriculum
+from courses import BY_ID, LESSONS, public_curriculum
 from runner import execute, node_binary
 from portfolio import load_portfolio, task_progress
 from library import Library, MAX_BOOK_BYTES
@@ -106,7 +106,7 @@ def state():
         drafts=db.execute('SELECT lesson,code,notes,MIN(updated,?) FROM drafts',(now_ms(),)).fetchall()
         complete=db.execute('SELECT lesson,at,xp FROM completions').fetchall()
         current=db.execute("SELECT value FROM settings WHERE key='currentLesson'").fetchone()
-        return dict(draftUpdated={r[0]:r[3] for r in drafts},drafts={r[0]:r[1] for r in drafts},notes={r[0]:r[2] for r in drafts},completed={r[0]:dict(at=r[1],xp=r[2]) for r in complete},currentLesson=current[0] if current and current[0] in BY_ID else 'foundations-1',activity=[r[0] for r in db.execute('SELECT day FROM activity ORDER BY day')])
+        return dict(draftUpdated={r[0]:r[3] for r in drafts},drafts={r[0]:r[1] for r in drafts},notes={r[0]:r[2] for r in drafts},completed={r[0]:dict(at=r[1],xp=r[2]) for r in complete},currentLesson=current[0] if current and current[0] in BY_ID else LESSONS[0]['id'],activity=[r[0] for r in db.execute('SELECT day FROM activity ORDER BY day')])
 
 def game_progress():
     with connect() as db:
