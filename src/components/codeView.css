@@ -1,27 +1,30 @@
 /* Line numbers, diff rows and view toggle adapted from beautiful-ui CodeBlock (github.com/slev12397/beautiful-ui), MIT License, Copyright (c) 2026 Shane Levine; see THIRD_PARTY_NOTICES.md. */
+/* Code colors. Light by default; Settings can switch code to a dark background (.code-dark on .app). */
+:root{--code-bg:#fbfcfd;--code-frame:#dce4ee;--code-line:#e3e9f0;--code-text:#1d2b40;--code-strong:#0c1528;--code-soft:#5f6f86;--code-gutter-bg:#f5f7fa;--code-gutter-line:#e3e9f0;--code-active:#eef3f8;--run-bg:#fff;--run-border:#b9c6d4;--run-text:#1d2b40;--run-hover:#eef3f7;--hl-keyword:#708;--hl-string:#a11;--hl-number:#164;--hl-comment:#940;--hl-function:#00f;--hl-type:#167;--diff-add-bg:#e7f6ec;--diff-del-bg:#fdeef0;--diff-add-mark:#1d7a45;--diff-del-mark:#b4323c}
+.code-dark{--code-bg:#192536;--code-frame:#273348;--code-line:#334156;--code-text:#dce3ee;--code-strong:#f6f8ff;--code-soft:#aab7c8;--code-gutter-bg:#192536;--code-gutter-line:#263349;--code-active:#ffffff08;--run-bg:#172234;--run-border:#a0aec0;--run-text:#fff;--run-hover:#2b3b4e;--hl-keyword:#d08be6;--hl-string:#98c379;--hl-number:#d19a66;--hl-comment:#939eb0;--hl-function:#61afef;--hl-type:#e5c07b;--diff-add-bg:#28383e;--diff-del-bg:#312e3e;--diff-add-mark:#98c379;--diff-del-mark:#ef8a92}
 pre.code-view{padding:14px 0;tab-size:4}
 .code-view>code{display:block;width:max-content;min-width:100%;font:inherit}
 .code-row{display:flex;position:relative}
-.code-num{flex:none;width:3.4em;padding-right:.9em;margin-right:.9em;border-right:1px solid #2c3a50;text-align:right;color:#94a2b6;font-variant-numeric:tabular-nums;user-select:none;-webkit-user-select:none}
+.code-num{flex:none;width:3.4em;padding-right:.9em;margin-right:.9em;border-right:1px solid var(--code-gutter-line);text-align:right;color:var(--code-soft);font-variant-numeric:tabular-nums;user-select:none;-webkit-user-select:none}
 .code-text{white-space:pre;padding-right:20px}
-.hl-keyword{color:#d08be6}
-.hl-string{color:#98c379}
-.hl-number{color:#d19a66}
-.hl-comment{color:#939eb0;font-style:italic}
-.hl-function{color:#61afef}
-.hl-type{color:#e5c07b}
+.hl-keyword{color:var(--hl-keyword)}
+.hl-string{color:var(--hl-string)}
+.hl-number{color:var(--hl-number)}
+.hl-comment{color:var(--hl-comment);font-style:italic}
+.hl-function{color:var(--hl-function)}
+.hl-type{color:var(--hl-type)}
 
 /* Diff: two line-number columns (your code, solution), then a − or + marker. */
 .diff-view .code-num{width:2.8em;padding-right:.6em;margin-right:0;border-right:0}
-.diff-view .code-num+.code-num{border-right:1px solid #2c3a50}
+.diff-view .code-num+.code-num{border-right:1px solid var(--code-gutter-line)}
 .diff-mark{flex:none;width:2em;text-align:center;user-select:none;-webkit-user-select:none}
-.code-row.add{background:#28383e}
-.code-row.del{background:#312e3e}
+.code-row.add{background:var(--diff-add-bg)}
+.code-row.del{background:var(--diff-del-bg)}
 .code-row.add::before,.code-row.del::before{content:'';position:absolute;inset:0 auto 0 0;width:3px}
-.code-row.add::before{background:#98c379}
-.code-row.del::before{background:repeating-linear-gradient(45deg,#e06c75 0 1.5px,transparent 1.5px 3px)}
-.code-row.add .diff-mark{color:#98c379}
-.code-row.del .diff-mark{color:#ef8a92}
+.code-row.add::before{background:var(--diff-add-mark)}
+.code-row.del::before{background:repeating-linear-gradient(45deg,var(--diff-del-mark) 0 1.5px,transparent 1.5px 3px)}
+.code-row.add .diff-mark{color:var(--diff-add-mark)}
+.code-row.del .diff-mark{color:var(--diff-del-mark)}
 .diff-legend{display:flex;flex-wrap:wrap;gap:4px 18px;margin:0 0 10px;font-size:12px;line-height:1.6;color:#5b6b82}
 .diff-legend b{display:inline-block;width:1.3em;font:700 13px ui-monospace,SFMono-Regular,Menlo,monospace}
 .diff-legend .diff-add{color:#1d7a45}
