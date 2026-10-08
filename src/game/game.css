@@ -39,7 +39,7 @@
 .g-error { margin: 12px 0; padding: 10px 14px; border-radius: 6px; background: #3a1418; border: 1px solid #7c2a32; color: #ffd8d8; font-size: 13px; display: flex; justify-content: space-between; gap: 12px; }
 
 /* Rarity text */
-.rt-basic { color: #f1f1f1; } .rt-common { color: #3ee03e; } .rt-rare { color: #4ea7ff; } .rt-epic { color: #ff5a5a; } .rt-legendary { color: #ffa233; }
+.rt-basic { color: #f1f1f1; } .rt-common { color: #3ee03e; } .rt-rare { color: #4ea7ff; } .rt-epic { color: #c77dff; } .rt-legendary { color: #ffa233; }
 
 /* Item icon frames: each rarity adds a layer of ornament on top of the last. */
 .g-icon {
@@ -52,10 +52,10 @@
 .g-icon.dim { filter: saturate(.4) brightness(.6); }
 .g-icon.r-common { border-color: #2fbf2f; background: radial-gradient(circle at 50% 40%, #233b23, #101610 75%); }
 .g-icon.r-rare { border-color: #2f8cff; background: radial-gradient(circle at 50% 40%, #173a6a, #0b1322 75%); box-shadow: inset 0 0 8px rgba(47, 140, 255, .12); }
-.g-icon.r-epic { border-color: #ff2b3a; background: radial-gradient(circle at 50% 40%, #5a1019, #16070a 75%); box-shadow: inset 0 0 8px rgba(255, 43, 58, .16); }
+.g-icon.r-epic { border-color: #a64df0; background: radial-gradient(circle at 50% 40%, #3a1659, #0f0716 75%); box-shadow: inset 0 0 8px rgba(166, 77, 240, .16); }
 .g-icon.r-epic::before {
   content: ''; position: absolute; inset: 7%; border-radius: 50%; z-index: 0;
-  border: 1px dashed rgba(255, 90, 90, .55); animation: g-spin 14s linear infinite;
+  border: 1px dashed rgba(199, 125, 255, .55); animation: g-spin 14s linear infinite;
 }
 .g-icon.r-epic::after, .g-icon.r-legendary::after {
   content: ''; position: absolute; inset: 0; z-index: 2; pointer-events: none;
@@ -66,7 +66,7 @@
     linear-gradient(315deg, var(--corner) 0 7px, transparent 7px) bottom right;
   background-size: 50% 50%; background-repeat: no-repeat;
 }
-.g-icon.r-epic { --corner: #ff4d58; }
+.g-icon.r-epic { --corner: #b46bff; }
 .g-icon.r-legendary {
   --corner: #ffd27a;
   border-color: #ffb03a;
@@ -143,6 +143,16 @@
 .hero-siege strong { font-family: var(--g-serif); color: var(--g-text); font-size: 15px; }
 .hero-siege small { font-size: 11px; color: var(--g-muted); }
 .fight-button { padding: 12px 20px; font-size: 15px; }
+.hero-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+/* Inline confirm steps: bulk actions, a lost Legendary effect, fighting with closed chests. */
+.g-confirm { margin: 12px 0; padding: 12px 14px; border-radius: 8px; background: #1d1a14; border: 1px solid #4a3d22; display: grid; gap: 8px; font-size: 13px; color: #e8d5a8; }
+.g-confirm p { color: #e8d5a8; margin: 0; }
+.g-confirm ul { margin: 0; padding-left: 18px; display: grid; gap: 3px; }
+.g-confirm li em { font-style: normal; color: #3ee03e; font-size: 12px; }
+.g-confirm small { color: var(--g-muted); }
+.g-confirm > div { display: flex; gap: 8px; flex-wrap: wrap; }
+.g-confirm.inline { margin: 0; }
+.bulk-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
 .armory-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(320px, 1fr); gap: 16px; margin-top: 16px; align-items: start; }
 .doll { display: grid; grid-template-columns: 200px minmax(0, 1fr) 200px; gap: 10px; padding: 12px; }
 .doll-col { display: flex; flex-direction: column; gap: 6px; }
@@ -165,7 +175,7 @@
 .chest-row small { font-size: 12px; color: var(--g-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chest-open-tag { font-size: 12px; font-weight: 700; color: #1b1206; background: linear-gradient(#f2cf7c, #c99636); border-radius: 5px; padding: 5px 10px; }
 .tier-title { font-family: var(--g-serif); font-weight: 700; }
-.tier-1 { color: #d2b48c; } .tier-2 { color: #c3cbd6; } .tier-3 { color: #5eb0ff; } .tier-4 { color: #ff6464; } .tier-5 { color: #ffb84d; }
+.tier-1 { color: #d2b48c; } .tier-2 { color: #c3cbd6; } .tier-3 { color: #5eb0ff; } .tier-4 { color: #c084ff; } .tier-5 { color: #ffb84d; }
 .opened-history { margin-top: 12px; font-size: 13px; color: var(--g-muted); }
 .opened-history summary { cursor: pointer; padding: 6px 0; }
 .opened-history > div { padding: 4px 0; border-top: 1px solid #1f2335; }
@@ -192,7 +202,8 @@
 .lifetime strong { font-size: 17px; color: var(--g-text); font-family: var(--g-serif); }
 .stat-sheet { margin: 0; display: grid; gap: 2px; }
 .stat-sheet > div { display: flex; justify-content: space-between; gap: 12px; padding: 7px 4px; border-bottom: 1px solid #1f2335; font-size: 13px; }
-.stat-sheet dt { color: var(--g-muted); }
+.stat-sheet dt { color: var(--g-muted); display: grid; gap: 2px; }
+.stat-sheet dt small { font-size: 11px; color: #8e8b80; line-height: 1.4; }
 .stat-sheet dd { margin: 0; font-weight: 650; text-align: right; }
 .stat-sheet .stat-effect { display: grid; justify-content: stretch; }
 .stat-sheet .stat-effect dd { text-align: left; font-weight: 400; color: var(--g-text); }
@@ -202,7 +213,7 @@
   display: grid; gap: 2px; width: 300px; padding: 10px 12px; border-radius: 6px; font-size: 13px; line-height: 1.45;
   background: rgba(10, 12, 20, .97); border: 1px solid #3a3f58; color: #f2f2f2; box-shadow: 0 10px 30px rgba(0, 0, 0, .5);
 }
-.item-tooltip.tt-rare { border-color: #23508e; } .item-tooltip.tt-epic { border-color: #7c2a32; } .item-tooltip.tt-legendary { border-color: #9a5a12; box-shadow: 0 0 22px rgba(255, 138, 0, .25), 0 10px 30px rgba(0, 0, 0, .5); }
+.item-tooltip.tt-rare { border-color: #23508e; } .item-tooltip.tt-epic { border-color: #5a2c80; } .item-tooltip.tt-legendary { border-color: #9a5a12; box-shadow: 0 0 22px rgba(255, 138, 0, .25), 0 10px 30px rgba(0, 0, 0, .5); }
 .tt-name { font-size: 15px; font-family: var(--g-serif); }
 .tt-ilvl { color: #ffd100; font-size: 12px; }
 .tt-row { display: flex; justify-content: space-between; }
@@ -212,9 +223,11 @@
 .tt-flavor { color: #e4bc6a; font-style: italic; margin-top: 4px; }
 .tt-source { color: #8e8b80; font-size: 11px; margin-top: 4px; }
 .tt-equipped { color: #8e8b80; font-size: 11px; }
+.tt-gain { margin-top: 4px; font-weight: 650; } .tt-gain.up { color: #3ee03e; } .tt-gain.down { color: #ff8a7a; }
+.tt-warn { color: #ffb84d; font-size: 12px; }
 .item-tooltip em { font-style: normal; font-size: 12px; }
 .item-tooltip em.up { color: #3ee03e; } .item-tooltip em.down { color: #ff5a5a; }
-.floating-tip { position: fixed; z-index: 50; pointer-events: none; }
+.floating-tip { position: fixed; z-index: 50; pointer-events: none; text-align: left; }
 .item-detail { position: fixed; right: 22px; bottom: 22px; z-index: 40; padding: 12px; display: grid; gap: 10px; box-shadow: 0 18px 50px rgba(0, 0, 0, .55); }
 .item-detail .item-tooltip { box-shadow: none; border: 0; background: transparent; padding: 0; }
 .item-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
@@ -237,16 +250,16 @@
 .loot-card { display: flex; gap: 12px; align-items: center; padding: 9px 12px 9px 9px; border-radius: 10px; background: #12151f; border: 1px solid #2a2f45; animation: loot-in .45s cubic-bezier(.2, 1.3, .4, 1) both; }
 .loot-card.lc-common { border-color: #275e27; }
 .loot-card.lc-rare { border-color: #23508e; box-shadow: 0 0 14px rgba(47, 140, 255, .18); }
-.loot-card.lc-epic { border-color: #8c2530; box-shadow: 0 0 18px rgba(255, 43, 58, .25); }
+.loot-card.lc-epic { border-color: #6a2f99; box-shadow: 0 0 18px rgba(166, 77, 240, .25); }
 .loot-card.lc-legendary { border-color: #c27a1a; background: linear-gradient(100deg, #2a1806, #12151f 60%); box-shadow: 0 0 26px rgba(255, 138, 0, .4); }
 .loot-text { display: grid; gap: 2px; flex: 1; min-width: 0; }
 .loot-text strong { font-size: 14px; font-family: var(--g-serif); }
 .loot-text span { font-size: 12px; color: var(--g-muted); }
 .loot-text .loot-effect { color: #ffa233; }
+.loot-text .loot-warn { color: #ffb84d; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 4px; }
 .loot-act { display: grid; gap: 4px; justify-items: end; }
 .upgrade { font-size: 11px; color: #3ee03e; font-weight: 700; }
 .equipped-note { font-size: 12px; color: var(--g-muted); }
-.loot-hover { margin-top: 10px; display: flex; justify-content: center; text-align: left; }
 .chest-dialog.legendary-burst { animation: g-shake .1s linear 6, legend-flash 1.4s ease-out; }
 @keyframes loot-in { from { transform: translateY(18px) scale(.96); opacity: 0; } }
 @keyframes legend-flash { 0% { box-shadow: 0 0 0 0 rgba(255, 170, 60, 0); } 20% { box-shadow: 0 0 24px 4px rgba(255, 150, 40, .18); } 100% { box-shadow: 0 0 0 0 rgba(255, 150, 40, 0); } }

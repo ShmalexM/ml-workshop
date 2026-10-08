@@ -60,7 +60,7 @@ RARITIES = [
     dict(id=rid, name=name, color=color, index=index)
     for index, (rid, name, color) in enumerate([
         ('basic', 'Basic', '#FFFFFF'), ('common', 'Common', '#1EFF00'),
-        ('rare', 'Rare', '#0070DD'), ('epic', 'Epic', '#E8343A'),
+        ('rare', 'Rare', '#0070DD'), ('epic', 'Epic', '#A64DF0'),
         ('legendary', 'Legendary', '#FF8000'),
     ])
 ]
@@ -677,6 +677,18 @@ def equip(db, hero, item):
                'ON CONFLICT(slot) DO UPDATE SET item=excluded.item', (item['slot'], item['id']))
 
 
+def equip_many(db, hero, ids):
+    """Equip up to one item per slot, in order, all or nothing."""
+    if (not isinstance(ids, list) or not 1 <= len(ids) <= len(SLOTS) or
+            any(type(iid) is not int or not 1 <= iid <= 2**63 - 1 for iid in ids)):
+        raise ValueError(f'Choose 1–{len(SLOTS)} items to equip.')
+    items = [owned_item(db, iid) for iid in ids]
+    if len({item['slot'] for item in items}) != len(items):
+        raise ValueError('Choose at most one item for each slot.')
+    for item in items:
+        equip(db, hero, item)
+
+
 def create_hero(db, body, rng):
     if saved_hero(db):
         raise ValueError('Retire your current hero first.')
@@ -778,7 +790,7 @@ def handle(db, action, body, progress, rng=None):
     """Serialize every mutation, including eligibility checks and the response snapshot."""
     if not isinstance(body, dict):
         raise ValueError('Expected an object.')
-    if action not in ('hero', 'open', 'equip', 'unequip', 'discard', 'settings',
+    if action not in ('hero', 'open', 'equip', 'equip-many', 'unequip', 'discard', 'settings',
                       'battle/start', 'battle/finish', 'retire'):
         raise ValueError('Unknown game action.')
     if rng is None:
@@ -808,6 +820,8 @@ def handle(db, action, body, progress, rng=None):
                 extra = open_chest(db, hero, body, progress, rng)
             elif action == 'equip':
                 equip(db, hero, owned_item(db, body.get('itemId')))
+            elif action == 'equip-many':
+                equip_many(db, hero, body.get('itemIds'))
             elif action == 'unequip':
                 slot = body.get('slot')
                 if slot not in SLOTS:

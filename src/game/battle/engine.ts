@@ -52,6 +52,8 @@ export class BattleEngine{
  private lastInput:'mouse'|'key'='mouse';private reported=false
  private raf=0;private timer=new THREE.Timer();private hudT=0;private disposed=false;private still=reducedMotion()
  private ring:THREE.Mesh;private cursorRing:THREE.Mesh;private shieldMesh:THREE.Mesh
+ // A flat class-colored copy of the hero, drawn on top of everything while the boss stands in front of it.
+ private xray:THREE.Mesh[]=[];private xrayOn=false;private xrayMat:THREE.MeshBasicMaterial
  private cleanups:(()=>void)[]=[]
  constructor(private canvas:HTMLCanvasElement,private overlay:HTMLElement,private setup:BattleSetup,private cb:Callbacks){
   this.renderer=createRenderer(canvas,{shadows:true});this.scene.environment=environment(this.renderer);this.scene.environmentIntensity=.45
@@ -62,6 +64,9 @@ export class BattleEngine{
   this.scene.add(this.particles.points)
   this.kit=KITS[setup.appearance.cls]||KITS.warrior
   this.hero=new HeroModel(setup.appearance);this.scene.add(this.hero.object)
+  this.xrayMat=new THREE.MeshBasicMaterial({color:setup.classColor,transparent:true,opacity:.42,depthTest:false,depthWrite:false})
+  const solid:THREE.Mesh[]=[];this.hero.object.traverse(o=>{const m=o as THREE.Mesh;if(m.isMesh&&!(m.material as THREE.Material).transparent)solid.push(m)})
+  for(const m of solid){const x=new THREE.Mesh(m.geometry,this.xrayMat);x.renderOrder=20;x.visible=false;x.raycast=()=>{};m.add(x);this.xray.push(x)}
   this.maxHp=setup.stats.maxHp;this.hp=this.maxHp
   this.ring=new THREE.Mesh(new THREE.RingGeometry(.55,.68,32),glow(setup.classColor,.9,THREE.DoubleSide));this.ring.rotation.x=-Math.PI/2;this.ring.position.y=.03;this.scene.add(this.ring)
   this.cursorRing=new THREE.Mesh(new THREE.RingGeometry(.3,.42,24),glow('#7aff7a',.9,THREE.DoubleSide));this.cursorRing.rotation.x=-Math.PI/2;this.cursorRing.visible=false;this.scene.add(this.cursorRing)
@@ -86,7 +91,7 @@ export class BattleEngine{
  }
  dispose(){
   this.disposed=true;cancelAnimationFrame(this.raf);for(const c of this.cleanups)c()
-  this.hero.dispose();this.particles.dispose()
+  this.hero.dispose();this.xrayMat.dispose();this.particles.dispose()
   for(const pass of this.composer.passes)pass.dispose();this.composer.dispose()
   this.scene.traverse(o=>{const m=o as THREE.Mesh;if(m.geometry)m.geometry.dispose()})
   this.arena.dispose()
@@ -204,7 +209,7 @@ export class BattleEngine{
  private has(effect:string){return this.setup.stats.effects.includes(effect)}
  private moveSpeed(){return 6.2*(this.has('galeforce')?1.25:1)*(this.spin?.7:1)}
  private updateHero(dt:number){
-  if(this.hero.dead){this.hero.speed=0;this.hero.update(dt,this.time,this.particles);return}
+  if(this.hero.dead){if(this.xrayOn){this.xrayOn=false;for(const x of this.xray)x.visible=false}this.hero.speed=0;this.hero.update(dt,this.time,this.particles);return}
   for(const k of Object.keys(this.cds) as Key[])this.cds[k]=Math.max(0,this.cds[k]-dt)
   for(const b of this.buffs)b.t-=dt;this.buffs=this.buffs.filter(b=>b.t>0)
   const hot=this.buffSum('hot');if(hot)this.heal(this.maxHp*hot*dt,false)
@@ -245,8 +250,15 @@ export class BattleEngine{
   this.hero.object.rotation.y=THREE.MathUtils.lerp(this.hero.object.rotation.y,this.shortest(this.hero.object.rotation.y,this.heroFacing),dt*14)
   this.hero.update(dt,this.time,this.particles,1)
   this.ring.position.set(this.heroPos.x,.03,this.heroPos.z)
+  const covered=this.coveredByBoss();if(covered!==this.xrayOn){this.xrayOn=covered;for(const x of this.xray)x.visible=covered}
   this.shieldMesh.visible=this.shield.amount>0;if(this.shieldMesh.visible){this.shieldMesh.position.set(this.heroPos.x,1,this.heroPos.z);this.shieldMesh.rotation.y+=dt}
   if(this.cursorRing.visible){this.cursorRing.scale.multiplyScalar(1-dt*2.2);if(this.cursorRing.scale.x<.2)this.cursorRing.visible=false}
+ }
+ /** The camera looks north from above, so a boss slightly south of the hero and as wide as it hides the hero. */
+ private coveredByBoss(){
+  const b=this.boss;if(!b||b.dead||this.hero.dead)return false
+  const dz=b.pos.z-this.heroPos.z;const dx=Math.abs(b.pos.x-this.heroPos.x)
+  return dz>-.3&&dz<b.model.height*.65+b.radius&&dx<b.radius+.6
  }
  private shortest(from:number,to:number){let d=(to-from)%(Math.PI*2);if(d>Math.PI)d-=Math.PI*2;if(d<-Math.PI)d+=Math.PI*2;return from+d}
  private face(p:THREE.Vector3){const d=flat(p.clone().sub(this.heroPos));if(d.lengthSq()>1e-4)this.heroFacing=Math.atan2(d.x,d.z)}

@@ -66,6 +66,7 @@ export default function BattleScreen({game,onGame,onExit}:{game:GameState;onGame
     <div className="g-bar siege"><span style={{width:`${left*100}%`}}/></div>
     <p>One fight uses one battle. Two waves come first, then the boss. Boss damage carries over between fights. The boss enrages at 2:30, and the fight ends at 4:00.</p>
     <dl className="ready-stats"><div><dt>Level</dt><dd>{hero.level}</dd></div><div><dt>Item level</dt><dd>{stats.itemLevel}</dd></div><div><dt>Health</dt><dd>{stats.maxHp.toLocaleString()}</dd></div><div><dt>Power</dt><dd>{stats.power}</dd></div></dl>
+    {campaign.targetPower!==undefined&&<p className="ready-target">Recommended Power for this stage: {campaign.targetPower}. Yours: {stats.power}.</p>}
     <div className="ready-kit">{kit.abilities.map(a=>{const Icon=ICON[a.kind];return <div key={a.key} className="kit-row"><span className="kit-key" style={{color:a.color}}><Icon size={16}/>{a.key}</span><div><strong>{a.name}</strong><small>{a.text}</small></div></div>})}</div>
     <p className="ready-controls">Click the ground to move and click an enemy to attack (left or right button). Abilities aim at the cursor. Arrow keys also move. T turns auto-battle on and off. Esc pauses.</p>
     {!gl&&<div className="g-error" role="alert"><span>Battles need WebGL, which this browser has turned off.</span></div>}

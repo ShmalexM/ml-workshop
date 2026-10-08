@@ -12,6 +12,8 @@ export const gameApi={
  create:(name:string,race:string,cls:string)=>api<WithGame>('/game/hero',{name,race,class:cls}),
  open:(source:string)=>api<WithGame<{chest:Chest;items:Item[]}>>('/game/open',{source}),
  equip:(itemId:number)=>api<WithGame>('/game/equip',{itemId}),
+ /** Equips several items in one step; the server checks each one like a single equip. */
+ equipMany:(itemIds:number[])=>api<WithGame>('/game/equip-many',{itemIds}),
  unequip:(slot:Slot)=>api<WithGame>('/game/unequip',{slot}),
  discard:(itemIds:number[])=>api<WithGame>('/game/discard',{itemIds}),
  settings:(enabled:boolean)=>api<WithGame>('/game/settings',{enabled}),

@@ -486,6 +486,28 @@ class GameStateTests(unittest.TestCase):
         self.assertNotIn('chest', saved['equipment'])
         self.assertIn(original['chest'], [i['id'] for i in saved['items']])
 
+    def test_equip_many_applies_in_order_and_rolls_back_on_any_error(self):
+        saved = self.hero()
+        original = saved['equipment']
+        head = self.add_item('warrior', 'head', 'plate')
+        two_hand = self.add_item('warrior', 'mainhand', 'greatsword')
+        cloak = self.add_item('warrior', 'back', 'cloak')
+        other = self.add_item('mage', 'chest', 'cloth')
+        before = game.export(self.db)
+        bad = ([head['id'], other['id']], [head['id'], 999999], [head['id'], head['id']],
+               [two_hand['id'], original['mainhand']], [], [True], ['1'], [1.0], [2**63],
+               list(range(1, 11)), '1', None)
+        for ids in bad:
+            with self.subTest(ids=ids):
+                with self.assertRaises(ValueError):
+                    self.action('equip-many', dict(itemIds=ids))
+                self.assertEqual(game.export(self.db), before)
+        saved = self.action('equip-many', dict(itemIds=[head['id'], two_hand['id'], cloak['id']]))['game']
+        self.assertEqual({k: saved['equipment'][k] for k in ('head', 'mainhand', 'back')},
+                         dict(head=head['id'], mainhand=two_hand['id'], back=cloak['id']))
+        self.assertNotIn('offhand', saved['equipment'])
+        self.assertEqual(saved['equipment']['chest'], original['chest'])
+
     def test_failed_discard_and_failed_open_roll_back_everything(self):
         initial = self.hero()
         loose = self.add_item('warrior', 'mainhand', 'sword')
@@ -1066,6 +1088,8 @@ class GameApiTests(unittest.TestCase):
             ('open', {}), ('open', {'source': []}), ('open', {'source': 'path:cuda'}),
             ('equip', {}), ('equip', {'itemId': True}), ('equip', {'itemId': 999999}),
             ('equip', {'itemId': 2**63}), ('equip', {'itemId': 2**100}),
+            ('equip-many', {}), ('equip-many', {'itemIds': []}), ('equip-many', {'itemIds': [999999]}),
+            ('equip-many', {'itemIds': [True]}), ('equip-many', {'itemIds': [1] * 10}),
             ('unequip', {'slot': 'waist'}), ('unequip', {'slot': []}),
             ('discard', {'itemIds': []}), ('discard', {'itemIds': [True]}),
             ('discard', {'itemIds': [1] * 201}), ('discard', {'itemIds': [1.0]}),
