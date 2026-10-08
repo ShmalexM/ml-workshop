@@ -8,6 +8,7 @@ import {gameApi} from '../gameApi'
 import {KITS,type AbilityKind} from './kits'
 import {BattleEngine,type BattleEnd,type Hud,type Key} from './engine'
 import type {Battle,BattleResult,GameState} from '../types'
+import {useBattleGuard} from '../../assistant/store'
 
 const ICON:Record<AbilityKind,typeof Swords>={projectile:Crosshair,nova:CircleDot,ground:Target,dash:ChevronsRight,blink:Sparkles,heal:Heart,shield:Shield,buff:TrendingUp,spin:RotateCw,cone:Triangle,chain:Zap,leap:ChevronsRight,spree:Swords,disengage:Undo2}
 type Phase='ready'|'starting'|'fighting'|'saving'|'result'
@@ -15,6 +16,7 @@ type Banner={text:string;tone:'info'|'boss'|'danger'|'good';n:number}
 const fmt=(s:number)=>`${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`
 
 export default function BattleScreen({game,onGame,onExit}:{game:GameState;onGame:(g:GameState)=>void;onExit:()=>void}){
+ useBattleGuard() // no assistant drawer or shortcut during a fight
  const hero=game.hero!;const cls=classOf(game)!;const kit=KITS[cls.id]||KITS.warrior
  const gear=useMemo(()=>equipped(game),[game]);const stats=useMemo(()=>heroStats(gear,hero.level),[gear,hero.level])
  const [phase,setPhase]=useState<Phase>('ready');const [battle,setBattle]=useState<Battle|null>(null);const [error,setError]=useState('')

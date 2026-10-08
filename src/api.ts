@@ -39,7 +39,7 @@ addEventListener('storage', event => { if (event.key === tokenKey && event.newVa
 const isExpired = (status: number, data: {code?: string} | null) => status === 403 && data?.code === 'session-expired'
 
 /** fetch with the session token. Throws connectMessage when the server does not accept the token. */
-async function authorized(url: string, init: RequestInit): Promise<Response> {
+export async function authorized(url: string, init: RequestInit): Promise<Response> {
   let sent = ''
   for (let attempt = 0; attempt < 2; attempt++) {
     const token = currentToken()

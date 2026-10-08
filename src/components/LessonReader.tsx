@@ -4,6 +4,7 @@ import type {Course,GlossaryEntry,Lesson,LearningStage,State} from '../types'
 import {linkTerms} from '../glossary'
 import {LinkedText} from './Glossary'
 import {bookLink,type StudyGuide} from '../libraryTypes'
+import {reportHints} from '../assistant/store'
 function GradientLab(){const [weight,setWeight]=useState(0);const [rate,setRate]=useState(.1);const loss=(weight-3)**2;const points=Array.from({length:81},(_,i)=>{const x=-1+i*.1;return `${20+(x+1)*34},${130-((x-3)**2)*7}`}).join(' ');return <div className="gradient-lab"><h3>Try a gradient step</h3><svg viewBox="0 0 320 150" role="img" aria-label={`Loss curve. Weight ${weight.toFixed(2)}, loss ${loss.toFixed(2)}.`}><path d="M20 10V131H302" stroke="#cad4df" fill="none"/><polyline points={points} fill="none" stroke="#0a9659" strokeWidth="2.5"/><circle cx={20+(weight+1)*34} cy={130-Math.min(loss,17)*7} r="6" fill="#111c30"/><text x="240" y="147" fill="#66758a" fontSize="11">weight</text></svg><div className="lab-values"><span>w = {weight.toFixed(2)}</span><span>loss = {loss.toFixed(3)}</span></div><label>Learning rate <strong>{rate.toFixed(2)}</strong><input aria-label="Learning rate" type="range" min="0.01" max="0.9" step=".01" value={rate} onChange={e=>setRate(Number(e.target.value))}/></label><div className="button-row"><button className="small-button" onClick={()=>setWeight(w=>w-rate*2*(w-3))}>Take a step</button><button className="text-button" onClick={()=>setWeight(0)}>Reset plot</button></div></div>}
 export default function LessonReader({lesson,course,index,count,notes,onNotes,onSolution,onPath,readings,stage,onStage,onLesson,allCourses,lessonsOpen,onToggleLessons,glossaryOpen,onToggleGlossary,glossary,onTerm,label,completed}:{completed:State['completed'];lessonsOpen:boolean;onToggleLessons:()=>void;glossaryOpen:boolean;onToggleGlossary:()=>void;glossary:Map<string,GlossaryEntry>;onTerm:(term:string)=>void;label:(id:string)=>string;readings:StudyGuide[];lesson:Lesson;course:Course;index:number;count:number;notes:string;onNotes:(s:string)=>void;onSolution:()=>void;onPath:()=>void;stage:LearningStage;onStage:(stage:LearningStage)=>void;onLesson:(id:string)=>void;allCourses:Course[]}){
  const reader=useRef<HTMLElement>(null);const stages=useRef<HTMLElement>(null);const shownStage=useRef(stage)
@@ -12,6 +13,8 @@ export default function LessonReader({lesson,course,index,count,notes,onNotes,on
  useLayoutEffect(()=>{reader.current?.scrollTo(0,0);if(window.matchMedia('(max-width:700px)').matches)window.scrollTo(0,0)},[stage])
  const [tab,setTab]=useState('learn');const [hints,setHints]=useState(0);const [choice,setChoice]=useState<number|null>(null)
  const guide=lesson.example;const correct=choice===guide.answer
+ // The assistant's hints chip sends the hints that are open.
+ useEffect(()=>reportHints(lesson.id,hints),[lesson.id,hints])
  // Glossary terms link where they first appear: once across the Understand text, and once in the recap.
  const termLinks={onGlossary:onTerm,onLesson,label,current:lesson.id}
  const terms=useMemo(()=>lesson.glossary.flatMap(id=>glossary.get(id)??[]),[lesson,glossary])
