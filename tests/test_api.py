@@ -201,7 +201,7 @@ class ApiTests(unittest.TestCase):
                 db.execute('CREATE TABLE project_state (project TEXT PRIMARY KEY, notes TEXT, reviewed TEXT, updated INTEGER)')
                 db.execute("INSERT INTO project_state VALUES ('public-micrograd','old note','[0, 1, 2]',5)")
             db.close()
-            code='import json,sys;sys.path.insert(0,sys.argv[1]);import server;print(json.dumps(server.project_state()))'
+            code='import json,sys;sys.path.insert(0,sys.argv[1]);import server;server.open_data();print(json.dumps(server.project_state()))'
             for _ in range(2):
                 out=subprocess.run([sys.executable,'-c',code,str(ROOT/'backend')],env={**os.environ,'ML_WORKSHOP_DATA_DIR':directory},capture_output=True,text=True,timeout=60)
                 self.assertEqual(out.returncode,0,out.stderr)
