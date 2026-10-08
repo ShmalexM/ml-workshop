@@ -68,20 +68,26 @@ with connect() as db:
     db.execute('CREATE TABLE IF NOT EXISTS reading_state (book TEXT PRIMARY KEY, location INTEGER, notes TEXT, bookmarks TEXT, completed TEXT, updated INTEGER)')
     game.ensure_schema(db)
 
-def project_state():
-    with connect() as db:
-        return {r[0]:dict(notes=r[1],reviewed=json.loads(r[2]),updatedAt=r[3],tasks=json.loads(r[4])) for r in db.execute('SELECT project,notes,reviewed,updated,tasks FROM project_state')}
-
-def reading_state():
-    with connect() as db:
-        return {r[0]:dict(location=r[1],notes=r[2],bookmarks=json.loads(r[3]),completed=json.loads(r[4]),updatedAt=r[5]) for r in db.execute('SELECT book,location,notes,bookmarks,completed,updated FROM reading_state')}
-
 def now_ms():
     return time.time_ns()//1_000_000
 
+def revision(value):
+    """A client revision, at most now: one ahead of this computer's clock would block later saves."""
+    if type(value) is not int or not 0<=value<=2**53-1:raise ValueError('Invalid timestamp')
+    return min(value,now_ms())
+
+# Stored revisions read as at most now, and a stored revision that is still ahead never blocks a save.
+# Rows from before revisions were checked can be ahead.
+def project_state():
+    with connect() as db:
+        return {r[0]:dict(notes=r[1],reviewed=json.loads(r[2]),updatedAt=r[3],tasks=json.loads(r[4])) for r in db.execute('SELECT project,notes,reviewed,MIN(updated,?),tasks FROM project_state',(now_ms(),))}
+
+def reading_state():
+    with connect() as db:
+        return {r[0]:dict(location=r[1],notes=r[2],bookmarks=json.loads(r[3]),completed=json.loads(r[4]),updatedAt=r[5]) for r in db.execute('SELECT book,location,notes,bookmarks,completed,MIN(updated,?) FROM reading_state',(now_ms(),))}
+
 def state():
     with connect() as db:
-        # A revision stored in the future, from before revisions were checked, reads as now.
         drafts=db.execute('SELECT lesson,code,notes,MIN(updated,?) FROM drafts',(now_ms(),)).fetchall()
         complete=db.execute('SELECT lesson,at,xp FROM completions').fetchall()
         current=db.execute("SELECT value FROM settings WHERE key='currentLesson'").fetchone()
@@ -292,11 +298,11 @@ class Handler(BaseHTTPRequestHandler):
                 notes=body.get('notes');reviewed=body.get('reviewed');updated=body.get('updatedAt')
                 if not isinstance(notes,str) or len(notes)>30000:raise ValueError('Invalid project notes')
                 if not isinstance(reviewed,list) or len(reviewed)>len(project['steps']) or any(type(i)!=int or not 0<=i<len(project['steps']) for i in reviewed):raise ValueError('Invalid reviewed steps')
-                if type(updated)!=int or not 0<=updated<=2**53-1:raise ValueError('Invalid timestamp')
+                updated=revision(updated)
                 # Clients from before task progress existed send no tasks; keep what is saved.
                 tasks=json.dumps(task_progress(project,body['tasks'])) if 'tasks' in body else None
-                with connect() as db:db.execute("INSERT INTO project_state (project,notes,reviewed,updated,tasks) VALUES (?,?,?,?,COALESCE(?,'{}')) ON CONFLICT(project) DO UPDATE SET notes=excluded.notes,reviewed=excluded.reviewed,updated=excluded.updated,tasks=COALESCE(?,project_state.tasks) WHERE excluded.updated>=project_state.updated",(project['id'],notes,json.dumps(sorted(set(reviewed))),updated,tasks,tasks))
-                return self.send({'ok':True})
+                with connect() as db:applied=db.execute("INSERT INTO project_state (project,notes,reviewed,updated,tasks) VALUES (?,?,?,?,COALESCE(?,'{}')) ON CONFLICT(project) DO UPDATE SET notes=excluded.notes,reviewed=excluded.reviewed,updated=excluded.updated,tasks=COALESCE(?,project_state.tasks) WHERE excluded.updated>=project_state.updated OR project_state.updated>?",(project['id'],notes,json.dumps(sorted(set(reviewed))),updated,tasks,tasks,now_ms())).rowcount==1
+                return self.send({'ok':True,'applied':applied})
             if path=='/api/library/state':
                 book_id=body.get('bookId','')
                 try:book=LIBRARY.book(book_id)
@@ -306,9 +312,9 @@ class Handler(BaseHTTPRequestHandler):
                 if not isinstance(bookmarks,list) or len(bookmarks)>book['count'] or any(type(n)!=int or not 1<=n<=book['count'] for n in bookmarks):raise ValueError('Invalid bookmarks')
                 valid={g['id'] for g in study_guides(LIBRARY) if g['bookId']==book_id}
                 if not isinstance(completed,list) or any(not isinstance(s,str) or s not in valid for s in completed):raise ValueError('Unknown study guide')
-                if type(updated)!=int or not 0<=updated<=2**53-1:raise ValueError('Invalid timestamp')
-                with connect() as db:db.execute('INSERT INTO reading_state VALUES (?,?,?,?,?,?) ON CONFLICT(book) DO UPDATE SET location=excluded.location,notes=excluded.notes,bookmarks=excluded.bookmarks,completed=excluded.completed,updated=excluded.updated WHERE excluded.updated>=reading_state.updated',(book_id,location,notes,json.dumps(sorted(set(bookmarks))),json.dumps(sorted(set(completed))),updated))
-                return self.send({'ok':True})
+                updated=revision(updated)
+                with connect() as db:applied=db.execute('INSERT INTO reading_state VALUES (?,?,?,?,?,?) ON CONFLICT(book) DO UPDATE SET location=excluded.location,notes=excluded.notes,bookmarks=excluded.bookmarks,completed=excluded.completed,updated=excluded.updated WHERE excluded.updated>=reading_state.updated OR reading_state.updated>?',(book_id,location,notes,json.dumps(sorted(set(bookmarks))),json.dumps(sorted(set(completed))),updated,now_ms())).rowcount==1
+                return self.send({'ok':True,'applied':applied})
             if path=='/api/library/remove':
                 # Deletes data/library/<id> only. Reading state stays in SQLite, so a reimport restores notes.
                 if not IMPORT_LOCK.acquire(blocking=False):return self.send({'error':'A book is being imported. Wait for it to finish, then try again.'},409)
@@ -335,11 +341,8 @@ class Handler(BaseHTTPRequestHandler):
                 if not isinstance(code,str) or not isinstance(notes,str):raise ValueError('Invalid draft')
                 if len(code)>50000:raise ValueError('Code is longer than 50,000 characters.')
                 if len(notes)>30000:raise ValueError('Notes are longer than 30,000 characters.')
-                if type(stamp) is not int or not 0<=stamp<=2**53-1:raise ValueError('Invalid draft revision')
-                # A revision ahead of this computer's clock is saved as now, so it cannot block later saves.
-                # A stored revision that is still ahead, from before this check, never blocks a save.
-                now=now_ms()
-                with connect() as db:applied=db.execute('INSERT INTO drafts VALUES (?,?,?,?) ON CONFLICT(lesson) DO UPDATE SET code=excluded.code,notes=excluded.notes,updated=excluded.updated WHERE excluded.updated>=drafts.updated OR drafts.updated>?',(lesson['id'],code,notes,min(stamp,now),now)).rowcount==1
+                stamp=revision(stamp)
+                with connect() as db:applied=db.execute('INSERT INTO drafts VALUES (?,?,?,?) ON CONFLICT(lesson) DO UPDATE SET code=excluded.code,notes=excluded.notes,updated=excluded.updated WHERE excluded.updated>=drafts.updated OR drafts.updated>?',(lesson['id'],code,notes,stamp,now_ms())).rowcount==1
                 return self.send({'ok':True,'applied':applied})
             if path in ('/api/run','/api/example'):
                 is_example=path=='/api/example'

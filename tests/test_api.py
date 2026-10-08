@@ -95,6 +95,42 @@ class ApiTests(unittest.TestCase):
         self.assertIn('Notes are longer than 30,000 characters', json.load(error.exception)['error'])
         self.assertNotIn('python-2', self.request('/api/state')['drafts'])
 
+    def test_project_and_reading_revisions_cannot_block_later_saves(self):
+        import sqlite3
+        database = Path(self.tmp.name) / 'workshop.sqlite3'
+        routes = [('/api/project/state', dict(projectId='sample', notes='', reviewed=[]), 'project_state',
+                   lambda: self.request('/api/portfolio')['projectState']['sample']),
+                  ('/api/library/state', dict(bookId='fixture', location=1, notes='', bookmarks=[], completed=[]), 'reading_state',
+                   lambda: self.request('/api/library')['readingState']['fixture'])]
+        def clear():
+            with sqlite3.connect(database) as db:
+                db.execute("DELETE FROM project_state WHERE project='sample'")
+                db.execute("DELETE FROM reading_state WHERE book='fixture'")
+        clear()
+        self.addCleanup(clear)
+        for path, body, table, saved in routes:
+            with self.subTest(path=path):
+                save = lambda notes, revision: self.request(path, {**body, 'notes': notes, 'updatedAt': revision})
+                # A revision far ahead of the clock is saved as now, so the next normal edit still replaces it.
+                self.assertTrue(save('future', 2**53 - 1)['applied'])
+                self.assertLessEqual(saved()['updatedAt'], time.time() * 1000 + 1000)
+                time.sleep(.01)
+                self.assertTrue(save('next edit', int(time.time() * 1000))['applied'])
+                self.assertFalse(save('stale', 5)['applied'])
+                self.assertEqual(saved()['notes'], 'next edit')
+                # A row stored ahead of the clock before revisions were checked does not block a save.
+                key = 'project' if table == 'project_state' else 'book'
+                with sqlite3.connect(database) as db:
+                    db.execute(f'UPDATE {table} SET notes=?, updated=? WHERE {key}=?', ('poisoned', 2**63 - 1, body.get('projectId') or body['bookId']))
+                self.assertLessEqual(saved()['updatedAt'], time.time() * 1000 + 1000)
+                self.assertTrue(save('normal', int(time.time() * 1000))['applied'])
+                self.assertEqual(saved()['notes'], 'normal')
+                for revision in (2**53, 2**63, 1e300, True, 1.5, -1, '123', None):
+                    with self.assertRaises(urllib.error.HTTPError) as error:
+                        save('bad', revision)
+                    self.assertEqual(error.exception.code, 400, revision)
+                self.assertEqual(saved()['notes'], 'normal')
+
     def test_deeply_nested_json_gets_400(self):
         body = b'{"a":' + b'[' * 11000 + b'0' + b']' * 11000 + b'}'
         for path in ('/api/current', '/api/draft', '/api/backup'):
