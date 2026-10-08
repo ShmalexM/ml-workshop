@@ -12,14 +12,21 @@ import type {Chest,GameState,Item} from './types'
 type Phase='ready'|'opening'|'revealed'
 
 /** Modal that opens one chest: shake while the server rolls, then reveal items one by one. */
-export default function ChestOpening({chest,game,onGame,onClose,onNext,nextCount}:{chest:Chest;game:GameState;onGame:(g:GameState,flash?:Item)=>void;onClose:()=>void;onNext:()=>void;nextCount:number}){
+export default function ChestOpening({chest,game,onGame,onClose,onNext,onOpenAll,nextCount}:{chest:Chest;game:GameState;onGame:(g:GameState,flash?:Item)=>void;onClose:()=>void;onNext:()=>void;onOpenAll:()=>Promise<void>;nextCount:number}){
  const dialog=useRef<HTMLDialogElement>(null);const openButton=useRef<HTMLButtonElement>(null)
  const [phase,setPhase]=useState<Phase>('ready');const [items,setItems]=useState<Item[]>([]);const [shown,setShown]=useState(0);const [error,setError]=useState('')
  const [hover,setHover]=useState<{item:Item;rect:DOMRect}|null>(null);const [replacing,setReplacing]=useState<number|null>(null)
  const still=reducedMotion()
  useEffect(()=>{const d=dialog.current;d?.showModal();openButton.current?.focus();return ()=>{if(d?.open)d.close()}},[])
  useEffect(()=>{if(phase!=='revealed'||shown>=items.length)return;const t=setTimeout(()=>setShown(n=>n+1),still?0:shown===0?650:480);return ()=>clearTimeout(t)},[phase,shown,items.length,still])
+ // When every item is shown, focus the next action: the first Equip, then Open next chest, then Done.
+ const revealed=phase==='revealed'&&shown>=items.length
+ useEffect(()=>{if(revealed)dialog.current?.querySelector<HTMLButtonElement>('.loot-act button, .chest-actions button')?.focus()},[revealed])
  const best=items.reduce<Item|null>((a,b)=>!a||RARITY_INDEX[b.rarity]>RARITY_INDEX[a.rarity]?b:a,null)
+ async function openAll(){
+  if(phase!=='ready')return;setPhase('opening');setError('')
+  try{await onOpenAll()}catch(e){setError((e as Error).message);setPhase('ready')}
+ }
  async function open(){
   if(phase!=='ready')return;setPhase('opening');setError('')
   try{
@@ -47,6 +54,7 @@ export default function ChestOpening({chest,game,onGame,onClose,onNext,nextCount
   </div>
   {phase!=='revealed'&&<div className="chest-actions">
    <button ref={openButton} className="g-button" onClick={open} disabled={phase==='opening'}>{phase==='opening'?'Opening…':'Open'}</button>
+   {nextCount>0&&<button className="g-button ghost" onClick={openAll} disabled={phase==='opening'}>Open all {nextCount+1}</button>}
    <small>{chest.tier>=4?'Guaranteed Rare or better.':`Tier ${chest.tier} of 5.`}</small>
   </div>}
   {phase==='revealed'&&<ul className="loot-list" aria-live="polite">

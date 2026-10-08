@@ -568,6 +568,49 @@ class GameStateTests(unittest.TestCase):
         self.assertNotIn(loose['id'], [i['id'] for i in game.export(self.db)['items']])
         self.action('open', dict(source='welcome'))
 
+    def test_open_all_matches_opening_each_chest_in_turn(self):
+        self.progress = full_progress()
+        self.hero()
+        sources = [c['source'] for c in game.state(self.db, self.progress)['chests']['unopened']]
+        result = self.action('open-all', {}, random.Random(9))
+        self.assertEqual([opened['chest']['source'] for opened in result['opened']], sources)
+        self.assertEqual(result['game']['chests']['unopened'], [])
+        at_once = game.export(self.db)
+        self.assertEqual(sum(len(opened['items']) for opened in result['opened']), len(at_once['items']) - 5)
+        # The same chests opened one at a time, with the same random numbers, give the same loot and luck.
+        other = sqlite3.connect(Path(self.tmp.name) / 'other.sqlite3')
+        try:
+            game.ensure_schema(other)
+            game.handle(other, 'hero', dict(name='Durgan', race='orc', **{'class': 'warrior'}), self.progress, random.Random(55))
+            rng = random.Random(9)
+            for source in sources:
+                game.handle(other, 'open', dict(source=source), self.progress, rng)
+            one_by_one = game.export(other)
+        finally:
+            other.close()
+        loot = lambda export: [(i['name'], i['rarity'], i['ilvl'], i['slot'], i['source']) for i in sorted(export['items'], key=lambda i: i['id'])]
+        self.assertEqual(loot(at_once), loot(one_by_one))
+        self.assertEqual({k: at_once['meta'][k] for k in ('sinceEpic', 'sinceLegendary')},
+                         {k: one_by_one['meta'][k] for k in ('sinceEpic', 'sinceLegendary')})
+        with self.assertRaisesRegex(ValueError, 'no chests'):
+            self.action('open-all', {})
+
+    def test_a_failed_open_all_opens_nothing(self):
+        self.progress = full_progress()
+        self.hero()
+        before = game.export(self.db)
+        calls = []
+        def fail_late(*args):
+            calls.append(args)
+            if len(calls) == 20:
+                raise RuntimeError('injected write failure')
+            return original(*args)
+        original = game.put_meta
+        with patch.object(game, 'put_meta', side_effect=fail_late):
+            with self.assertRaisesRegex(RuntimeError, 'injected'):
+                self.action('open-all', {})
+        self.assertEqual(game.export(self.db), before)
+
     def test_backup_history_is_complete_and_retire_resets_all_game_tables(self):
         self.progress = full_progress()
         self.hero()
@@ -1102,6 +1145,13 @@ class GameApiTests(unittest.TestCase):
                          ['boss:1'])
         self.assertEqual(self.request('/api/game/summary'),
                          dict(enabled=True, hero=True, unopened=2, battles=0, stage=2))
+
+    def test_open_all_over_http(self):
+        self.hero()
+        reply = self.request('/api/game/open-all', {})
+        self.assertEqual([opened['chest']['source'] for opened in reply['opened']], ['welcome'])
+        self.assertEqual(reply['game']['chests']['unopened'], [])
+        self.assertEqual(self.assert_error('/api/game/open-all', {}), 'There are no chests to open.')
 
     def test_concurrent_open_is_once_only(self):
         self.hero()

@@ -841,6 +841,17 @@ def open_chest(db, hero, body, progress, rng):
     return dict(chest=opened, items=new_items)
 
 
+def open_all_chests(db, hero, progress, rng):
+    """Open every unopened chest in one transaction, oldest first. Each one is rolled as if it were opened on its
+    own, so the luck counters and the gear that a roll compares against carry from one chest to the next."""
+    opened = {row[0] for row in db.execute('SELECT source FROM game_chests')}
+    waiting = {c['source']: c for c in earned_chests(progress, hero) + boss_chests(db) if c['source'] not in opened}
+    if not waiting:
+        raise ValueError('There are no chests to open.')
+    order = sorted(waiting.values(), key=lambda c: (datetime.fromisoformat(c['earnedAt']), c['source']))
+    return dict(opened=[open_chest(db, hero, dict(source=c['source']), progress, rng) for c in order])
+
+
 def start_battle(db, hero, progress):
     if not hero or battle_counts(db, earned_chests(progress, hero))['available'] == 0:
         raise ValueError(NEXT_BATTLE)
@@ -892,7 +903,7 @@ def handle(db, action, body, progress, rng=None):
     """Serialize every mutation, including eligibility checks and the response snapshot."""
     if not isinstance(body, dict):
         raise ValueError('Expected an object.')
-    if action not in ('hero', 'open', 'equip', 'equip-many', 'unequip', 'discard', 'settings',
+    if action not in ('hero', 'open', 'open-all', 'equip', 'equip-many', 'unequip', 'discard', 'settings',
                       'battle/start', 'battle/finish', 'retire', 'passives'):
         raise ValueError('Unknown game action.')
     if rng is None:
@@ -921,6 +932,8 @@ def handle(db, action, body, progress, rng=None):
                 raise ValueError('Create a hero first.')
             if action == 'open':
                 extra = open_chest(db, hero, body, progress, rng)
+            elif action == 'open-all':
+                extra = open_all_chests(db, hero, progress, rng)
             elif action == 'equip':
                 equip(db, hero, owned_item(db, body.get('itemId')))
             elif action == 'equip-many':

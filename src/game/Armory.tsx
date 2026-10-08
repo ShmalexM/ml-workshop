@@ -16,7 +16,7 @@ const pct=(n:number)=>`${(n*100).toFixed(1)}%`
 // The server takes up to 200 items per discard.
 const DISCARD_BATCH=200
 
-export default function Armory({game,onGame,onOpenChest,onFight,onTree,onPractice,flash}:{game:GameState;onGame:(g:GameState,flash?:Item)=>void;onOpenChest:(c:Chest)=>void;onFight:()=>void;onTree:()=>void;onPractice:()=>void;flash:{color:string;n:number}|null}){
+export default function Armory({game,onGame,onOpenChest,onOpenAll,onFight,onTree,onPractice,flash}:{game:GameState;onGame:(g:GameState,flash?:Item)=>void;onOpenChest:(c:Chest)=>void;onOpenAll:()=>Promise<void>;onFight:()=>void;onTree:()=>void;onPractice:()=>void;flash:{color:string;n:number}|null}){
  const hero=game.hero!;const cls=classOf(game)!;const race=game.catalog.races.find(r=>r.id===hero.race)
  const gear=useMemo(()=>equipped(game),[game]);const mods=useMemo(()=>passiveMods(game),[game]);const stats=useMemo(()=>heroStats(gear,hero.level,mods),[gear,hero.level,mods])
  const look=useMemo(()=>appearanceOf(hero.race,hero.class,cls.role,gear),[hero.race,hero.class,cls.role,gear])
@@ -48,6 +48,10 @@ export default function Armory({game,onGame,onOpenChest,onFight,onTree,onPractic
  function equip(item:Item,from?:HTMLElement){
   if(upgradeGain(item,gear,hero.level,mods).lostEffects.length){if(from)opener.current=from;setSelected(item);setReplacing(item);return}
   void act(()=>gameApi.equip(item.id),item)
+ }
+ async function openAll(){
+  if(busy)return;setBusy(true);setError('')
+  try{await onOpenAll()}catch(e){setError((e as Error).message)}finally{setBusy(false)}
  }
  async function discardJunk(){
   const ids=junk.map(i=>i.id)
@@ -86,11 +90,11 @@ export default function Armory({game,onGame,onOpenChest,onFight,onTree,onPractic
     </div>
     {tab==='chests'&&<div className="chest-list">
      {game.chests.unopened.length===0?<div className="g-empty"><ChestArt tier={1} size={70}/><p>No chests waiting. Finish a lesson to earn the next one. Harder lessons give better chests. A lesson passed after Show solution gives a chest one tier lower.</p></div>
-     :game.chests.unopened.map(chest=><button key={chest.source} className="chest-row" onClick={()=>onOpenChest(chest)}>
+     :<>{game.chests.unopened.length>1&&<div className="chest-list-head"><button className="g-button small" onClick={openAll} disabled={busy}><Gift size={14}/>{busy?'Opening…':`Open all ${game.chests.unopened.length}`}</button><small>One list of everything they hold, without the animation.</small></div>}{game.chests.unopened.map(chest=><button key={chest.source} className="chest-row" onClick={()=>onOpenChest(chest)}>
       <ChestArt tier={chest.tier} size={58}/>
       <span><strong className={`tier-title tier-${chest.tier}`}>{chest.tierName}</strong><small>{chest.title}{chest.subtitle?` · ${chest.subtitle}`:''}</small></span>
       <span className="chest-open-tag">Open</span>
-     </button>)}
+     </button>)}</>}
      {game.chests.opened.length>0&&<details className="opened-history"><summary>Opened ({game.chests.opened.length})</summary>{game.chests.opened.map(ch=><div key={ch.source}><span className={`tier-title tier-${ch.tier}`}>{ch.tierName}</span> <small>{ch.title}</small></div>)}</details>}
     </div>}
     {tab==='bags'&&<div className="bags">
