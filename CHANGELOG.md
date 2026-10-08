@@ -2,6 +2,24 @@
 
 This file lists the notable changes in each release. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and version numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Battle graphics** in **Settings → Hero game**: Standard, the default and the current look, or Light. Light draws fights at no more than 1.5 pixels per CSS pixel and without glow, for slower computers. The choice is kept in this browser and applies from the next fight.
+
+### Changed
+
+- Pages other than Learn no longer load the code editor. The first page loads 338 kB of script instead of 802 kB, and the editor loads when the Learn page opens.
+- The Hero page starts loading when the pointer or keyboard focus reaches its tab, and opens in about 0.1 s instead of 0.37 s.
+- The first page after the app starts no longer waits about 55 ms for the server to build the curriculum. The server prepares it, and the installed package versions, while the browser opens. Package versions are read again only after a package folder changes.
+- Running an exercise takes about 13 ms less for Python and 28 ms less for JavaScript. Each run still gets a new process with the same clean environment, limits and cleanup.
+
+### Fixed
+
+- In fights, rings of the same color shared one fade, so a new ring made the older ones bright again. Each ring now fades on its own.
+- A cloth chest made every part that shares its cloth double-sided, so their shadows depended on which items were drawn first. Only the skirt is double-sided now.
+
 ## [1.2.0] - 2026-10-08
 
 ### Added
