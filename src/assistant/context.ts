@@ -5,7 +5,8 @@ import type {Course,LearningStage,Lesson,RunResult} from '../types'
 
 export type ChipId='lesson'|'example'|'code'|'run'|'hints'|'notes'|'page'
 export type Chip={id:ChipId;label:string;text:string;truncated:boolean;on:boolean}
-export type LessonContext={kind:'lesson';lesson:Lesson;course:Course;stage:LearningStage;code:string;notes:string;result:RunResult|null}
+// result is the last run of the learner's code; exampleResult the last run of the worked example.
+export type LessonContext={kind:'lesson';lesson:Lesson;course:Course;stage:LearningStage;code:string;notes:string;result:RunResult|null;exampleResult?:RunResult|null}
 export type PageContext={kind:'page';name:string}
 export type AssistantContext=LessonContext|PageContext
 
@@ -32,10 +33,10 @@ function exampleText(lesson:Lesson){
  // The answer index and the feedback are left out: they give away the prediction.
  return ['Worked example:','```',g.code.trimEnd(),'```','',...g.steps.map((s,i)=>`${i+1}. ${s}`),'',`Prediction question: ${g.question}`,...g.choices.map((choice,i)=>`${String.fromCharCode(65+i)}. ${choice}`)].join('\n')
 }
-function runText(result:RunResult){
+function runText(result:RunResult,example:boolean){
  const lines:string[]=[]
  if(result.error){
-  lines.push('The last run ended with an error.')
+  lines.push(example?'The worked example ended with an error when it ran.':'The last run ended with an error.')
   if(result.summary)lines.push(`Error: ${result.summary}`)
   if(result.explanation)lines.push(`Plain-language note: ${result.explanation}`)
   lines.push('Traceback:',cut(result.error,3500,'end').text)
@@ -49,7 +50,7 @@ function runText(result:RunResult){
    else if(c.detail)lines.push(`  Detail: ${c.detail}`)
    if(c.explanation)lines.push(`  Note: ${c.explanation}`)
   }
- }else lines.push('The last run finished without an error.')
+ }else lines.push(example?'The worked example ran without an error.':'The last run finished without an error.')
  if(result.stdout)lines.push('Output:',cut(result.stdout,2000,'end').text)
  return lines.join('\n')
 }
@@ -63,7 +64,10 @@ export function buildChips(context:AssistantContext,hints:number,overrides:Recor
  add('lesson','Lesson and stage',lessonText(context),true)
  add('example','Worked example',exampleText(lesson),stage==='example')
  add('code','Your code',context.code,stage==='practice','both')
- if(context.result)add('run',context.result.error?'Last run: error':context.result.checks.some(c=>!c.passed)?'Last run: failed checks':'Last run',runText(context.result),stage==='practice','end')
+ // On the example stage the run chip holds the worked example's run, on the practice stage the learner's run.
+ const example=stage==='example'
+ const result=example?context.exampleResult??null:context.result
+ if(result)add('run',(example?'Example run':'Last run')+(result.error?': error':result.checks.some(c=>!c.passed)?': failed checks':''),runText(result,example),stage!=='understand','end')
  if(hints>0)add('hints',`Hints opened (${hints})`,lesson.hints.slice(0,hints).map((h,i)=>`${i+1}. ${h}`).join('\n'),true)
  if(context.notes.trim())add('notes','Your notes',context.notes,false)
  return chips.map(c=>({...c,on:overrides[c.id]??defaults[c.id]!}))

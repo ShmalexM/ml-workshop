@@ -28,9 +28,10 @@ export function AssistantDock({context}:{context:AssistantContext}){
  return <><div className="assistant-scrim" onClick={closeAssistant}/><Suspense fallback={<aside className="assistant-drawer" id="assistant-drawer" aria-label="Assistant"><p className="assistant-setup">Loading the assistant…</p></aside>}><AssistantDrawer context={context}/></Suspense></>
 }
 
-/** Shown next to an error or a failed check once a model is set up. Opens the drawer with a question ready to send. */
-export function ExplainButton({lessonId,kind}:{lessonId:string;kind:'error'|'checks'}){
+/** Shown next to an error or a failed check once a model is set up. Opens the drawer with a question ready to send.
+ * source="example" is for a run of the worked example. */
+export function ExplainButton({lessonId,kind,source='practice'}:{lessonId:string;kind:'error'|'checks';source?:'practice'|'example'}){
  const s=useAssistant()
  if(!s.config?.ready||s.battle)return null
- return <button type="button" className="explain-button" onClick={()=>requestExplain('lesson:'+lessonId,kind)}><Sparkles size={14}/>{kind==='error'?'Explain this error':'Explain the failed check'}</button>
+ return <button type="button" className="explain-button" onClick={()=>requestExplain('lesson:'+lessonId,kind,source)}><Sparkles size={14}/>{kind==='error'?'Explain this error':'Explain the failed check'}</button>
 }

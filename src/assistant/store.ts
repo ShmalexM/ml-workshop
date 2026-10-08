@@ -50,10 +50,12 @@ export function setDraft(scope:string,draft:string){update(scope,c=>({...c,draft
 export function setChip(scope:string,id:string,on:boolean){update(scope,c=>({...c,chips:{...c.chips,[id]:on}}))}
 export function clearConversation(scope:string){if(state.streaming===scope)stopAnswer();update(scope,c=>({...c,messages:[],mode:'chat'}))}
 const explainText={error:'Explain this error. What does it mean, and which line causes it?',checks:'Why does this check fail? Point me to the problem without giving the solution.'}
-/** "Explain this error": open the drawer with the code and last run turned on and a question ready to send. */
-export function requestExplain(scope:string,kind:'error'|'checks'){
+/** "Explain this error": open the drawer with the code and the run turned on and a question ready to send.
+ * For the worked example that is the example's code, not the learner's. */
+export function requestExplain(scope:string,kind:'error'|'checks',source:'practice'|'example'='practice'){
  if(!usable())return
- update(scope,c=>({...c,draft:explainText[kind],mode:'explain',chips:{...c.chips,code:true,run:true}}))
+ const chips:Record<string,boolean>=source==='example'?{example:true,run:true}:{code:true,run:true}
+ update(scope,c=>({...c,draft:explainText[kind],mode:'explain',chips:{...c.chips,...chips}}))
  openAssistant()
 }
 
