@@ -29,6 +29,7 @@ This file lists the notable changes in each release. The format follows [Keep a 
 
 - Text and button colors meet WCAG AA contrast, the focus ring is darker, and text is at least 12px.
 - A locked **Next lesson** says why in visible text.
+- Checks in 20 lessons reject the wrong answers that used to pass, and learner code that reuses a name such as `abs` or `raises` no longer breaks grading. A far-future draft revision no longer blocks later saves, results are marked out of date after the code changes, and a draft the server refuses shows the reason.
 - The editor shows "Esc, then Tab, leaves the editor". Key hints are hidden on touch screens.
 - Keyboard use: a skip link, `aria-current` on the active page, page titles, focus that stays in place after stage changes and returns after dialogs close, and Escape to close the lesson list.
 
