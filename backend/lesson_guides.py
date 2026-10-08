@@ -1,11 +1,19 @@
 """Original small examples and orientation, taught before the independent tasks."""
 from textwrap import dedent
 
-ORIENTATION = {'foundations': {'welcome': 'Machine learning adjusts a functionâ€™s parameters using examples. '
+ORIENTATION = {'python': {'welcome': 'This path teaches the Python that the other paths use. It starts '
+                       'with the first line of a program and needs no coding experience.',
+            'goal': 'Write and fix the small functions, lists and loops that ML foundations '
+                    'starts with.',
+            'prerequisites': [],
+            'terms': [['Program', 'A list of instructions that Python runs from top to bottom.'],
+                      ['Variable', 'A name that holds a value, such as items = 3.'],
+                      ['Output', 'What print shows when the program runs.']]},
+ 'foundations': {'welcome': 'Machine learning adjusts a functionâ€™s parameters using examples. '
                             'Begin with a line whose weight and bias you can inspect.',
                  'goal': 'Explain how a prediction changes, then learn its parameters from '
                          'data.',
-                 'prerequisites': [],
+                 'prerequisites': ['python'],
                  'terms': [['Model', 'A function that turns an input into a prediction.'],
                            ['Parameter',
                             'An adjustable number inside the model, such as weight or bias.'],
@@ -15,7 +23,7 @@ ORIENTATION = {'foundations': {'welcome': 'Machine learning adjusts a functionâ€
                         'to calculate gradients. Use it to build the training loop from '
                         'Foundations.',
              'goal': 'Train a small model using automatic gradients and an optimizer.',
-             'prerequisites': ['foundations'],
+             'prerequisites': ['python', 'foundations'],
              'terms': [['Tensor', 'An array of numbers with a shape, data type, and device.'],
                        ['Gradient', 'How much a small parameter change affects the loss.'],
                        ['Autograd', 'PyTorchâ€™s automatic gradient calculation.']]},
@@ -23,7 +31,7 @@ ORIENTATION = {'foundations': {'welcome': 'Machine learning adjusts a functionâ€
                            'building models. This path uses the Foundations training loop. '
                            'PyTorch is optional.',
                 'goal': 'Train a Keras model and explain each training step.',
-                'prerequisites': ['foundations'],
+                'prerequisites': ['python', 'foundations'],
                 'terms': [['Variable', 'A tensor whose value can be updated during training.'],
                           ['GradientTape',
                            'A context that records operations for differentiation.'],
@@ -33,7 +41,7 @@ ORIENTATION = {'foundations': {'welcome': 'Machine learning adjusts a functionâ€
                        'Everything runs locally without downloads or a model service. Prompt '
                        'and retrieval lessons do not generate answers.',
             'goal': 'Build and inspect the inputs and data used by an AI application.',
-            'prerequisites': ['pytorch'],
+            'prerequisites': ['python', 'pytorch'],
             'terms': [['Token', 'A text piece represented by an integer ID.'],
                       ['Checkpoint', 'Saved model parameters learned during training.'],
                       ['Retrieval', 'Selecting relevant source material for a query.']]},
@@ -42,7 +50,7 @@ ORIENTATION = {'foundations': {'welcome': 'Machine learning adjusts a functionâ€
                      'GPU compilation, timing, and hardware race behavior require NVIDIA '
                      'hardware.',
           'goal': 'Write kernels with correct indices, bounds checks, and memory transfers.',
-          'prerequisites': ['foundations'],
+          'prerequisites': ['python', 'foundations'],
           'terms': [['Kernel', 'A function run by every thread in a launch.'],
                     ['Block', 'A group of threads that can cooperate.'],
                     ['Global index', 'A threadâ€™s position across the whole launch.']]},
@@ -50,7 +58,7 @@ ORIENTATION = {'foundations': {'welcome': 'Machine learning adjusts a functionâ€
                         'actions. Here you build and test its rules with recorded data. No '
                         'language model or external tool runs.',
              'goal': 'Control which actions a run can take and check whether it succeeded.',
-             'prerequisites': [],
+             'prerequisites': ['python'],
              'terms': [['State', 'A named phase of a run, such as running or waiting.'],
                        ['Tool call', 'A proposed tool name and its arguments.'],
                        ['Trace', 'A recorded sequence of what happened during a run.']]},
@@ -59,7 +67,7 @@ ORIENTATION = {'foundations': {'welcome': 'Machine learning adjusts a functionâ€
                         'in-memory data. A deployed service also needs storage, '
                         'authentication, and concurrency controls.',
              'goal': 'Handle invalid requests and retries without losing track of the result.',
-             'prerequisites': [],
+             'prerequisites': ['python'],
              'terms': [['Validation', 'Checking input types and values before using them.'],
                        ['Idempotency',
                         'Repeated requests have the effect of a single accepted request.'],
@@ -79,7 +87,7 @@ ORIENTATION = {'foundations': {'welcome': 'Machine learning adjusts a functionâ€
                    'rewards teach. These exercises use a small corridor and action-value '
                    'lists. They do not train a game agent.',
         'goal': 'Explain how rewards and ending signals affect an action-value update.',
-        'prerequisites': ['foundations'],
+        'prerequisites': ['python', 'foundations'],
         'terms': [['Observation', 'The information an environment gives the agent.'],
                   ['Reward', 'A numerical feedback signal after an action.'],
                   ['Episode',
@@ -88,7 +96,7 @@ ORIENTATION = {'foundations': {'welcome': 'Machine learning adjusts a functionâ€
                      'one piece. Start with small inputs whose expected results you can work '
                      'out by hand.',
           'goal': 'Prepare text for retrieval and measure how many relevant results it finds.',
-          'prerequisites': [],
+          'prerequisites': ['python'],
           'terms': [['Revision', 'A source-defined version of a record.'],
                     ['Chunk', 'A bounded piece of a larger document.'],
                     ['Recall',
@@ -100,7 +108,7 @@ ORIENTATION = {'foundations': {'welcome': 'Machine learning adjusts a functionâ€
                             'written inside free text.',
                  'goal': 'Use failure cases and measurements to decide when to retry or '
                          'release.',
-                 'prerequisites': ['backend'],
+                 'prerequisites': ['python', 'backend'],
                  'terms': [['Retry budget',
                             'A limit on how long or how often an operation may retry.'],
                            ['Desired state',
@@ -114,7 +122,7 @@ ORIENTATION = {'foundations': {'welcome': 'Machine learning adjusts a functionâ€
                             'functions and do not open windows or devices.',
                  'goal': 'Keep app state and motion predictable across pauses and repeated '
                          'events.',
-                 'prerequisites': [],
+                 'prerequisites': ['python'],
                  'terms': [['Lifecycle',
                             'The states an app moves through, such as active, paused, and '
                             'stopped.'],
@@ -125,6 +133,131 @@ GUIDES={}
 def add(id,code,output,steps,question,choices,answer,feedback):
  GUIDES[id]=dict(code=dedent(code).strip()+'\n',output=output,steps=steps,question=question,choices=choices,answer=answer,feedback=feedback)
 
+add('python-1','''
+# Two cups at 3 each, plus a tip of 2.
+cups = 2
+cost = 3
+tip = 2
+bill = cups * cost + tip
+print(bill)
+''','8',['Python runs the lines in order. It stores 2 in cups, 3 in cost and 2 in tip.',
+ 'Then it works out 2 * 3 + 2 = 8, stores 8 in bill, and print shows it.'],'If cups = 2 becomes cups = 5, what is printed?',['8', '15', '17'],2,'Python works out 5 * 3 + 2 = 17. bill uses the value that cups has when that line runs.')
+add('python-2','''
+print(2 + 3 * 4)
+print((2 + 3) * 4)
+print(3 ** 2)
+print(7 / 2)
+''','14\n20\n9\n3.5',['* runs before +, so 2 + 3 * 4 is 2 + 12 = 14. Brackets make 2 + 3 run first: 5 * 4 = 20.',
+ '3 ** 2 is 3 Ã— 3 = 9. / gives a float, so 7 / 2 is 3.5.'],'If the first line becomes print(10 - 4 / 2), what is the first number printed?',['3.0', '8.0', '8'],1,'/ runs before -, so Python works out 4 / 2 = 2.0 first. 10 - 2.0 is 8.0, a float, because / always gives a float.')
+add('python-3','''
+def double(n):
+    return n * 2
+
+print(double(4))
+print(double(10))
+''','8\n20',['double(4) runs the body with n = 4. return sends back 4 * 2 = 8, and print shows it.',
+ 'double(10) runs the same body again, this time with n = 10, and gives back 20.'],'If return n * 2 becomes return n * 3, what is the first line printed?',['12', '8', '30'],0,'double(4) now returns 4 * 3 = 12. The name of a function does not change what its body does.')
+add('python-4','''
+def bigger(a, b):
+    if a > b:
+        return a
+    else:
+        return b
+
+print(5 > 3)
+print(0 <= 5 and 5 <= 10)
+print(bigger(2, 7))
+''','True\nTrue\n7',['5 > 3 is True. 0 <= 5 and 5 <= 10 is also True, because both comparisons are True.',
+ 'bigger(2, 7) tests 2 > 7. That is False, so the lines under else run and return b, which is 7.'],'If the last line becomes print(bigger(4, 4)), what is the last line printed?',['True', 'None', '4'],2,'4 > 4 is False, because 4 is not greater than itself. The lines under else run and return b, which is 4.')
+add('python-5','''
+scores = [70, 85, 90, 65]
+print(scores[0])
+print(scores[-1])
+print(scores[1:3])
+print(len(scores))
+''','70\n65\n[85, 90]\n4',['Positions start at 0, so scores[0] is 70. Position -1 counts from the end, so scores[-1] is 65.',
+ 'scores[1:3] starts at position 1 and stops before position 3: [85, 90]. len counts the items: 4.'],'If scores[1:3] becomes scores[0:2], what is the third line printed?',['[70, 85]', '[85, 90]', '[70, 85, 90]'],0,'scores[0:2] starts at position 0 and stops before position 2, so it holds the items at positions 0 and 1: 70 and 85.')
+add('python-6','''
+numbers = [6, 1, 5]
+running = 0
+for number in numbers:
+    running += number
+    print(running)
+print(running / len(numbers))
+''','6\n7\n12\n4.0',['running starts at 0. Each pass adds one number: 0 + 6 = 6, then 6 + 1 = 7, then 7 + 5 = 12. The indented print shows each step.',
+ 'The last print is not indented, so it runs once, after the loop: 12 / 3 = 4.0.'],'If numbers becomes [6, 1, 5, 8], what is the last line printed?',['4.0', '5.0', '20'],1,'The total is now 20 and the list has 4 items, so the mean is 20 / 4 = 5.0. len(numbers) follows the length of the list.')
+add('python-7','''
+prices = [2, 5, 3]
+doubled = []
+for price in prices:
+    doubled.append(price * 2)
+print(doubled)
+print([price * 2 for price in prices])
+print([a + b for a, b in zip([1, 2], [10, 20])])
+''','[4, 10, 6]\n[4, 10, 6]\n[11, 22]',['The loop appends price * 2 to the empty list doubled, once for each price.',
+ 'The list comprehension builds the same list in one line. zip pairs 1 with 10 and 2 with 20.'],'If price * 2 becomes price + 1 in both places, what is the first line printed?',['[3, 6, 4]', '[4, 10, 6]', '[2, 5, 3, 1]'],0,'Each price gets 1 added: 2 + 1, 5 + 1 and 3 + 1. The loop and the list comprehension both give [3, 6, 4].')
+add('python-8','''
+def first_last(values):
+    return values[0], values[-1]
+
+def scale(x, factor=2):
+    return x * factor
+
+first, last = first_last([7, 8, 9])
+print(first, last)
+print(first_last([7, 8, 9]))
+print(scale(5), scale(5, 3))
+''','7 9\n(7, 9)\n10 15',['first_last returns the tuple (7, 9). first, last = ... unpacks it into two names, and print shows both.',
+ 'scale(5) uses the default factor 2. scale(5, 3) passes 3, which replaces the default.'],'If factor=2 becomes factor=10, what is the last line printed?',['10 15', '50 15', '50 30'],1,'scale(5) now uses the default 10, so it gives 50. scale(5, 3) passes 3, which replaces the default, so it still gives 15.')
+add('python-9','''
+ages = {"ana": 31, "ben": 25}
+print(ages["ana"])
+ages["cy"] = 40
+print("cy" in ages)
+print(ages.get("dan", 0))
+print(len(ages))
+''','31\nTrue\n0\n3',['ages["ana"] looks up the key "ana" and gives its value, 31. ages["cy"] = 40 adds a new key.',
+ '"cy" in ages is True. get gives 0, because "dan" is not a key; ages["dan"] would stop with a KeyError.'],'If ages.get("dan", 0) becomes ages.get("ben", 0), what is the third line printed?',['0', 'True', '25'],2,'"ben" is a key, so get returns its value, 25. The default 0 is used only when the key is missing.')
+add('python-10','''
+def safe_divide(a, b):
+    if b == 0:
+        raise ValueError("b must not be 0")
+    return a / b
+
+print(safe_divide(6, 3))
+print(safe_divide(5, 2))
+''','2.0\n2.5',['safe_divide(6, 3) tests 3 == 0. That is False, so raise does not run and the function returns 6 / 3 = 2.0.',
+ 'safe_divide(5, 0) would stop at raise. The last line of its traceback would read ValueError: b must not be 0.'],'If safe_divide(6, 3) becomes safe_divide(0, 3), what is the first line printed?',['0.0', 'ValueError: b must not be 0', '2.0'],0,'The test looks only at b, and b is 3. 0 / 3 is 0.0, so the function returns it without an error.')
+add('python-11','''
+import math
+
+side = 9
+root = math.sqrt(side)
+print(root)
+print(f"The square root of {side} is {root}")
+print(f"{2 / 3:.3f}")
+''','3.0\nThe square root of 9 is 3.0\n0.667',['import math loads the math module. math.sqrt is its square root function, and math.sqrt(9) is 3.0.',
+ 'In an f-string, {side} becomes 9 and {root} becomes 3.0. :.3f shows 2 / 3 with 3 decimal places: 0.667.'],'If :.3f becomes :.1f, what is the last line printed?',['0.667', '0.6', '0.7'],2,'2 / 3 is 0.6666â€¦. Shown with 1 decimal place, it is rounded to 0.7.')
+add('python-12','''
+def loss(w):
+    return (w - 3) ** 2
+
+for step in [1, 0.1, 0.001]:
+    print(round((loss(0 + step) - loss(0)) / step, 3))
+''','-5.0\n-5.9\n-5.999',['loss(w) works out (w âˆ’ 3)Â². ML calls a function that measures error a loss. Each pass prints the slope between w = 0 and w = step, rounded to 3 decimal places.',
+ 'As step shrinks, the slope gets closer to âˆ’6, the derivative at w = 0. ML foundations lesson 3 calls it the gradient.'],'If loss(0 + step) - loss(0) becomes loss(3 + step) - loss(3), what is the last line printed?',['-5.999', '6.0', '0.001'],2,'At w = 3 the curve is at its lowest point, where it is flat. The slopes are 1.0, 0.1 and 0.001, shrinking towards 0.')
+add('python-13','''
+def count_above(values, limit):
+    count = 0
+    for value in values:
+        print(value, value > limit)
+        if value > limit:
+            count += 1
+    return count
+
+print(count_above([3, 8, 5], 4))
+''','3 False\n8 True\n5 True\n2',['The print inside the loop shows each value and whether it is above the limit.',
+ 'Two values are above 4, so count ends at 2. A print like this is a quick way to follow a loop.'],'If the call becomes count_above([3, 8, 5], 5), what is the last line printed?',['2', '1', '3'],1,'5 > 5 is False, so only 8 counts. The trace line for 5 now shows 5 False.')
 add('foundations-1','''
 # A small model: a starting amount plus a per-item amount.
 items = 3

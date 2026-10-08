@@ -1,7 +1,8 @@
 """Plausible wrong implementations must fail a lesson's executable checks.
 
 The first 23 cases reproduce the curriculum audit. Extra cases cover device
-transfers, shared memory, missing inputs, and checks that used to accept stubs.
+transfers, shared memory, missing inputs, checks that used to accept stubs, and
+the beginner mistakes that Python from zero must catch.
 """
 import ast
 from pathlib import Path
@@ -172,6 +173,173 @@ WRONG_ANSWERS["foundations-5"] = [("accepts missing training statistics", change
 WRONG_ANSWERS["reliability-2"] = [("unimplemented redaction", "def redact(value):\n    return None")]
 WRONG_ANSWERS["interactive-4"] = [("unimplemented progress merge", "def merge_progress(state, events):\n    return None")]
 WRONG_ANSWERS["web-3"] = [("always returns an empty view", "function visibleRows(rows, query) { return []; }")]
+
+# Python from zero. Lessons 1 and 2 check top-level variables, so their
+# mistakes are whole programs; the others replace the reference functions.
+WRONG_ANSWERS.update({
+    "python-1": [
+        ("forgets delivery", "items = 3\nprice = 2\ndelivery = 1\ntotal = items * price\n"),
+        ("adds instead of multiplying", "items = 3\nprice = 2\ndelivery = 1\ntotal = items + price + delivery\n"),
+        ("works out total before setting price and delivery",
+         "items = 3\nprice = 0\ndelivery = 0\ntotal = items * price + delivery\nprice = 2\ndelivery = 1\n"),
+    ],
+    "python-2": [
+        ("leaves out the brackets before squaring",
+         "error = 5 - 2 ** 2\naverage = (1 + 4) / 2\nrate = (9 - 3) / (4 - 1)\n"),
+        ("doubles instead of squaring",
+         "error = (5 - 2) * 2\naverage = (1 + 4) / 2\nrate = (9 - 3) / (4 - 1)\n"),
+        ("divides only the 4", "error = (5 - 2) ** 2\naverage = 1 + 4 / 2\nrate = (9 - 3) / (4 - 1)\n"),
+    ],
+    "python-3": [
+        ("prints instead of returning", functions("python-3", area="""def area(width, height):
+    print(width * height)
+""")),
+        ("adds instead of multiplying", changed("python-3", "width * height", "width + height")),
+        ("squares the width", changed("python-3", "width * height", "width * width")),
+    ],
+    "python-4": [
+        ("forgets the high side", functions("python-4", clamp="""def clamp(value, low, high):
+    if value < low:
+        return low
+    return value
+""")),
+        ("returns the wrong edge", functions("python-4", clamp="""def clamp(value, low, high):
+    if value < low:
+        return high
+    elif value > high:
+        return low
+    else:
+        return value
+""")),
+        ("has no return for values inside the range", functions("python-4", clamp="""def clamp(value, low, high):
+    if value < low:
+        return low
+    if value > high:
+        return high
+""")),
+    ],
+    "python-5": [
+        ("counts positions from 1", changed("python-5", "values[-1]", "values[len(values)]")),
+        ("keeps the last item", changed("python-5", "values[1:-1]", "values[1:]")),
+        ("drops only the last item", changed("python-5", "values[1:-1]", "values[:-1]")),
+    ],
+    "python-6": [
+        ("resets the total inside the loop", functions("python-6", total="""def total(values):
+    for value in values:
+        result = 0
+        result += value
+    return result
+""")),
+        ("returns inside the loop", functions("python-6", total="""def total(values):
+    result = 0
+    for value in values:
+        result += value
+        return result
+    return result
+""")),
+        ("always divides by 2", functions("python-6", mean="""def mean(values):
+    return total(values) / 2
+""")),
+    ],
+    "python-7": [
+        ("subtracts in the wrong order", changed("python-7", "[p - t for", "[t - p for")),
+        ("keeps only the last difference", functions("python-7", differences="""def differences(predictions, targets):
+    result = []
+    for p, t in zip(predictions, targets):
+        result = [p - t]
+    return result
+""")),
+        ("pairs every prediction with every target", changed(
+            "python-7", "for p, t in zip(predictions, targets)", "for p in predictions for t in targets")),
+    ],
+    "python-8": [
+        ("returns a list instead of a tuple", functions("python-8", low_high="""def low_high(values):
+    return [min(values), max(values)]
+""")),
+        ("ignores fraction", functions("python-8", split_at="""def split_at(values, fraction=0.5):
+    cut = int(len(values) * 0.5)
+    return values[:cut], values[cut:]
+""")),
+        ("loses the item at the cut", functions("python-8", split_at="""def split_at(values, fraction=0.5):
+    cut = int(len(values) * fraction)
+    return values[:cut], values[cut + 1:]
+""")),
+    ],
+    "python-9": [
+        ("sets every count to 1", changed("python-9", "counts.get(word, 0) + 1", "1")),
+        ("skips words it has not seen yet", functions("python-9", count_words="""def count_words(words):
+    counts = {}
+    for word in words:
+        if word in counts:
+            counts[word] += 1
+    return counts
+""")),
+        ("starts a new word at 1 before adding 1", changed("python-9", "counts.get(word, 0)", "counts.get(word, 1)")),
+    ],
+    "python-10": [
+        ("returns the error instead of raising it", functions("python-10", safe_mean="""def safe_mean(values):
+    if not values:
+        return ValueError("values is empty")
+    return sum(values) / len(values)
+""")),
+        ("returns 0 for an empty list", functions("python-10", safe_mean="""def safe_mean(values):
+    if not values:
+        return 0
+    return sum(values) / len(values)
+""")),
+        ("raises a general Exception", functions("python-10", safe_mean="""def safe_mean(values):
+    if not values:
+        raise Exception("values is empty")
+    return sum(values) / len(values)
+""")),
+    ],
+    "python-11": [
+        ("forgets the square root", functions("python-11", distance="""def distance(x, y):
+    return x ** 2 + y ** 2
+""")),
+        ("leaves out the f before the quote", functions("python-11", describe="""def describe(name, value):
+    return "{name} = {value:.2f}"
+""")),
+        ("rounds instead of showing 2 decimal places", functions("python-11", describe="""def describe(name, value):
+    return f"{name} = {round(value, 2)}"
+""")),
+    ],
+    "python-12": [
+        ("divides the change in x by the change in y", functions("python-12", slope="""def slope(x1, y1, x2, y2):
+    if x1 == x2:
+        raise ValueError("x1 and x2 must differ")
+    return (x2 - x1) / (y2 - y1)
+""")),
+        ("does not reject equal x values", functions("python-12", slope="""def slope(x1, y1, x2, y2):
+    return (y2 - y1) / (x2 - x1)
+""")),
+        ("subtracts the x values in the other order", functions("python-12", slope="""def slope(x1, y1, x2, y2):
+    if x1 == x2:
+        raise ValueError("x1 and x2 must differ")
+    return (y2 - y1) / (x1 - x2)
+""")),
+    ],
+    "python-13": [
+        ("fixes only the return", functions("python-13", mse="""def mse(a, b):
+    total = 0
+    for i in range(len(a) - 1):
+        total = (a[i] - b[i]) ** 2
+    return total / len(a)
+""")),
+        ("still skips the last position", functions("python-13", mse="""def mse(a, b):
+    total = 0
+    for i in range(len(a) - 1):
+        total += (a[i] - b[i]) ** 2
+    return total / len(a)
+""")),
+        ("still replaces the total", functions("python-13", mse="""def mse(a, b):
+    total = 0
+    for i in range(len(a)):
+        total = (a[i] - b[i]) ** 2
+    return total / len(a)
+""")),
+    ],
+})
 
 
 class WrongAnswerTests(unittest.TestCase):

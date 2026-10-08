@@ -1,6 +1,6 @@
 # Learn from public projects
 
-The Projects tab ships with **12 curated public repositories**, covering all 12 paths. Each entry has a level, a preparation lesson, a specific starting file, prerequisites and three walkthrough steps. Follow a small slice of a codebase before trying to run or understand the whole application.
+The Projects tab ships with **12 curated public repositories**, covering every path except Python from zero. Each entry has a level, a preparation lesson, a specific starting file, prerequisites and three walkthrough steps. Follow a small slice of a codebase before trying to run or understand the whole application.
 
 ```mermaid
 flowchart LR
@@ -67,7 +67,7 @@ A Git-ignored `data/portfolio.json` overrides the bundled catalog when present. 
 }
 ```
 
-Valid path IDs: `foundations`, `pytorch`, `tensorflow`, `modern`, `cuda`, `harness`, `backend`, `web`, `rl`, `data`, `reliability`, `interactive`. IDs must be unique lowercase slugs. Use 1–8 walkthrough steps and HTTPS GitHub URLs. Visibility is descriptive, not an access-control boundary; this remains a personal loopback app.
+Valid path IDs: `python`, `foundations`, `pytorch`, `tensorflow`, `modern`, `cuda`, `harness`, `backend`, `web`, `rl`, `data`, `reliability`, `interactive`. IDs must be unique lowercase slugs. Use 1–8 walkthrough steps and HTTPS GitHub URLs. Visibility is descriptive, not an access-control boundary; this remains a personal loopback app.
 
 ## Progress and backups
 

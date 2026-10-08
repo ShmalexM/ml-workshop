@@ -33,6 +33,8 @@ Glossary guides resolve source section keys. Inference guides contain fixed prin
 
 ## Engineering paths and project practice
 
+`backend/python_course.py` holds Python from zero, the first path, for learners who have not written Python. It ends with the functions, lists and loops that ML foundations lesson 1 assumes, and every other Python path lists it as a suggested first path.
+
 `backend/engineering_courses.py` adds original, deterministic engineering lessons. A lesson's language selects Python (the default) or JavaScript. JavaScript runs in a fresh Node process via a Python launcher that sets CPU/file limits before `execve`; the threaded server does not use `preexec_fn`. Both languages share wall timeout, output capture, process-group cleanup and completion rules. Node's VM context organizes exercise/check bindings; it is not a security boundary.
 
 `backend/portfolio.py` validates the bundled public selection in `backend/public_projects.json`, or an optional ignored `data/portfolio.json` override. Fresh clones get the curated public catalog; a personal project list belongs in the ignored override. The server reads only catalog metadata, not the referenced repositories. API responses supply catalog metadata and project state; token-protected writes persist timestamped notes and reviewed step indices in SQLite. Progress export version 3 includes the catalog and project state. Existing lesson IDs, draft caches, book storage and launcher identity remain compatible.
@@ -41,7 +43,7 @@ The UI uses hash routes for Paths, lessons, Projects and Books. The suggested or
 
 ## Guided learning and solutions
 
-`backend/lesson_guides.py` supplies course orientation, vocabulary, prerequisite links and a hand-written small example for each of the 58 lessons. Each example has expected output, a short walkthrough and a prediction question with explanatory feedback. Examples are teaching material, separate from the exercise solution and its checks.
+`backend/lesson_guides.py` supplies course orientation, vocabulary, prerequisite links and a hand-written small example for each of the 71 lessons. Each example has expected output, a short walkthrough and a prediction question with explanatory feedback. Examples are teaching material, separate from the exercise solution and its checks.
 
 The lesson UI begins in Understand, moves to See an example, then exposes the editor in Try it yourself. Learners can revisit any stage and open the solution at any time without using hints. Viewing the solution leaves the draft intact; Load into editor replaces it. Changing the lesson resets the stage and keeps saved exercise drafts.
 

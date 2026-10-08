@@ -2,6 +2,18 @@
 
 This file lists the notable changes in each release. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and version numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Python from zero, a new first path of 13 lessons for people who have never written code. It starts with `print` and variables, then covers arithmetic, functions, `if`, lists and slices, `for` loops, `zip` and list comprehensions, tuples, dictionaries, tracebacks and `raise ValueError`, f-strings and `import`, the slope between two points, and fixing a broken function. It ends where ML foundations lesson 1 begins. The app now has 71 lessons in 13 paths.
+- A question on the Paths page for new learners: "Have you written Python before?" **No** opens Python from zero, and **Yes** hides the question. The answer is saved in the browser. It shows only when you have no saved work.
+
+### Changed
+
+- ML foundations and the other Python paths list Python from zero as a suggested first path, and the ML & GPU engineer order starts with it.
+- In the Hero game, Python from zero lessons earn the smallest chests: the first seven earn a Worn Footlocker.
+
 ## [1.1.2] - 2026-10-06
 
 ### Fixed

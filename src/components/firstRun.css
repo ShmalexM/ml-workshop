@@ -1,0 +1,6 @@
+/* First-run question on the Paths page, shown until the learner answers it. */
+.first-run{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px 24px;background:#fff;border:1px solid var(--line);border-left:3px solid var(--green);border-radius:10px;padding:16px 20px;margin-bottom:12px}
+.first-run h2{font-size:17px;letter-spacing:-.3px}
+.first-run p{font-size:13px;color:var(--muted);margin-top:4px;max-width:520px}
+.first-run-actions{display:flex;flex-wrap:wrap;gap:10px}
+@media(max-width:700px){.first-run{padding:15px 16px}.first-run-actions,.first-run-actions button{width:100%}}

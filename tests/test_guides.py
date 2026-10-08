@@ -8,7 +8,22 @@ from runner import execute
 from test_curriculum import OFFLINE_PREFIX,JS_OFFLINE_PREFIX,require_lesson_modules
 
 # Input changes asked about by the prediction questions.
-PREDICTIONS = {'foundations-1': ([('items = 3', 'items = 4')], '9', '9'),
+PREDICTIONS = {'python-1': ([('cups = 2', 'cups = 5')], '17', '17'),
+ 'python-2': ([('print(2 + 3 * 4)', 'print(10 - 4 / 2)')], '8.0\n20\n9\n3.5', '8.0'),
+ 'python-3': ([('return n * 2', 'return n * 3')], '12\n30', '12'),
+ 'python-4': ([('bigger(2, 7)', 'bigger(4, 4)')], 'True\nTrue\n4', '4'),
+ 'python-5': ([('scores[1:3]', 'scores[0:2]')], '70\n65\n[70, 85]\n4', '[70, 85]'),
+ 'python-6': ([('numbers = [6, 1, 5]', 'numbers = [6, 1, 5, 8]')], '6\n7\n12\n20\n5.0', '5.0'),
+ 'python-7': ([('price * 2', 'price + 1')], '[3, 6, 4]\n[3, 6, 4]\n[11, 22]', '[3, 6, 4]'),
+ 'python-8': ([('factor=2', 'factor=10')], '7 9\n(7, 9)\n50 15', '50 15'),
+ 'python-9': ([('ages.get("dan", 0)', 'ages.get("ben", 0)')], '31\nTrue\n25\n3', '25'),
+ 'python-10': ([('safe_divide(6, 3)', 'safe_divide(0, 3)')], '0.0\n2.5', '0.0'),
+ 'python-11': ([(':.3f', ':.1f')], '3.0\nThe square root of 9 is 3.0\n0.7', '0.7'),
+ 'python-12': ([('loss(0 + step) - loss(0)', 'loss(3 + step) - loss(3)')], '1.0\n0.1\n0.001', '0.001'),
+ 'python-13': ([('count_above([3, 8, 5], 4)', 'count_above([3, 8, 5], 5)')],
+               '3 False\n8 True\n5 False\n1',
+               '1'),
+ 'foundations-1': ([('items = 3', 'items = 4')], '9', '9'),
  'foundations-2': ([('predictions = [3, 5]', 'predictions = [3, 7]')], '[4, 4]\n4.0', '4.0'),
  'foundations-3': ([('learning_rate = 0.1', 'learning_rate = 0.5')], '-6.0\n3.0', '3.0'),
  'foundations-4': ([('range(10)', 'range(7)')], '6 1 0', '6 1 0'),

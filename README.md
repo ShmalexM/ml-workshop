@@ -4,7 +4,7 @@
 [![Latest release](https://img.shields.io/github/v/release/ShmalexM/ml-workshop)](https://github.com/ShmalexM/ml-workshop/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-Engineering Workshop is an app for learning machine learning and software engineering by writing code. It has 58 short lessons in 12 paths, from ML basics, PyTorch, TensorFlow and CUDA to agent harnesses, backends and web apps. Each lesson explains one idea, shows a small example, and then runs checks on your own code. It is for programmers who know some Python and want hands-on practice. Everything runs on your computer and works offline after the install, without an account, an API key or a GPU. It is free and open source under the MIT license.
+Engineering Workshop is an app for learning machine learning and software engineering by writing code. It has 71 short lessons in 13 paths, from Python and ML basics, PyTorch, TensorFlow and CUDA to agent harnesses, backends and web apps. Each lesson explains one idea, shows a small example, and then runs checks on your own code. If you have never written code, start with Python from zero. It teaches the Python that the other paths use, from the first line of a program. Everything runs on your computer and works offline after the install, without an account, an API key or a GPU. It is free and open source under the MIT license.
 
 ![A lesson in the See an example stage: a worked example, its output and a prediction question](docs/guided-lesson-screenshot.jpg)
 
@@ -42,6 +42,7 @@ Everything goes into one folder: `~/.local/share/engineering-workshop` on macOS 
 
 | Path | Lessons | Topics |
 | --- | ---: | --- |
+| Python from zero | 13 | Variables, print, arithmetic, functions, if, lists, loops, zip, tuples, dictionaries, errors, f-strings, imports, slopes, and debugging |
 | ML foundations | 6 | Predictions, loss, gradients, data splitting, and training |
 | PyTorch | 6 | Tensors, broadcasting, autograd, modules, optimization, and inference |
 | TensorFlow | 6 | Tensors, GradientTape, Keras, training, datasets, and inference |
@@ -55,11 +56,11 @@ Everything goes into one folder: `~/.local/share/engineering-workshop` on macOS 
 | Shipping & reliability | 4 | Retry budgets, structured redaction, change plans, and release gates |
 | Interactive & native systems | 4 | Lifecycle, frame time, aspect ratios, and event replay |
 
-The exercises are in Python, except the Web app engineering lessons, which use JavaScript. A lesson takes about 10 to 20 minutes.
+The exercises are in Python, except the Web app engineering lessons, which use JavaScript. A lesson takes about 8 to 20 minutes.
 
 Each lesson has three stages: **Understand**, **See an example** and **Try it yourself**. You read a short explanation, run a small example and answer a question about it. Then you write your own code. **Run code** (⌘ Enter, or Ctrl Enter on Linux and Windows) shows the output. **Check answer** (⌘ Shift Enter, or Ctrl Shift Enter) runs the checks and gives you XP the first time they all pass. Hints open one at a time. **Show solution** works at any time, and **Compare with my code** marks the lines that differ from your draft.
 
-All lessons are open from the start. The **Paths** page suggests an order for four roles, and **All lessons** lists every lesson with filters by path and status. See the [ML learning guide](docs/learning-plan.md).
+All lessons are open from the start. On first launch, the **Paths** page asks whether you have written Python before; **No** opens Python from zero. The page suggests an order for four roles, and **All lessons** lists every lesson with filters by path and status. See the [ML learning guide](docs/learning-plan.md).
 
 **Projects** lists 12 public repositories, from Start small to Capstone. Each has a preparation lesson, a link to a starting file and three walkthrough steps. See [Learn from public projects](docs/project-learning.md).
 
@@ -70,7 +71,7 @@ All lessons are open from the start. The **Paths** page suggests an order for fo
 Finished work earns rewards in a small fantasy game next to the lessons. The game is optional. Turn it off in **Settings** to hide it completely.
 
 - **Chests.** Every finished lesson, path, project walkthrough and reading guide earns one chest. Harder work earns a better chest. A lesson's chest depends on its path and on how far into the path the lesson is. A finished path earns one of the two best chests.
-- **Gear.** You create one hero from 13 World of Warcraft races and 12 classes. Chests hold only gear that your class can use, in five rarities: Basic (white), Common (green), Rare (blue), Epic (red) and Legendary (orange). Better gear looks more ornate on the 3D hero and in your bags. Finishing every lesson, path and project opens about 140 items, and 3 or 4 of them are Legendary.
+- **Gear.** You create one hero from 13 World of Warcraft races and 12 classes. Chests hold only gear that your class can use, in five rarities: Basic (white), Common (green), Rare (blue), Epic (red) and Legendary (orange). Better gear looks more ornate on the 3D hero and in your bags. Finishing every lesson, path and project opens about 155 items, and 3 or 4 of them are Legendary.
 - **Battles.** Each of these chests also earns one fight in a top-down arena. Click to move and attack, and press Q, W, E and R to use your class's abilities. Each stage ends with a boss, and beating it earns a chest. A new hero usually loses at first. The damage you deal to a boss carries over between fights, and better gear makes your hero stronger. The **Auto** button plays the fight for you.
 
 ![The Hero armory: a 3D hero with equipped gear, and a list of chests earned from lessons](docs/hero-screenshot.jpg)
