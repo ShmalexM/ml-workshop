@@ -194,12 +194,17 @@ class LaunchTests(unittest.TestCase):
     def test_reuse_and_browser_choice(self):
         with tempfile.TemporaryDirectory() as directory:
             token = paths.session_token(Path(directory))
+            umask = os.umask(0o022)
             with patch.object(launch, 'data_dir', return_value=Path(directory)), patch.object(launch, 'port', return_value=17319), patch.object(launch, 'health', return_value={'app': 'ml-workshop'}), patch.object(launch, 'token_accepted', return_value=True), patch.object(launch.subprocess, 'Popen') as spawn, patch.object(launch.webbrowser, 'open') as browser:
-                with patch.object(sys, 'argv', ['launch.py', '--no-open']):launch.main()
-                browser.assert_not_called()
-                with patch.object(sys, 'argv', ['launch.py']):launch.main()
-                # The browser gets the token in the URL fragment.
-                browser.assert_called_once_with(f'http://127.0.0.1:17319/#session={token}')
+                try:
+                    with patch.object(sys, 'argv', ['launch.py', '--no-open']):launch.main()
+                    browser.assert_not_called()
+                    with patch.object(sys, 'argv', ['launch.py']):launch.main()
+                    # The browser gets the token in the fragment and the user's own umask.
+                    browser.assert_called_once_with(f'http://127.0.0.1:17319/#session={token}')
+                    self.assertEqual(os.umask(0o022), 0o022)
+                finally:
+                    os.umask(umask)
                 spawn.assert_not_called()
 
     def test_reuse_needs_this_data_folders_token(self):
@@ -232,6 +237,9 @@ class LaunchTests(unittest.TestCase):
                 for process, (stdout, stderr) in zip(processes, outputs):
                     self.assertEqual(process.returncode, 0, stderr)
                     self.assertEqual(stdout.strip(), f'http://127.0.0.1:{port}/#session={token}')
+                if os.name != 'nt':
+                    for path, mode in [(data, 0o700), (data / 'session-token', 0o600), (data / 'server.log', 0o600), (data / 'workshop.sqlite3', 0o600)]:
+                        self.assertEqual(path.stat().st_mode & 0o777, mode, path)
                 pid = (data / 'server.pid').read_text()
                 subprocess.run(command, cwd=ROOT, env=env, check=True, capture_output=True, timeout=20)
                 self.assertEqual((data / 'server.pid').read_text(), pid)

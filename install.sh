@@ -137,6 +137,9 @@ prepare_home() {
     fail "$EW_HOME has files that this installer did not create. Set EW_HOME to another folder."
   fi
   mkdir -p "$EW_HOME" "$DATA" "$RUNTIME" || fail "Could not create $EW_HOME."
+  # Other accounts on this computer must not read progress, notes or the session token.
+  # Older installs made these folders 0755.
+  chmod 700 "$EW_HOME" "$DATA" || fail "Could not set the permissions of $EW_HOME."
   say 'Created by the Engineering Workshop installer.' >"$MARKER"
   LOG=$EW_HOME/install.log
   : >"$LOG"
@@ -400,7 +403,9 @@ finish() {
   else
     say "Starting Engineering Workshop..."
     errors=$EW_HOME/.launch-errors
-    if url=$("$APP/.venv/bin/python" "$APP/scripts/installed.py" </dev/null 2>"$errors"); then
+    # Start the app with the user's own umask, so a browser that it starts does not inherit 077.
+    # The launcher and the server make their own files private.
+    if url=$(umask "$USER_UMASK" && "$APP/.venv/bin/python" "$APP/scripts/installed.py" </dev/null 2>"$errors"); then
       rm -f "$errors"
       # The launcher prints the address with the session token after #. Show only the address.
       say "Done. Engineering Workshop is open in your browser at ${url%%#*}"
@@ -468,6 +473,9 @@ usage() {
 }
 
 main() {
+  # Everything the installer creates is readable only by this user: 0600 files, 0700 folders.
+  USER_UMASK=$(umask)
+  umask 077
   LOG=
   FAILED=0
   MODE=install_app

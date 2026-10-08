@@ -47,6 +47,10 @@ def main(install):
         # The server keeps its session token in the data folder; the launcher passes it in the URL fragment.
         token = (install / 'data' / 'session-token').read_text(encoding='ascii').strip()
         check(started.stdout.strip() == f'{url}/#session={token}', f'unexpected launcher output: {started.stdout!r}')
+        if os.name != 'nt':
+            for path, mode in [(install, 0o700), (install / 'data', 0o700), (install / 'data' / 'session-token', 0o600)]:
+                actual = path.stat().st_mode & 0o777
+                check(actual == mode, f'{path} has mode {actual:o}; expected {mode:o}')
         health = call(url + '/api/health')
         check(health.get('app') == 'ml-workshop', f'unexpected /api/health response: {health}')
         print(f'{url}/api/health -> {health}')

@@ -14,6 +14,10 @@ Every API request must send the session token, except `/api/health` and the file
 - The app's page files, `/api/health` and book files (covers, images, the original PDF or EPUB) do not need the token. The browser loads book files by URL, so it cannot send the token with them.
 - Another program that runs as your user account can read the token file. The token protects against other accounts on the computer and against web pages, not against software you run yourself.
 
+## File permissions
+
+On macOS and Linux, the server and the install command create the data folder as `0700` and its files as `0600`, so other accounts on the computer cannot read your progress, notes, backups or the token. They also set the data folder of an older install to `0700`. On Windows, the install folder is in `%LOCALAPPDATA%`, which other standard accounts cannot read. In a Windows clone, the `data` folder has the same permissions as the clone folder.
+
 ## Report a vulnerability
 
 Report vulnerabilities privately with the repository's [private reporting form](https://github.com/ShmalexM/ml-workshop/security/advisories/new). It is also on the [Security advisories](https://github.com/ShmalexM/ml-workshop/security/advisories) page under **Report a vulnerability**. Include the steps to reproduce, your operating system, and whether you used the install command or a clone. Do not include personal notes, progress databases, credentials, or sensitive source code in public issues. There is no guaranteed response time.

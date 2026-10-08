@@ -16,7 +16,12 @@ from library import import_book
 from book_fixture import make_epub
 from server_fixture import server_token
 
+POSIX = os.name != 'nt'
 BANNER = 'Open Engineering Workshop from its shortcut or start command to connect this browser.'
+
+
+def mode(path):
+    return path.stat().st_mode & 0o777
 
 
 class LocalServer:
@@ -69,7 +74,9 @@ class SessionTests(unittest.TestCase):
     def setUpClass(cls):
         cls.tmp = tempfile.TemporaryDirectory(prefix='ml-security-test-')
         cls.data = Path(cls.tmp.name) / 'data'
-        cls.data.mkdir()
+        # A folder made by an older version with the default umask.
+        cls.data.mkdir(mode=0o755)
+        os.chmod(cls.data, 0o755)
         cls.book = import_book(make_epub(Path(cls.tmp.name) / 'fixture.epub'), cls.data, 'fixture')
         cls.server = LocalServer(cls.data)
 
@@ -109,6 +116,14 @@ class SessionTests(unittest.TestCase):
             urllib.request.urlopen(request, timeout=10)
         self.assertEqual(error.exception.code, 403)
 
+    @unittest.skipUnless(POSIX, 'POSIX file modes')
+    def test_data_files_are_private(self):
+        backup = json.loads(self.server.request('/api/backup', body={})[2])['filename']
+        self.assertEqual(mode(self.data), 0o700)
+        for path in [self.data / 'session-token', self.data / 'workshop.sqlite3', self.data / 'backups' / backup]:
+            with self.subTest(path=path.name):
+                self.assertEqual(mode(path), 0o600)
+
 
 class RestartTests(unittest.TestCase):
     def test_token_survives_restarts_and_changes_only_when_the_file_is_missing(self):
@@ -119,6 +134,9 @@ class RestartTests(unittest.TestCase):
             try:
                 self.assertEqual(second.token, first.token)
                 self.assertEqual(second.request('/api/state')[0], 200)
+                if POSIX:
+                    self.assertEqual(second.request('/api/backup', body={})[0], 200)
+                    self.assertEqual(mode(Path(directory) / 'backups'), 0o700)
             finally:
                 second.stop()
             (Path(directory) / 'session-token').unlink()

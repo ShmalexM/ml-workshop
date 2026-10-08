@@ -41,7 +41,13 @@ def main():
     data = data_dir()
     listen_port = port()
     url = f'http://127.0.0.1:{listen_port}'
-    start(data, listen_port, url)
+    # The data folder, server.log and the server process are private to this user.
+    # The browser is started later with the original umask.
+    previous_umask = os.umask(0o077)
+    try:
+        start(data, listen_port, url)
+    finally:
+        os.umask(previous_umask)
     url = session_url(url, data)
     if '--no-open' not in sys.argv:
         webbrowser.open(url)

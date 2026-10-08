@@ -15,6 +15,9 @@ import threading
 import tempfile
 import time
 
+# Files and folders this server creates are private to the user: 0600 files, 0700 folders.
+os.umask(0o077)
+
 from courses import BY_ID, public_curriculum
 from runner import execute, node_binary
 from portfolio import load_portfolio
@@ -29,6 +32,10 @@ sys.path.append(str(ROOT/'scripts'))
 from platform_paths import data_dir, session_token
 DATA=data_dir()
 DATA.mkdir(parents=True,exist_ok=True)
+if os.name!='nt':
+    # Older versions created the data folder as 0755. A 0700 folder also protects the 0644 files inside it.
+    try:DATA.chmod(0o700)
+    except OSError:pass
 DB=DATA/'workshop.sqlite3'
 # The token stays the same across restarts. The launcher reads it from the data folder and gives
 # it to the browser in the URL fragment; no endpoint returns it.
