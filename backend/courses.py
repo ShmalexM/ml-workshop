@@ -46,7 +46,11 @@ lesson('foundations',2,'Measure the error',
 'MSE = mean((prediction − target)²)',
 ('For predictions [2, 4] and targets [1, 6], the squared errors are [1, 4]. Their mean is '
  '(1 + 4) / 2 = 2.5. This loss measures how wrong the predictions are. The gradient in the '
- 'next lesson tells you which way to change a weight.'),
+ 'next lesson tells you which way to change a weight.\n\n'
+ 'The code uses four pieces of Python. zip(predictions, targets) pairs the two lists by '
+ 'position. for p, t in ... unpacks each pair into two names. (p - t) ** 2 squares the '
+ 'difference. raise ValueError("...") stops the function when the input makes no sense, '
+ 'such as an empty list. Python from zero lessons 2, 7, 8 and 10 cover them.'),
 ['Pair each prediction with its target.',
  'Return the mean of their squared differences from mse(predictions, targets).',
  'Raise ValueError for empty lists or lists of different lengths.'],
@@ -84,7 +88,13 @@ lesson('foundations',3,'Follow the gradient',
 ('This toy model has no input; its prediction is the weight, so its loss is (weight − '
  'target)². At weight 0 and target 3, the gradient is 2 × (0 − 3) = −6. A learning rate of 0.1 gives the '
  'update 0 − 0.1 × (−6) = 0.6. Try the plot below to see how the learning rate changes '
- 'each step.'),
+ 'each step.\n\n'
+ 'Where 2 × (weight − target) comes from: call the difference d = weight − target, so the '
+ 'loss is d × d. Raise the weight by a small amount h. The difference becomes d + h, and '
+ 'the loss becomes (d + h)² = d² + 2 × d × h + h². The loss grew by 2 × d × h + h². '
+ 'Divide that by h to get the slope: 2 × d + h. As h shrinks toward 0, the slope gets '
+ 'closer to 2 × d, which is 2 × (weight − target). Python from zero lesson 12 measured '
+ 'the same slope with h = 0.001 and got about −6.'),
 ['Compute the gradient of (weight − target)².',
  'Subtract learning_rate times the gradient from weight.',
  'Return the updated weight from step(weight, target, learning_rate).'],
@@ -188,7 +198,14 @@ lesson('foundations',6,'A complete training loop',
 ('An epoch is one pass over the training set. With x = 1, y = 3, and both parameters at '
  'zero, the error is −3. Both gradients are −6, so learning rate 0.1 moves weight and bias '
  'to 0.6. Compute both gradients from the same old parameters so they describe the same '
- 'predictions.'),
+ 'predictions.\n\n'
+ 'Where dw and db come from: for one example, the loss is error², and lesson 3 showed '
+ 'that the slope of a square is 2 × error. Raising the bias by a small amount h raises the '
+ 'prediction, and so the error, by h. So the loss changes 2 × error times as fast as the '
+ 'bias: db = 2 × error. Raising the weight by h raises the prediction by h × x, because '
+ 'the weight is multiplied by x. So the loss changes 2 × error × x times as fast as the '
+ 'weight: dw = 2 × error × x. The loss of the training set is the mean over its examples, '
+ 'so each gradient is the mean of these values.'),
 ['Start weight and bias at zero in train(xs, ys, epochs=400, lr=0.05).',
  'For each epoch, compute all errors and both mean gradients before updating either '
  'parameter.',

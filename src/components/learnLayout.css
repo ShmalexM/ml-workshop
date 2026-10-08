@@ -40,6 +40,9 @@
 .recap>summary{padding:13px 0;font-size:13px;font-weight:600;color:#33445c;cursor:pointer}
 .recap .formula{margin:4px 0 0}
 .recap .guided-explanation{margin:14px 0 16px}
+/* An explanation can have several paragraphs; keep them closer than the blocks around them. */
+.guided-explanation:has(+.guided-explanation){margin-bottom:12px}
+.guided-explanation+.guided-explanation{margin-top:12px}
 @media(min-width:1450px){.lesson-content h2.challenge-heading{font-size:19px}.recap>summary{font-size:14px}}
 
 /* Footer notes: why Next lesson is locked, or what passing the checks earned. */

@@ -12,6 +12,7 @@ This file lists the notable changes in each release. The format follows [Keep a 
 ### Changed
 
 - ML foundations and the other Python paths list Python from zero as a suggested first path, and the ML & GPU engineer order starts with it.
+- ML foundations lesson 2 explains the Python in its code: the worked example pairs the lists with `zip` in one step and squares the errors in a second, and the explanation names `zip`, unpacking, `**` and `raise`. Lessons 3 and 6 show where their gradient formulas come from.
 - In the Hero game, Python from zero lessons earn the smallest chests: the first seven earn a Worn Footlocker.
 - The lesson list is a drawer, opened with **Lessons** next to the back link. From 1440px it sits beside the lesson and remembers when you close it; on smaller screens it opens over the lesson.
 - The right panel follows the lesson stage: none in Understand, the worked example in See an example, and the editor in Try it yourself. The line between the lesson text and the editor can be dragged.

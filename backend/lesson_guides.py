@@ -274,10 +274,13 @@ print(prediction)
 add('foundations-2','''
 predictions = [3, 5]
 targets = [1, 5]
-squared_errors = [(p - t) ** 2 for p, t in zip(predictions, targets)]
+pairs = list(zip(predictions, targets))
+print(pairs)
+squared_errors = [(p - t) ** 2 for p, t in pairs]
 print(squared_errors)
 print(sum(squared_errors) / len(squared_errors))
-''','[4, 0]\n2.0',['Subtract each correct target from its prediction, then square the difference.','Average the squared errors: (4 + 0) / 2.'], 'If predictions becomes [3, 7], what mean squared error is printed?', ['4.0', '2.0', '8.0'],0,'Both errors are 2, so both squares are 4. Their mean is 4.')
+''','[(3, 1), (5, 5)]\n[4, 0]\n2.0',['The first step pairs the lists. zip(predictions, targets) matches items by position: 3 with 1, then 5 with 5. list(...) collects those pairs into a list of tuples, so print can show them.',
+ 'The second step squares each error. for p, t in pairs unpacks each pair into two names, p and t. (p - t) ** 2 squares the difference: (3 - 1) ** 2 = 4 and (5 - 5) ** 2 = 0. The square brackets around the line collect the results into a new list; this form is a list comprehension. The last line averages them: (4 + 0) / 2 = 2.0.'], 'If predictions becomes [3, 7], what mean squared error is printed?', ['4.0', '2.0', '8.0'],0,'The pairs become (3, 1) and (7, 5). Both errors are 2, so both squares are 4. Their mean is 4.0.')
 add('foundations-3','''
 weight = 0.0
 target = 3.0
