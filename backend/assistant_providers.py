@@ -3,6 +3,7 @@
 Standard library only. Upstream calls use http.client, which never follows redirects and ignores proxy
 variables. The connection goes to an address that the URL policy in assistant.py already checked.
 """
+import base64
 import codecs
 import http.client
 import json
@@ -11,6 +12,7 @@ import socket
 import ssl
 import threading
 import time
+from urllib.parse import quote
 
 # Seconds. Socket timeouts limit each read; the deadlines below limit wall-clock time, so a provider that sends
 # one byte at a time cannot hold a request open.
@@ -439,11 +441,14 @@ class Upstream:
         return response
 
     def error_for(self, response):
-        """A plain message for a response that is not 200. The body is read only to find the provider's message."""
+        """A short message for a response that is not 200. The provider's own text is shown only as a short
+        excerpt with the key and anything like a token hidden, and never for a refused key."""
         host = self.target.label
         status = response.status
         if 300 <= status < 400:
             return f'{host} answered with a redirect (HTTP {status}). Redirects are not followed. Check the base URL.'
+        if status in (401, 403):
+            return f'{host} refused the API key (HTTP {status}). Check the key and the base URL in Settings.'
         detail = ''
         self.step(ERROR_BODY_TIMEOUT)
         try:
@@ -456,10 +461,8 @@ class Upstream:
         except (OSError, ValueError, http.client.HTTPException):
             pass
         self.step()
-        detail = redact(detail, self.key)
-        if status in (401, 403):
-            message = f'{host} refused the API key (HTTP {status}).'
-        elif status == 404:
+        detail = excerpt(detail, self.key)
+        if status == 404:
             message = f'{host} did not find this model or address (HTTP 404). Check the base URL and the model name.'
         elif status in (402, 429):
             message = f'Out of credit or rate-limited at {host} (HTTP {status}).'
@@ -534,7 +537,7 @@ def run_stream(upstream, protocol, provider, model, messages, max_tokens, events
                         events.put(('done', {'truncated': True}))
                         return
                     size += len(value)
-                events.put((kind, redact(value, upstream.key) if kind == 'error' else value))
+                events.put((kind, excerpt(value, upstream.key) if kind == 'error' else value))
                 if kind in ('done', 'error'):
                     return
             if not chunk:
@@ -579,14 +582,83 @@ SECRET_PATTERNS = [
     re.compile(r'\bsk-[A-Za-z0-9_-]{8,}'),
     re.compile(r'\b(?:AKIA|ghp_|gho_|github_pat_|xox[abp]-|AIza)[A-Za-z0-9_-]{12,}'),
 ]
+# A run of letters, digits and base64 characters this long is treated as a token when it mixes letters and digits.
+TOKEN_RUN = re.compile(r'[A-Za-z0-9+/=]{20,}')
+# Any 8 characters in a row of the key, or of a simple change of it, count as the key.
+KEY_WINDOW = 8
+EXCERPT_CHARS = 200
+
+
+def _ignored(char):
+    """Characters left out when the key is compared, so a key split by spaces or dots is still found."""
+    return char.isspace() or char == '.'
+
+
+def _key_forms(key):
+    raw = key.encode()
+    forms = {key, key[::-1], quote(key, safe=''), base64.b64encode(raw).decode(), base64.urlsafe_b64encode(raw).decode(),
+             base64.b64encode(key[::-1].encode()).decode()}
+    return {''.join(c for c in form.rstrip('=') if not _ignored(c)) for form in forms}
+
+
+def _without_key(text, key):
+    """Hide the key and simple changes of it: reversed, base64, URL-encoded, or split by spaces or dots."""
+    keep = [i for i, char in enumerate(text) if not _ignored(char)]
+    flat = ''.join(text[i] for i in keep)
+    windows, short = set(), []
+    for form in _key_forms(key):
+        if len(form) >= KEY_WINDOW:
+            windows.update(form[i:i + KEY_WINDOW] for i in range(len(form) - KEY_WINDOW + 1))
+        elif len(form) >= 4:
+            short.append(form)
+    spans = []
+    for start in range(len(flat) - KEY_WINDOW + 1):
+        if flat[start:start + KEY_WINDOW] in windows:
+            spans.append((keep[start], keep[start + KEY_WINDOW - 1] + 1))
+    for form in short:
+        start = flat.find(form)
+        while start >= 0:
+            spans.append((keep[start], keep[start + len(form) - 1] + 1))
+            start = flat.find(form, start + 1)
+    if not spans:
+        return text
+    merged = []
+    for start, end in sorted(spans):
+        if merged and start <= merged[-1][1]:
+            merged[-1][1] = max(merged[-1][1], end)
+        else:
+            merged.append([start, end])
+    out, done = [], 0
+    for start, end in merged:
+        out += [text[done:start], '[redacted]']
+        done = end
+    out.append(text[done:])
+    return ''.join(out)
 
 
 def redact(text, key=''):
-    """Remove the configured key and strings that look like API keys."""
+    """Remove the configured key, simple changes of it, and strings that look like API keys."""
     if not text:
         return text
     if key and len(key) >= 4:
-        text = text.replace(key, '[redacted]')
+        text = _without_key(text, key)
     for pattern in SECRET_PATTERNS:
         text = pattern.sub('[redacted]', text)
     return text
+
+
+def _token(match):
+    run = match.group()
+    mixed = any(c.isdigit() for c in run) and any(c.isalpha() for c in run)
+    return '[hidden]' if mixed or len(run) >= 32 else run
+
+
+def excerpt(text, key=''):
+    """A short, safe excerpt of a provider's message: one line, without the key, token-like runs or invisible
+    characters, and at most EXCERPT_CHARS characters."""
+    if not text:
+        return ''
+    text = ' '.join(str(text).split())
+    text = TOKEN_RUN.sub(_token, redact(text, key))
+    text = ''.join(c for c in text if c.isprintable())
+    return text if len(text) <= EXCERPT_CHARS else text[:EXCERPT_CHARS - 1] + '…'

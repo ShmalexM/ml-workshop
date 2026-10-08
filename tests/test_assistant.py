@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'backend'))
 import assistant  # noqa: E402
 import assistant_providers as providers  # noqa: E402
-from fake_llm import ANSWER, NDJSON_PIECES, SSE_PIECES, FakeLLM  # noqa: E402
+from fake_llm import ANSWER, NDJSON_PIECES, SSE_PIECES, FakeLLM, changed_keys  # noqa: E402
 from server_fixture import server_token  # noqa: E402
 
 KEY = 'sk-test-0123456789abcdefWXYZ'
@@ -80,6 +80,23 @@ class ParserTests(unittest.TestCase):
         self.assertNotIn(KEY, providers.redact(text, KEY))
         self.assertNotIn('abc.def', providers.redact(text))
         self.assertNotIn('otherkey', providers.redact(text))
+
+    def test_redact_changed_copies_of_the_key(self):
+        body = KEY.removeprefix('sk-test-')
+        for copy in changed_keys(KEY) + [KEY[:14], KEY[10:], ' . '.join(KEY), KEY.lower()[::-1][:12]]:
+            with self.subTest(copy=copy):
+                shown = providers.excerpt(f'Your key {copy} is wrong', KEY)
+                self.assertNotIn(copy, shown)
+                for start in range(len(body) - 7):
+                    self.assertNotIn(body[start:start + 8], shown.replace(' ', '').replace('.', ''))
+        # Model names and plain words stay; tokens and invisible characters go; the excerpt is short.
+        for kept in ['gpt-4o-mini-2024-07-18', 'llama3.2:1b', 'meta-llama/llama-3.1-8b-instruct', 'Internationalization']:
+            self.assertIn(kept, providers.excerpt(f'Model {kept} not found', KEY))
+        self.assertEqual(providers.excerpt('session 9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08'), 'session [hidden]')
+        self.assertEqual(providers.excerpt('a\u202eb\u200bc\nd'), 'abc d')
+        self.assertLessEqual(len(providers.excerpt('x ' * 1000)), providers.EXCERPT_CHARS)
+        # Chips go through redact only, so long names in the learner's code stay.
+        self.assertIn('very_long_variable_name_123', providers.redact('very_long_variable_name_123 = 1', KEY))
 
     def test_long_lines_and_events_end_the_stream(self):
         too_long = providers.MAX_LINE_CHARS + 1
@@ -588,7 +605,11 @@ class AssistantServerTests(unittest.TestCase):
                 status, events = self.server.chat(question())
                 self.assertEqual(status, 200)
                 self.assertIn(words, events[-1]['message'])
-                self.assertIn('[redacted]', events[-1]['message'])
+                if status_code == 401:
+                    # A refused key never shows the provider's text.
+                    self.assertNotIn('It said', events[-1]['message'])
+                else:
+                    self.assertIn('[redacted]', events[-1]['message'])
                 self.assertNotIn(KEY, json.dumps(events))
                 self.wait_until_idle()
                 for path in ('/api/assistant/models', '/api/assistant/test'):
@@ -596,6 +617,25 @@ class AssistantServerTests(unittest.TestCase):
                     self.assertEqual(status, 502)
                     self.assertNotIn(KEY.encode(), raw)
         self.assertEqual(self.fake.requests[0]['headers']['Authorization'], 'Bearer ' + KEY)
+
+    def test_changed_copies_of_the_key_are_hidden(self):
+        self.configure(key=KEY)
+        self.fake.status = 500
+        for mode in ('echo', 'echostream'):
+            with self.subTest(mode=mode):
+                self.fake.mode = mode
+                status, events = self.server.chat(question())
+                self.assertEqual(status, 200)
+                self.assertEqual(events[-1]['type'], 'error')
+                raw = json.dumps(events, ensure_ascii=False)
+                for copy in changed_keys(KEY) + [KEY]:
+                    self.assertNotIn(copy, raw)
+                self.wait_until_idle()
+        self.fake.mode = 'echo'
+        status, raw = self.server.request('/api/assistant/models', {})
+        self.assertEqual(status, 502)
+        for copy in changed_keys(KEY) + [KEY]:
+            self.assertNotIn(copy.encode(), raw)
 
     def test_flood_ends_the_answer_and_frees_the_lock(self):
         self.configure()
