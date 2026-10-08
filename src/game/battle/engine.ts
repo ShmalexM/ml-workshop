@@ -56,7 +56,8 @@ export class BattleEngine{
  private xray:THREE.Mesh[]=[];private xrayOn=false;private xrayMat:THREE.MeshBasicMaterial
  private cleanups:(()=>void)[]=[]
  constructor(private canvas:HTMLCanvasElement,private overlay:HTMLElement,private setup:BattleSetup,private cb:Callbacks){
-  this.renderer=createRenderer(canvas,{shadows:true});this.scene.environment=environment(this.renderer);this.scene.environmentIntensity=.45
+  // The scene is drawn into the composer's own buffers and only copied to the canvas, so canvas antialiasing would add memory, not smoother edges.
+  this.renderer=createRenderer(canvas,{shadows:true,antialias:false});this.scene.environment=environment(this.renderer);this.scene.environmentIntensity=.45
   const made=createComposer(this.renderer,this.scene,this.camera,{strength:.22,radius:.4,threshold:1.4});this.composer=made.composer;this.bloomPass=made.bloom
   let s=(setup.seed>>>0)||7;this.rng=()=>{s^=s<<13;s^=s>>>17;s^=s<<5;return (s>>>0)/4294967296}
   const def=stageDef(setup.stage);this.arena=buildArena(def.theme,setup.seed);this.scene.add(this.arena.group)
