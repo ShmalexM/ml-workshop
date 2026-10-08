@@ -7,6 +7,7 @@ import re
 import secrets
 
 from courses import COURSES, LESSONS
+import game_tree
 
 
 RACES = [
@@ -228,12 +229,14 @@ CAMPAIGN_STAGES = [
 ABYSS_BOSSES = ('Tyrant', 'Behemoth', 'Herald', 'Warden', 'Devourer')
 BATTLE_COLUMNS = ('id', 'stage', 'started', 'finished', 'outcome', 'damage', 'kills', 'seconds')
 NEXT_BATTLE = 'Finish a lesson, project walkthrough or reading to earn your next battle.'
+# A fight started this recently blocks passive changes; an older one was left without a result.
+BATTLE_LOCK = timedelta(minutes=15)
 
 
 def catalog():
     return dict(races=RACES, classes=CLASSES, slots=SLOTS, rarities=RARITIES,
                 chestTiers=CHEST_TIERS, lessonTiers=LESSON_TIERS, pathTiers=PATH_TIERS,
-                effects=EFFECTS, twoHand=TWO_HAND)
+                effects=EFFECTS, twoHand=TWO_HAND, tree=game_tree.catalog())
 
 
 def utc_now():
@@ -275,6 +278,15 @@ def campaign(meta):
                 bossDamage=damage, bossRemaining=hp - damage,
                 targetPower=power, targetHealth=health,
                 enemyHealth=power / first_power, enemyDamage=health / first_health)
+
+
+def practice_stages(reached):
+    """Enemy strength for the practice arena at each stage reached so far; nothing here is saved."""
+    out = []
+    for stage in range(1, reached + 1):
+        entry = campaign(dict(stage=stage, bossDamage=0))
+        out.append({k: entry[k] for k in ('stage', 'stageName', 'bossHp', 'enemyHealth', 'enemyDamage')})
+    return out
 
 
 def boss_chest(stage, finished):
@@ -542,7 +554,8 @@ def ensure_schema(db):
 
 
 def metadata(db):
-    defaults = dict(sinceEpic=0, sinceLegendary=0, enabled=True, stage=1, bossDamage=0)
+    defaults = dict(sinceEpic=0, sinceLegendary=0, enabled=True, stage=1, bossDamage=0,
+                    passives={'v': 1, 'nodes': []})
     placeholders = ','.join('?' for _ in defaults)
     saved = {key: json.loads(value) for key, value in db.execute(
         f'SELECT key,value FROM game_meta WHERE key IN ({placeholders})', tuple(defaults))}
@@ -589,6 +602,63 @@ def export(db):
                     chests=chests, meta=metadata(db), battles=battles)
 
 
+def hero_level(progress):
+    xp = sum(c['xp'] for c in progress.get('completed', {}).values())
+    return xp, min(60, 1 + xp // 100)
+
+
+def paths_mastered(progress):
+    completed = progress.get('completed', {})
+    return sum(1 for lessons in LESSONS_BY_COURSE.values()
+               if lessons and all(lesson['id'] in completed for lesson in lessons))
+
+
+def passive_points(progress):
+    """One point per level after the first, and one per mastered learning path."""
+    return hero_level(progress)[1] - 1 + paths_mastered(progress)
+
+
+def saved_passives(meta):
+    """The stored node ids, or None when the stored value is not a version 1 allocation."""
+    value = meta.get('passives')
+    if (not isinstance(value, dict) or value.get('v') != 1 or not isinstance(value.get('nodes'), list)
+            or not all(isinstance(nid, str) for nid in value['nodes'])):
+        return None
+    return value['nodes']
+
+
+def passives(meta, hero, progress):
+    """The allocation in effect. One that no longer fits the tree or the points is refunded whole."""
+    if not hero:
+        return None
+    earned = passive_points(progress)
+    start = game_tree.START_BY_CLASS[hero['class']]
+    nodes = saved_passives(meta)
+    reason = 'changed' if nodes is None else None
+    if nodes:
+        nodes = list(dict.fromkeys([start, *nodes]))
+        problem = game_tree.problem(hero['class'], nodes, earned)
+        reason = problem and ('points' if problem == 'points' else 'changed')
+    allocated = [start] if reason or not nodes else sorted(nodes)
+    spent = len(allocated) - 1
+    return dict(allocated=allocated, points=dict(earned=earned, spent=spent, available=earned - spent),
+                refunded=reason)
+
+
+def set_passives(db, hero, body, progress):
+    allocated = game_tree.validate(hero['class'], body.get('allocated'), passive_points(progress))
+    cutoff = datetime.now(timezone.utc) - BATTLE_LOCK
+    for (started,) in db.execute("SELECT started FROM game_battles WHERE outcome='active'"):
+        try:
+            recent = datetime.fromisoformat(started) >= cutoff
+        except (TypeError, ValueError):
+            recent = False
+        if recent:
+            raise ValueError('Finish or retreat from your fight before changing passives.')
+    start = game_tree.START_BY_CLASS[hero['class']]
+    put_meta(db, 'passives', {'v': 1, 'nodes': [nid for nid in allocated if nid != start]})
+
+
 def battle_counts(db, earned):
     used = db.execute('SELECT COUNT(*) FROM game_battles').fetchone()[0]
     count = len({c['source'] for c in earned})
@@ -629,8 +699,7 @@ def state(db, progress):
         items, equipment = inventory(db)
         meta = metadata(db)
         if hero:
-            xp = sum(c['xp'] for c in progress.get('completed', {}).values())
-            level = min(60, 1 + xp // 100)
+            xp, level = hero_level(progress)
             hero = {**hero, 'xp': xp, 'level': level,
                     'levelProgress': 1. if level == 60 else (xp % 100) / 100}
         opened = {source: json.loads(data) for source, data in db.execute(
@@ -645,8 +714,9 @@ def state(db, progress):
                     luck={k: meta[k] for k in ('sinceEpic', 'sinceLegendary')},
                     battles=battle_counts(db, earned),
                     campaign={**campaign(meta), 'stagesCleared': meta['stage'] - 1,
-                              'stages': CAMPAIGN_STAGES},
-                    lifetime=lifetime, history=battle_history, catalog=catalog())
+                              'stages': CAMPAIGN_STAGES, 'practice': practice_stages(meta['stage'])},
+                    lifetime=lifetime, history=battle_history,
+                    passives=passives(meta, hero, progress), catalog=catalog())
 
 
 def store_item(db, item):
@@ -807,7 +877,7 @@ def handle(db, action, body, progress, rng=None):
     if not isinstance(body, dict):
         raise ValueError('Expected an object.')
     if action not in ('hero', 'open', 'equip', 'equip-many', 'unequip', 'discard', 'settings',
-                      'battle/start', 'battle/finish', 'retire'):
+                      'battle/start', 'battle/finish', 'retire', 'passives'):
         raise ValueError('Unknown game action.')
     if rng is None:
         rng = random.Random(secrets.randbits(64))
@@ -856,4 +926,6 @@ def handle(db, action, body, progress, rng=None):
                 db.executemany('DELETE FROM game_items WHERE id=?', [(iid,) for iid in set(ids)])
             elif action == 'battle/finish':
                 extra = finish_battle(db, body)
+            elif action == 'passives':
+                set_passives(db, hero, body, progress)
         return dict(game=state(db, progress), **extra)

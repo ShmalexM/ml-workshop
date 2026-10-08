@@ -896,7 +896,9 @@ class GameApiTests(unittest.TestCase):
         self.assertEqual(initial['chests'], dict(opened=[], unopened=[]))
         self.assertEqual(set(initial), {'hero', 'items', 'equipment', 'chests',
                                        'luck', 'enabled', 'battles', 'campaign',
-                                       'lifetime', 'history', 'catalog'})
+                                       'lifetime', 'history', 'passives', 'catalog'})
+        self.assertIsNone(initial['passives'])
+        self.assertEqual(len(initial['catalog']['tree']['nodes']), 120)
         self.assertEqual((len(initial['catalog']['races']), len(initial['catalog']['classes'])), (13, 12))
         saved = self.hero(name='  Durgan  ')
         self.assertEqual(saved['hero']['name'], 'Durgan')
@@ -1132,6 +1134,35 @@ class GameApiTests(unittest.TestCase):
         self.assertIsNone(self.request('/api/game')['hero'])
         self.assert_error('/api/game', None, 403, {'Origin': 'https://example.com'})
 
+    def test_passives_over_http(self):
+        body = dict(allocated=['start-warrior', 'warrior-1'])
+        self.assert_error('/api/game/passives', body)
+        self.hero()
+        game_state = self.request('/api/game')
+        self.assertEqual(game_state['passives']['points'], dict(earned=0, spent=0, available=0))
+        self.assertIn('needs more passive points', self.assert_error('/api/game/passives', body))
+        db = sqlite3.connect(Path(self.tmp.name) / 'workshop.sqlite3')
+        try:
+            with db:
+                for lesson in [l for l in LESSONS if l['course'] == 'foundations']:
+                    db.execute('INSERT INTO completions VALUES (?,?,?)', (lesson['id'], STAMP, lesson['xp']))
+        finally:
+            db.close()
+        saved = self.request('/api/game/passives', body)['game']['passives']
+        self.assertEqual(saved['points'], dict(earned=7, spent=1, available=6))
+        self.assertEqual(self.request('/api/game')['passives']['allocated'], ['start-warrior', 'warrior-1'])
+        for headers in ({'X-Workshop-Token': None}, {'Origin': 'https://example.com'}):
+            self.assert_error('/api/game/passives', dict(allocated=['start-warrior']), 403, headers)
+        battle = self.request('/api/game/battle/start', {})['battle']
+        self.assertIn('fight', self.assert_error('/api/game/passives', dict(allocated=['start-warrior'])))
+        self.request('/api/game/battle/finish', dict(battleId=battle['id'], outcome='retreat', bossDamage=0,
+                                                     kills=0, seconds=1))
+        self.assertEqual(self.request('/api/game/passives', dict(allocated=['start-warrior']))['game']['passives']
+                         ['points']['spent'], 0)
+        backup = self.request('/api/backup', {})
+        with urllib.request.urlopen(self.url + backup['url']) as response:
+            self.assertEqual(json.load(response)['game']['meta']['passives'], {'v': 1, 'nodes': []})
+
     def test_invalid_names_and_action_payloads(self):
         for name in ('', 'A', '123', 'A  B', '-Durgan', "Durgan'", 'A_B', 'éowyn',
                      'A' * 17, 'A\nB', 'A\tB', None, 3, [], {}):
@@ -1154,6 +1185,9 @@ class GameApiTests(unittest.TestCase):
             ('discard', {'itemIds': '1'}), ('discard', {'itemIds': [999999]}),
             ('discard', {'itemIds': [2**63]}), ('discard', {'itemIds': [2**100]}),
             ('retire', {}), ('retire', {'confirm': 'retire'}), ('unknown', {}),
+            ('passives', {}), ('passives', {'allocated': 'start-warrior'}), ('passives', {'allocated': []}),
+            ('passives', {'allocated': ['start-warrior', 'warrior-1']}),
+            ('passives', {'allocated': ['start-paladin']}), ('passives', {'allocated': [None]}),
         ]
         before = self.request('/api/game')
         for action, body in invalid:
