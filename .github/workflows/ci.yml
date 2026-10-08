@@ -125,6 +125,7 @@ jobs:
           bare EW_NO_SHORTCUTS=1 sh install.sh
           bare "$python" tests/check_install.py "$EW_HOME"
           echo progress > "$EW_HOME/data/keep.txt"
+          echo '{"key":"sk-ci"}' > "$EW_HOME/data/assistant.json"
           # Update in place, this time with the app shortcut in a scratch home folder.
           export HOME="$RUNNER_TEMP/home"
           bare sh install.sh
@@ -137,6 +138,7 @@ jobs:
           bare "$python" tests/check_install.py "$EW_HOME"
           bare sh install.sh --uninstall
           test -f "$EW_HOME/data/keep.txt" && test -f "$EW_HOME/data/workshop.sqlite3"
+          test ! -e "$EW_HOME/data/assistant.json"
           test ! -e "$EW_HOME/app" && test ! -e "$EW_HOME/runtime" && test ! -e "$shortcut"
           bare sh install.sh --uninstall --purge
           test ! -e "$EW_HOME"
@@ -159,6 +161,7 @@ jobs:
           & $python tests\check_install.py $env:EW_HOME
           if ($LASTEXITCODE) { throw 'The installed app failed its checks.' }
           Set-Content -LiteralPath "$env:EW_HOME\data\keep.txt" -Value progress
+          Set-Content -LiteralPath "$env:EW_HOME\data\assistant.json" -Value '{"key":"sk-ci"}'
           # Update in place the way users run it (irm | iex), this time with shortcuts.
           Remove-Item env:EW_NO_SHORTCUTS
           Get-Content -Raw .\install.ps1 | Invoke-Expression
@@ -170,6 +173,7 @@ jobs:
           if ($LASTEXITCODE) { throw 'The updated app failed its checks.' }
           & ([scriptblock]::Create((Get-Content -Raw .\install.ps1))) -Uninstall
           foreach ($path in "$env:EW_HOME\data\keep.txt", "$env:EW_HOME\data\workshop.sqlite3") { if (-not (Test-Path -LiteralPath $path)) { throw "Uninstall removed $path" } }
+          if (Test-Path -LiteralPath "$env:EW_HOME\data\assistant.json") { throw 'Uninstall left the assistant key file.' }
           foreach ($path in @("$env:EW_HOME\app", "$env:EW_HOME\runtime") + $links) { if (Test-Path -LiteralPath $path) { throw "Uninstall left $path" } }
           & ([scriptblock]::Create((Get-Content -Raw .\install.ps1))) -Uninstall -Purge
           if (Test-Path -LiteralPath $env:EW_HOME) { throw 'Purge left the install folder.' }

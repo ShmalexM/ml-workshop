@@ -475,6 +475,11 @@ uninstall_app() {
     say "Removed Engineering Workshop and your progress."
   else
     rm -f "$LOG"
+    # The AI assistant file can hold an API key, which is a billing credential. Progress stays.
+    if [ -f "$DATA/assistant.json" ]; then
+      rm -f "$DATA/assistant.json" || fail "Could not remove $DATA/assistant.json."
+      say "Removed the AI assistant settings and API key."
+    fi
     say "Removed Engineering Workshop. Your progress is still in $DATA."
     say "To delete it too, run the uninstall command again with --purge at the end."
   fi

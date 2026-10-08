@@ -477,6 +477,12 @@ param([switch]$Uninstall, [switch]$Purge)
             Say 'Removed Engineering Workshop and your progress.'
         } else {
             Remove-Item -LiteralPath $S.Log -Force
+            # The AI assistant file can hold an API key, which is a billing credential. Progress stays.
+            $assistantFile = Join-Path $S.Data 'assistant.json'
+            if (Test-Path -LiteralPath $assistantFile) {
+                Remove-Item -LiteralPath $assistantFile -Force
+                Say 'Removed the AI assistant settings and API key.'
+            }
             Say "Removed Engineering Workshop. Your progress is still in $($S.Data)."
             Say 'To delete it too, run the uninstall command again with -Purge at the end.'
         }
