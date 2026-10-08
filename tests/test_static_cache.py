@@ -18,7 +18,7 @@ DIST = ROOT / 'dist'
 class StaticCacheTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.tmp = tempfile.TemporaryDirectory(prefix='ml-static-test-')
+        cls.tmp = tempfile.TemporaryDirectory(prefix='ml-static-test-', ignore_cleanup_errors=True)
         with socket.socket() as sock:
             sock.bind(('127.0.0.1', 0))
             cls.port = sock.getsockname()[1]
@@ -37,8 +37,13 @@ class StaticCacheTests(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        # Windows keeps workshop.sqlite3 locked until the server has exited.
         cls.proc.terminate()
-        cls.proc.wait()
+        try:
+            cls.proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            cls.proc.kill()
+            cls.proc.wait()
         cls.tmp.cleanup()
 
     def get(self, path, headers=None):
