@@ -2,10 +2,14 @@
 
 This file lists the notable changes in each release. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and version numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.2.0] - 2026-10-08
 
 ### Added
 
+- Failed checks show the call, the expected value and what your code returned. A function that used `print` instead of `return` gets a plain note.
+- A one-line plain explanation above the common Python and JavaScript errors. The full error is behind **Full error**, closed at first.
+- **Remove book** in the library.
+- **Open all** for chests in the Hero game: one summary of everything that dropped, best rarity first.
 - An optional AI assistant, off by default. You bring the model: Ollama or LM Studio on this computer, or OpenRouter, OpenAI or another OpenAI-compatible service with your own API key. Set it up in **Settings → AI assistant**, then open it with **Ask** in the header or ⌘J (Ctrl+J). In a lesson, chips show what is sent with a question: the lesson and stage, the worked example without its answer, your code, the last run and the hints you opened. Notes are off by default, and other pages send only the page name. **Explain this error** next to an error or a failed check opens the assistant with a question ready to send. Tutor mode gives one hint at a time and no full solution unless **Allow full solutions** is on. The local server forwards the request and streams the answer, and **Stop** ends it. The API key is saved in `data/assistant.json` (`0600`), is never shown again or exported, and uninstall deletes it.
 - Python from zero, a new first path of 13 lessons for people who have never written code. It starts with `print` and variables, then covers arithmetic, functions, `if`, lists and slices, `for` loops, `zip` and list comprehensions, tuples, dictionaries, tracebacks and `raise ValueError`, f-strings and `import`, the slope between two points, and fixing a broken function. It ends where ML foundations lesson 1 begins.
 - From Python to JavaScript, a new first lesson in Web app engineering. It shows the JavaScript forms of the Python from zero basics: `let` and `const`, functions and arrow functions, arrays, objects, `===`, `map` and `filter`, and `console.log`. Web app engineering now lists Python from zero as its suggested first path. The app now has 72 lessons in 13 paths.
@@ -36,12 +40,21 @@ This file lists the notable changes in each release. The format follows [Keep a 
 
 ### Security
 
+- The session token that lets the page save and run code is no longer served by `/api/bootstrap`. The launcher opens the app with the token in the address fragment, the page keeps it, and it is stored in `data/session-token` (0600). Every `/api` route that returns personal data needs it. Other programs and other accounts on the computer can no longer get it.
+- The data folder is private to your account (files 0600, folders 0700). Backups are written 0600, and the newest 10 are kept.
+- Malformed requests get a 400 instead of a dropped connection, and stalled connections close after 15 seconds.
+- Book imports are bounded: at most 2,000 sections, 8 MB per section and 64 MB of text, with repeated sections dropped. Chapters are stored one file each. Book pages can no longer imitate the app's own screens.
+- Release archives are built by a read-only job and published with build provenance. `SECURITY.md` shows how to check them with `gh attestation verify`. The installers pin uv and Node.js by SHA-256, and Python packages are installed from hash-locked files.
 - Book files (covers, figures and the original PDF or EPUB) need the session token, like the rest of the API. Only `/api/health` is public.
 - On macOS and Linux, cleanup after an exercise also ends processes that left its process group with `setsid()`. Exercises have a process limit (the user's count plus 256), and on Linux a 4 GB memory limit. Temporary files go in the exercise folder.
 - An EPUB may hold at most 2,000 images and 150 MB of image data.
 
 ### Fixed
 
+- Error messages show only your code and the line that failed, without the app's own files or install path.
+- foundations-4 says to return a tuple, modern-1's hint names `Tokenizer(WordLevel(...))`, and four lessons have clearer wording. Hint 2 shows `raise` on a different example in every lesson whose checks expect a `ValueError`.
+- A new learner's **Continue learning** opens Python from zero lesson 1.
+- Battles use less GPU memory, closed 3D views are freed, and a page reload transfers about 1 kB instead of 800 kB.
 - One damaged `book.json` no longer hides the whole library. That book shows as **Could not open this book** with **Remove book**.
 - **Export progress and notes** works after removing a book you had read.
 - A tab that opened before the app had a session loads when another tab connects. A new launch token works when the browser's storage is full.
@@ -130,6 +143,7 @@ First public release.
 - Setup and launch scripts for Apple silicon Macs, and an optional launcher in your Applications folder.
 - CI that runs every lesson on macOS and the API tests on Linux.
 
+[1.2.0]: https://github.com/ShmalexM/ml-workshop/compare/v1.1.2...v1.2.0
 [1.1.2]: https://github.com/ShmalexM/ml-workshop/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/ShmalexM/ml-workshop/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/ShmalexM/ml-workshop/compare/a493fba...v1.1.0
