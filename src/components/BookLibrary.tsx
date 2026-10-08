@@ -177,6 +177,8 @@ export default function BookLibrary({ data, selection, onLesson, onState, onImpo
     // The book's folder is gone, so a pending save would fail. Saved notes stay on the server.
     clearTimeout(timers.current[bookId]); delete timers.current[bookId]
     setUnreadable(old => old.filter(id => id !== bookId)); onRemoved(bookId)
+    // The Remove button is gone with the book, so focus moves to the page heading.
+    requestAnimationFrame(() => { const heading = document.querySelector<HTMLElement>('.book-home h1'); if (heading) { heading.tabIndex = -1; heading.focus() } })
   }
   function open(bookId: string, location: number) { setQuery(''); window.location.hash = bookLink(bookId, location).slice(1) }
   function imported(result: BookImportResult) {

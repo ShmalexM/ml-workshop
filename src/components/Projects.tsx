@@ -146,8 +146,11 @@ function RetiredProjects({data}:{data:Portfolio}){
 }
 
 export default function Projects({data,courses,lessons,state,selected,initialFilter,gameEnabled,onSelectProject,onLesson,onChange,saveStatus}:Props){
- const container=useRef<HTMLElement>(null)
- useLayoutEffect(()=>{container.current?.scrollTo(0,0);if(window.matchMedia('(max-width:700px)').matches)window.scrollTo(0,0)},[selected])
+ const container=useRef<HTMLElement>(null);const shown=useRef(false)
+ // Opening a project, or going back to the list, moves focus to the new page's heading.
+ useLayoutEffect(()=>{container.current?.scrollTo(0,0);if(window.matchMedia('(max-width:700px)').matches)window.scrollTo(0,0)
+  if(shown.current){const heading=container.current?.querySelector<HTMLElement>('h1');if(heading){heading.tabIndex=-1;heading.focus({preventScroll:true})}}
+  shown.current=true},[selected])
  const [query,setQuery]=useState('');const [filter,setFilter]=useState(initialFilter||'all');const [level,setLevel]=useState('all')
  const project=data.projects.find(p=>p.id===selected)
  const start=(track:string)=>{const list=lessons.filter(l=>l.course===track);onLesson((list.find(l=>!state.completed[l.id])||list[0]).id)}
