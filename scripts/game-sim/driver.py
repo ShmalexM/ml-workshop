@@ -266,7 +266,7 @@ BURNS = {'druid', 'priest', 'mage', 'warlock'}
 KEYSTONE_IDS = [k[0] for k in tree.KEYSTONES]
 # A build's worth is the Power and Health multiplier at which the same hero without passives deals
 # the same boss damage per fight. Boss damage itself grows much faster than that, because a hero who
-# lives longer also kills the waves sooner. Checks: the whole tree (71 points) is worth roughly
+# lives longer also kills the waves sooner. Checks: the whole tree (FULL_POINTS) is worth roughly
 # +25-40% (median build), and at the points a hero has on reaching each stage no build is clearly
 # worth more than +35% (its estimate minus two standard errors), so none puts a hero much beyond the
 # stage's Power and Health target. Single fights vary a lot, so use 16 or more seeds per build.
@@ -274,6 +274,8 @@ SCALES = (.8, .9, 1, 1.1, 1.2, 1.3, 1.45, 1.6, 1.8, 2, 2.3)
 FULL_GAIN = (1.25, 1.40)
 STAGE_GAIN_MAX = 1.35
 TOLERANCE = .02
+# Every point the curriculum gives: level 60 and every path mastered.
+FULL_POINTS = game.passive_points(dict(completed={l['id']: dict(xp=l['xp']) for l in LESSONS}))
 
 
 def sector_of(cls):
@@ -344,7 +346,7 @@ def planned_points(level):
 def build_points():
     """(label, stage, rarity, item level, hero level, points): every campaign stage, then the full tree."""
     rows = [(f'stage {i}', i, r, il, lv, planned_points(lv)) for i, (r, il, lv) in enumerate(STAGE_GEAR, 1)]
-    return rows + [('full', 10, 'epic', 72, 60, 71)]
+    return rows + [('full', 10, 'epic', 72, 60, FULL_POINTS)]
 
 
 def fit_curve(curve, center=0., width=.3):
@@ -431,7 +433,7 @@ def print_builds(rows):
     full = [r for r in rows if r['point'] == 'full']
     if full:
         names = list(dict.fromkeys(r['build'] for r in full))
-        print('\nFull tree (71 points, epic ilvl 72, level 60, stage 10): gain per class and build')
+        print(f'\nFull tree ({FULL_POINTS} points, epic ilvl 72, level 60, stage 10): gain per class and build')
         print(f"{'class':13s} " + ' '.join(f'{n[:9]:>9s}' for n in names))
         for cls in dict.fromkeys(r['cls'] for r in full):
             by = {r['build']: r['gain'] for r in full if r['cls'] == cls}
