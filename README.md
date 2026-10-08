@@ -6,7 +6,7 @@
 
 Engineering Workshop is an app for learning machine learning and software engineering by writing code. It has 72 short lessons in 13 paths, from Python and ML basics, PyTorch, TensorFlow and CUDA to agent harnesses, backends and web apps. Each lesson explains one idea, shows a small example, and then runs checks on your own code. If you have never written code, start with Python from zero. It teaches the Python that the other paths use, from the first line of a program. Everything runs on your computer and works offline after the install, without an account, an API key or a GPU. It is free and open source under the MIT license.
 
-![A lesson in the See an example stage: a worked example, its output and a prediction question](docs/guided-lesson-screenshot.jpg)
+![A lesson in the Try it yourself stage: the tasks, the code editor, and failed checks that show the call, the expected value and the value the code returned](docs/guided-lesson-screenshot.jpg)
 
 ## Install
 
@@ -75,7 +75,7 @@ Finished work earns rewards in a small fantasy game next to the lessons. The gam
 - **Battles.** Each of these chests also earns one fight in a top-down arena. Click to move and attack, and press Q, W, E and R to use your class's abilities. Each stage ends with a boss, and beating it earns a chest. A new hero usually loses at first. The damage you deal to a boss carries over between fights, and better gear makes your hero stronger. The **Auto** button plays the fight for you.
 - **Skill tree.** Each level after the first and each mastered learning path gives one passive point, 72 with the whole curriculum. **Skill tree** opens a 120-node tree around your class. Small nodes add stats, notables change how abilities work, and four keystones on the borders between sectors trade one strength for another. Changes are free outside fights: edit a draft, then press **Apply**. **Practice** opens an arena with a training dummy and optional waves. It uses no battles and saves nothing, so you can try a build before a real fight.
 
-![The Hero armory: a 3D hero with equipped gear, and a list of chests earned from lessons](docs/hero-screenshot.jpg)
+![The Hero skill tree: a 21-point Paladin build with five notables and a keystone, and the stats that it gives](docs/hero-screenshot.jpg)
 
 The game uses three.js and needs WebGL. Its data is in the same local database as your progress, and progress exports include it.
 
