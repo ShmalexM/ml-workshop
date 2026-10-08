@@ -11,15 +11,16 @@ import time
 import unittest
 from unittest.mock import patch
 from urllib.parse import urlencode
+import urllib.error
 import urllib.request
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT/'backend'))
-from book_import import import_upload
+from book_import import import_upload, sweep_staging
 from book_study import study_guides, INFERENCE_GUIDE_EDITION
 from library import Library
-from book_fixture import make_epub
+from book_fixture import make_custom_epub, make_epub
 
 
 class UploadTests(unittest.TestCase):
@@ -52,6 +53,48 @@ class UploadTests(unittest.TestCase):
             response = connection.getresponse()
             return response.status, json.loads(response.read())
         finally: connection.close()
+
+    def post_json(self, path, payload, headers=None):
+        connection = http.client.HTTPConnection('127.0.0.1', self.port, timeout=10)
+        try:
+            connection.request('POST', path, json.dumps(payload).encode(),
+                               {'Content-Type': 'application/json', 'X-Workshop-Token': self.token, **(headers or {})})
+            response = connection.getresponse()
+            return response.status, json.loads(response.read())
+        finally: connection.close()
+
+    def test_remove_book_needs_write_token_and_keeps_notes(self):
+        source = make_custom_epub(self.root/'remove.epub', {'one.xhtml': '<html><body><h1>Remove me</h1></body></html>'})
+        status, result = self.upload(source.read_bytes(), 'remove.epub')
+        self.assertEqual(status, 200, result); book_id = result['book']['id']
+        state = dict(bookId=book_id, location=1, notes='Keep these notes', bookmarks=[], completed=[], updatedAt=300)
+        self.assertEqual(self.post_json('/api/library/state', state)[0], 200)
+        for headers in ({'X-Workshop-Token': 'wrong'}, {'Origin': 'https://example.org'},
+                        {'Sec-Fetch-Site': 'cross-site'}, {'Host': 'attacker.example'}):
+            with self.subTest(headers=headers):
+                self.assertEqual(self.post_json('/api/library/remove', {'bookId': book_id}, headers)[0], 403)
+        for bad in ('../library', 'missing-book', 7, None):
+            with self.subTest(bad=bad):
+                self.assertEqual(self.post_json('/api/library/remove', {'bookId': bad})[0], 404)
+        self.assertTrue((self.data/'library'/book_id/'source.epub').is_file())
+        self.assertEqual(self.post_json('/api/library/remove', {'bookId': book_id}), (200, {'ok': True}))
+        self.assertFalse((self.data/'library'/book_id).exists())
+        library = json.load(urllib.request.urlopen(self.url+'/api/library'))
+        self.assertNotIn(book_id, [book['id'] for book in library['books']])
+        self.assertEqual(library['readingState'][book_id]['notes'], 'Keep these notes')
+        with self.assertRaises(urllib.error.HTTPError) as error: urllib.request.urlopen(self.url+f'/api/library/{book_id}/chapter/1')
+        self.assertEqual(error.exception.code, 404)
+        # Importing the same file again brings back the saved notes.
+        status, result = self.upload(source.read_bytes(), 'remove.epub')
+        self.assertEqual(status, 200, result); self.assertEqual(result['readingState']['notes'], 'Keep these notes')
+
+    def test_over_limit_epub_returns_plain_error_and_leaves_nothing(self):
+        before = Library(self.data).catalog()
+        source = make_custom_epub(self.root/'bomb.epub', {'big.xhtml': '<html><body>' + '<p>' + 'a'*(9 << 20) + '</p></body></html>'})
+        status, result = self.upload(source.read_bytes(), 'bomb.epub')
+        self.assertEqual(status, 400); self.assertIn('larger than 8 MB when unpacked', result['error'])
+        self.assertEqual(Library(self.data).catalog(), before)
+        self.assertEqual(list(self.data.glob('.upload-*')) + list(self.data.glob('.parse-*')), [])
 
     def test_upload_preserves_original_and_duplicate_reading_state(self):
         source = make_epub(self.root/'fixture.epub'); raw = source.read_bytes()
@@ -158,6 +201,29 @@ class WorkerTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'too long'): import_upload(source, root, source.name)
             self.assertEqual(Library(root).catalog(), [])
             self.assertEqual(list(root.glob('.parse-*')), [])
+
+    def test_stale_staging_folders_are_swept(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            stale = [root/'.upload-old', root/'.parse-old', root/'library/.import-old', root/'library/.removing-old']
+            fresh = root/'.upload-fresh'
+            for folder in stale + [fresh]: (folder/'partial').mkdir(parents=True)
+            old = time.time() - 2*3600
+            for folder in stale: os.utime(folder, (old, old))
+            sweep_staging(root)
+            self.assertEqual([folder for folder in stale if folder.exists()], [])
+            self.assertTrue(fresh.is_dir()); self.assertTrue((root/'library').is_dir())
+
+    def test_glossary_guides_match_section_titles_without_source_file_names(self):
+        class FixtureLibrary:
+            def book(self, book_id):
+                if book_id != 'gpu-glossary': raise KeyError(book_id)
+                titles = ['What is a CUDA Kernel?', 'What is a Thread Block?', 'Thread Block Grid', 'Unrelated notes']
+                return dict(title='GPU Glossary', format='pdf', sha256='any', count=4,
+                            toc=[dict(title=t, location=i+1, label=str(i+1), depth=0) for i, t in enumerate(titles)])
+        guides = study_guides(FixtureLibrary())
+        self.assertEqual([guide['id'] for guide in guides], ['gpu-threads'])
+        self.assertEqual([reading['location'] for reading in guides[0]['readings']], [1, 2, 3])
 
     def test_numeric_guides_only_apply_to_verified_pdf_edition(self):
         class FixtureLibrary:

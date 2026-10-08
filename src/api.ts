@@ -46,6 +46,8 @@ export async function importBook(file: File, bookId: string, onProgress: (percen
   if (result.status < 200 || result.status >= 300) throw new Error(result.data.error || 'Could not import this book. Choose the file again to retry.')
   return result.data
 }
+/** Delete the app's stored copy of a book. Notes and reading position stay on the server. */
+export function removeBook(bookId: string) { return api<{ok: boolean}>('/library/remove', {bookId}) }
 /** True when the server answers /api/health within 5 seconds. */
 export async function serverReachable(){
   try{return (await fetch('/api/health',{cache:'no-store',signal:AbortSignal.timeout(5000)})).ok}catch{return false}

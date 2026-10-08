@@ -1,4 +1,6 @@
 """Reading guides with source locations and related lessons."""
+import re
+
 # These printed-page locators were checked against this PDF edition. Other
 # editions/formats remain readable, but must not be linked to unrelated pages.
 INFERENCE_GUIDE_EDITION = 'b297183c38ffc7ffa30100e1aab0af3b1c20b49778939ee976522fe39ac0df89'
@@ -162,6 +164,18 @@ GUIDES = [{'id': 'gpu-threads',
               'concurrency?',
   'lessons': ['reliability-4', 'data-4']}]
 
+def section_name(text):
+    """Reduce a section title or file name to its terms.
+
+    'What is a Thread Block?', 'thread-blocks' and 'Thread blocks' all become 'thread block'.
+    """
+    words = re.sub(r'[^0-9a-z]+', ' ', text.casefold()).split()
+    if words[:2] in (['what', 'is'], ['what', 'are']):
+        words = words[2:]
+    if words[:1] in (['a'], ['an'], ['the']):
+        words = words[1:]
+    return ' '.join(w[:-1] if len(w) > 3 and w.endswith('s') and not w.endswith('ss') else w for w in words)
+
 def study_guides(library, lesson_id=None):
     result = []
     for guide in GUIDES:
@@ -174,9 +188,17 @@ def study_guides(library, lesson_id=None):
         if guide['bookId'] == 'inference-engineering' and (book['format'] != 'pdf' or book['sha256'] != INFERENCE_GUIDE_EDITION):
             continue
         keys = {item.get('key'):item['location'] for item in book['toc']}
+        # Modal publishes no official EPUB, so copies differ. Glossary readings match the source
+        # file name (device-software--kernel) first, then a section title such as "What is a Kernel?".
+        titles = {}
+        for item in book['toc']:
+            titles.setdefault(section_name(item['title']), item['location'])
         readings = []
         for locator,title in guide['readings']:
-            location = locator if isinstance(locator,int) else keys.get(locator)
+            if isinstance(locator,int):
+                location = locator
+            else:
+                location = keys.get(locator) or titles.get(section_name(locator.split('--')[-1])) or titles.get(section_name(title))
             if location and 1<=location<=book['count']:
                 readings.append(dict(location=location,title=title))
         if readings:

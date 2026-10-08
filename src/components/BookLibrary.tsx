@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { ArrowLeft, ArrowRight, Bookmark, BookOpen, Check, ExternalLink, Search, X, ZoomIn } from 'lucide-react'
 import { api } from '../api'
 import { bookLink, type BookImportResult, type BookLocation, type Chapter, type LibraryData, type ReadingState, type SearchHit, type StudyGuide } from '../libraryTypes'
-import BookImports from './BookImports'
+import BookImports, { RemoveBook } from './BookImports'
 const PdfPage = lazy(() => import('./PdfPage'))
 const cacheKey = 'ml-workshop-reading-v1'
 const emptyState = (): ReadingState => ({ location: 1, notes: '', bookmarks: [], completed: [], updatedAt: 0 })
@@ -44,7 +44,7 @@ function Guide({ guide, done, onToggle, onLesson }: { guide: StudyGuide; done: b
   </section>
 }
 
-export default function BookLibrary({ data, selection, onLesson, onState, onImported, onGuidesSaved }: { data: LibraryData; selection: BookLocation | null; onLesson: (id: string) => void; onState: (bookId: string, state: ReadingState) => void; onImported: (result: BookImportResult) => void; onGuidesSaved?: () => void }) {
+export default function BookLibrary({ data, selection, onLesson, onState, onImported, onRemoved, onGuidesSaved }: { data: LibraryData; selection: BookLocation | null; onLesson: (id: string) => void; onState: (bookId: string, state: ReadingState) => void; onImported: (result: BookImportResult) => void; onRemoved: (bookId: string) => void; onGuidesSaved?: () => void }) {
   const [states, setStates] = useState(() => restoredState(data))
   const statesRef = useRef(states)
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
@@ -104,7 +104,8 @@ export default function BookLibrary({ data, selection, onLesson, onState, onImpo
   }, [book?.id, position])
   useEffect(() => {
     if (!chapter || !selection?.anchor || book?.format !== 'epub') return
-    const target = Array.from(reader.current?.querySelectorAll('[id]') || []).find(element => element.id === selection.anchor)
+    // The importer prefixes every id from a book with bk-, so book ids never match the app's own.
+    const target = Array.from(reader.current?.querySelectorAll('.epub-page [id]') || []).find(element => element.id === 'bk-' + selection.anchor)
     target?.scrollIntoView({ block: 'start' })
   }, [chapter, selection?.anchor])
   useEffect(() => {
@@ -139,9 +140,9 @@ export default function BookLibrary({ data, selection, onLesson, onState, onImpo
 
   if (!book) return <main className="book-home" onDragOver={event => { if (event.dataTransfer.types.includes('Files')) event.preventDefault() }} onDrop={event => event.preventDefault()}><h1>Books</h1><p className="book-intro">Build your reading library. Add a PDF or EPUB to read offline, explore diagrams, and keep your notes alongside your lessons.</p>{data.books.length > 0 && search}{searchResults}
     {selection && <p role="alert" className="book-error">This book is not imported on this computer.</p>}
-    <BookImports books={data.books} states={states} onImported={imported} onOpen={open}>
+    <BookImports books={data.books} states={states} onImported={imported} onOpen={open} onRemoved={onRemoved}>
     {data.books.filter(item => !['gpu-glossary', 'inference-engineering'].includes(item.id)).map(item => { const state = states[item.id] || emptyState(); const guides = data.guides.filter(g => g.bookId === item.id); return <section className="book-shelf-entry" key={item.id}>
-      <div className="book-summary"><div className="book-cover">{item.cover ? <img src={`/api/library/${item.id}/asset/${item.cover}`} alt={`${item.title} cover`} /> : <BookOpen size={43} />}</div><div><h2>{item.title}</h2><p>{item.author}</p><small>{item.count} {item.format === 'pdf' ? 'pages · PDF' : `sections · ${item.assets.length} images`}</small><button className="primary-button" onClick={() => open(item.id, state.location)}>{state.updatedAt ? 'Continue reading' : 'Open book'}<ArrowRight size={16} /></button></div></div>
+      <div className="book-summary"><div className="book-cover">{item.cover ? <img src={`/api/library/${item.id}/asset/${item.cover}`} alt={`${item.title} cover`} /> : <BookOpen size={43} />}</div><div><h2>{item.title}</h2><p>{item.author}</p><small>{item.count} {item.format === 'pdf' ? 'pages · PDF' : `sections · ${item.assets.length} images`}</small><button className="primary-button" onClick={() => open(item.id, state.location)}>{state.updatedAt ? 'Continue reading' : 'Open book'}<ArrowRight size={16} /></button><RemoveBook book={item} onRemoved={onRemoved} /></div></div>
       {guides.length > 0 && <details className="book-study-overview"><summary>Reading guides · {guides.filter(g => state.completed.includes(g.id)).length} of {guides.length} reviewed</summary><p>Each guide links sections of this book to related lessons.</p>{guides.map(guide => <Guide key={guide.id} guide={guide} done={state.completed.includes(guide.id)} onToggle={() => toggleGuide(guide)} onLesson={onLesson} />)}</details>}
     </section>})}</BookImports></main>
 

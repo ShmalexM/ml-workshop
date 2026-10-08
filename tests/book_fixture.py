@@ -28,3 +28,20 @@ def make_epub(path):
     with zipfile.ZipFile(path,'w') as archive:
         for name, content in files.items(): archive.writestr(name,content)
     return path
+
+def make_custom_epub(path, chapters, spine=None, metadata=''):
+    """Build a compressed EPUB from {name: xhtml}. spine lists chapter names, repeats allowed."""
+    path = Path(path)
+    spine = list(chapters) if spine is None else spine
+    ids = {name: f'c{i}' for i, name in enumerate(chapters)}
+    manifest = ''.join(f'<item id="{ids[name]}" href="{name}" media-type="application/xhtml+xml"/>' for name in chapters)
+    itemrefs = ''.join(f'<itemref idref="{ids[name]}"/>' for name in spine)
+    opf = (f'<package><metadata><title>Custom Book</title>{metadata}</metadata><manifest>{manifest}</manifest>'
+           f'<spine>{itemrefs}</spine></package>')
+    with zipfile.ZipFile(path, 'w', zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr('mimetype', 'application/epub+zip')
+        archive.writestr('META-INF/container.xml', '<container><rootfiles><rootfile full-path="OEBPS/book.opf"/></rootfiles></container>')
+        archive.writestr('OEBPS/book.opf', opf)
+        for name, content in chapters.items():
+            archive.writestr('OEBPS/' + name, content)
+    return path

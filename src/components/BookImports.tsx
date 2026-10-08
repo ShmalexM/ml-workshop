@@ -1,17 +1,17 @@
 import { useRef, useState, type DragEvent, type ReactNode } from 'react'
-import { ArrowRight, BookOpen, Check, ExternalLink, FileUp, LoaderCircle } from 'lucide-react'
-import { importBook } from '../api'
+import { ArrowRight, BookOpen, Check, ExternalLink, FileUp, LoaderCircle, Trash2 } from 'lucide-react'
+import { importBook, removeBook } from '../api'
 import type { Book, BookImportResult, ReadingState } from '../libraryTypes'
 
 const suggestedBooks = [
   {id: 'gpu-glossary', title: 'GPU Glossary', author: 'Modal', tag: 'GPU FUNDAMENTALS',
     description: 'Connect GPU hardware, CUDA, and performance concepts.',
     url: 'https://modal.com/gpu-glossary', link: 'Read on Modal',
-    hint: 'Have an EPUB or PDF copy? Add it here for offline reading. EPUB supports linked glossary sections.'},
+    hint: 'Modal publishes the glossary as a website, with its Markdown source on GitHub under CC BY 4.0. There is no official EPUB or PDF. If you made your own copy, add it here to read offline.'},
   {id: 'inference-engineering', title: 'Inference Engineering', author: 'Philip Kiely · Baseten', tag: 'MODELS IN PRODUCTION',
     description: 'Explore how models are optimized and served in production.',
     url: 'https://www.baseten.co/inference-engineering/', link: 'Get a free copy',
-    hint: 'Download your copy from Baseten, then add the PDF or EPUB here. PDF preserves the printed layout.'},
+    hint: 'Baseten offers the book as a free PDF or EPUB. Download your copy there, then add it here. Use the PDF for the printed page layout and the reading guides.'},
 ]
 
 function DropZone({label, disabled, busy, percent, error, onFiles}: {
@@ -45,9 +45,30 @@ function DropZone({label, disabled, busy, percent, error, onFiles}: {
   </div>
 }
 
-export default function BookImports({books, states, onImported, onOpen, children}: {
+/** Two-step removal. The confirm step is inline because the Mac app's web view has no confirm() dialog. */
+export function RemoveBook({book, onRemoved}: {book: Book; onRemoved: (id: string) => void}) {
+  const [confirming, setConfirming] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  async function remove() {
+    setBusy(true); setError('')
+    try { await removeBook(book.id); onRemoved(book.id) }
+    catch (e) { setError(e instanceof Error ? e.message : 'Could not remove this book. Try again.'); setBusy(false) }
+  }
+  if (!confirming) return <button className="text-button book-remove" onClick={() => setConfirming(true)}><Trash2 size={14} aria-hidden="true" />Remove book</button>
+  return <div className="book-remove-confirm" role="group" aria-label={`Remove ${book.title}`}>
+    <p>Remove “{book.title}” from your library? This deletes the copy stored by Workshop, not the file you imported. Your notes and reading position are kept.</p>
+    <div className="book-remove-actions">
+      <button className="book-danger" disabled={busy} onClick={() => void remove()}>{busy ? 'Removing…' : 'Remove'}</button>
+      <button className="secondary-button" disabled={busy} autoFocus onClick={() => { setConfirming(false); setError('') }}>Cancel</button>
+    </div>
+    {error && <p className="book-remove-error" role="alert">{error}</p>}
+  </div>
+}
+
+export default function BookImports({books, states, onImported, onOpen, onRemoved, children}: {
   books: Book[]; states: Record<string, ReadingState>; onImported: (result: BookImportResult) => void;
-  onOpen: (id: string, location: number) => void; children?: ReactNode;
+  onOpen: (id: string, location: number) => void; onRemoved: (id: string) => void; children?: ReactNode;
 }) {
   const [active, setActive] = useState<string | null>(null)
   const activeRef = useRef(false)
@@ -70,7 +91,7 @@ export default function BookImports({books, states, onImported, onOpen, children
     } finally { activeRef.current = false; setActive(null) }
   }
   return <>
-    {success && <div className="book-import-success" role="status"><Check size={20} aria-hidden="true" /><div><strong>{success.book.title}</strong><span>{success.alreadyImported ? 'Already in your library. Your notes and reading position are unchanged.' : 'Ready to read. Your copy is saved on this computer.'}</span></div>
+    {success && books.some(book => book.id === success.book.id) && <div className="book-import-success" role="status"><Check size={20} aria-hidden="true" /><div><strong>{success.book.title}</strong><span>{success.alreadyImported ? 'Already in your library. Your notes and reading position are unchanged.' : 'Ready to read. Your copy is saved on this computer.'}</span></div>
       <button className="text-button" onClick={() => onOpen(success.book.id, states[success.book.id]?.location || success.readingState?.location || 1)}>Read book<ArrowRight size={16} /></button></div>}
     <div className="book-section-heading"><h2>Suggested reading</h2><span>Add your own copies</span></div>
     <div className="book-suggestions">{suggestedBooks.map(suggestion => {
@@ -79,7 +100,8 @@ export default function BookImports({books, states, onImported, onOpen, children
         <div className="book-card-heading"><div className="book-card-icon"><BookOpen size={26} aria-hidden="true" /></div><span>{suggestion.tag}</span>{book && <span className="book-ready"><Check size={13} />In your library</span>}</div>
         <h3>{suggestion.title}</h3><p className="book-card-author">{suggestion.author}</p><p className="book-card-description">{suggestion.description}</p>
         {book ? <div className="book-card-ready"><p>{book.count} {book.format === 'pdf' ? 'pages' : 'sections'} · {book.format.toUpperCase()} · Available offline</p>
-          <button className="primary-button" onClick={() => onOpen(book.id, states[book.id]?.location || 1)}>{states[book.id]?.updatedAt ? 'Continue reading' : 'Open book'}<ArrowRight size={16} /></button></div>
+          <button className="primary-button" onClick={() => onOpen(book.id, states[book.id]?.location || 1)}>{states[book.id]?.updatedAt ? 'Continue reading' : 'Open book'}<ArrowRight size={16} /></button>
+          <RemoveBook book={book} onRemoved={onRemoved} /></div>
           : <><a className="book-source-link" href={suggestion.url} target="_blank" rel="noreferrer">{suggestion.link}<ExternalLink size={14} /></a><p className="book-import-hint">{suggestion.hint}</p>
             <DropZone label={suggestion.title} disabled={active !== null} busy={active === suggestion.id} percent={percent} error={errors[suggestion.id]} onFiles={files => void add(files, suggestion.id)} /></>}
       </section>
