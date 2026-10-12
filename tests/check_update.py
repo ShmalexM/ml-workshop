@@ -63,6 +63,30 @@ def fixture_worker_source(original, archive):
     return source.encode('utf-8')
 
 
+def print_update_diagnostics(install, data):
+    """Bounded fixture logs explain native failures without exposing saved credentials."""
+    secrets = []
+    try:
+        secrets.append((data / 'session-token').read_text(encoding='ascii').strip())
+    except OSError:
+        pass
+    try:
+        assistant = json.loads((data / 'assistant.json').read_text(encoding='utf-8-sig'))
+        if isinstance(assistant, dict) and isinstance(assistant.get('key'), str):
+            secrets.append(assistant['key'])
+    except (OSError, ValueError):
+        pass
+    for path in (data / 'update-status.json', data / 'update.log', install / 'install.log', data / 'server.log'):
+        try:
+            text = path.read_bytes()[-8000:].decode('utf-8', errors='replace')
+        except OSError:
+            continue
+        for secret in secrets:
+            if secret:
+                text = text.replace(secret, '[redacted]')
+        print(f'CI update diagnostic: {path.name}\n{text}', flush=True)
+
+
 def stop_worker_tree(data):
     """Failure cleanup targets only the worker recorded by this isolated fixture."""
     try:
@@ -177,6 +201,9 @@ def main(install, archive):
             time.sleep(.1)
         check(not (install / '.install-lock').exists(), 'The completed update did not release its installer lock.')
         succeeded = True
+    except Exception:
+        print_update_diagnostics(install, data)
+        raise
     finally:
         if not succeeded:
             stop_worker_tree(data)
