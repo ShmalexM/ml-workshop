@@ -39,13 +39,18 @@ fail() {
   exit 1
 }
 
-# Explain exits that did not come from fail(), such as Ctrl-C or an unexpected error.
-on_exit() {
-  status=$?
+unlock_install() {
   if [ "${INSTALL_LOCK_HELD:-0}" = 1 ]; then
     rm -f "$INSTALL_LOCK/pid"
     rmdir "$INSTALL_LOCK" 2>/dev/null || true
+    INSTALL_LOCK_HELD=0
   fi
+}
+
+# Explain exits that did not come from fail(), such as Ctrl-C or an unexpected error.
+on_exit() {
+  status=$?
+  unlock_install
   if [ "$status" != 0 ] && [ "$FAILED" = 0 ]; then
     say "Stopped before finishing." >&2
     if [ -n "$LOG" ] && [ -s "$LOG" ]; then say "Details: $LOG" >&2; fi
@@ -497,6 +502,7 @@ uninstall_app() {
   if [ "$PURGE" = 1 ]; then
     rm -rf "$DATA" || fail "Could not remove $DATA."
     rm -f "$MARKER" "$LOG"
+    unlock_install
     rmdir "$EW_HOME" 2>/dev/null || true
     say "Removed Engineering Workshop and your progress."
   else
