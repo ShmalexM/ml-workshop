@@ -199,6 +199,7 @@ param([switch]$Uninstall, [switch]$Purge)
         $S.Marker = Join-Path $S.Root '.engineering-workshop'
         $S.Stage = Join-Path $S.Root '.app-new'
         $S.Old = Join-Path $S.Root '.app-old'
+        $S.Failed = Join-Path $S.Root '.app-failed'
         $S.Work = Join-Path $S.Root '.download'
     }
 
@@ -240,7 +241,7 @@ param([switch]$Uninstall, [switch]$Purge)
         Set-Content -LiteralPath $S.Log -Value "Engineering Workshop installer, $(Get-Date -Format o), $($S.Arch)" -Encoding UTF8
         # Finish an update that stopped after moving the old app out.
         if ((Test-Path -LiteralPath $S.Old) -and -not (Test-Path -LiteralPath $S.App)) { Move-Tree $S.Old $S.App }
-        foreach ($folder in $S.Old, $S.Stage, $S.Work) {
+        foreach ($folder in $S.Old, $S.Failed, $S.Stage, $S.Work) {
             if (-not (Remove-Tree $folder)) { Fail "Could not remove $folder. Close any program that uses it, then run the command again." }
         }
         New-Folder $S.Work
@@ -497,7 +498,7 @@ param([switch]$Uninstall, [switch]$Purge)
         Say 'Removing Engineering Workshop...'
         Stop-App
         Remove-Shortcuts
-        foreach ($folder in $S.App, $S.Runtime, $S.Stage, $S.Old, $S.Work) {
+        foreach ($folder in $S.App, $S.Runtime, $S.Stage, $S.Old, $S.Failed, $S.Work) {
             if (-not (Remove-Tree $folder)) { Fail "Could not remove $folder. Close any program that uses it, then run the command again." }
         }
         if ($Purge) {

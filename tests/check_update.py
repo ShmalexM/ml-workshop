@@ -90,6 +90,23 @@ def print_update_diagnostics(install, data):
         print(output.encode(encoding, errors='backslashreplace').decode(encoding), flush=True)
 
 
+def create_failed_release_fixture(install):
+    failed = install / '.app-failed'
+    check(not failed.exists(), 'The successful update left a failed release folder.')
+    failed.mkdir()
+    (failed / 'ci-uninstall-sentinel.txt').write_text('CI failed release must be removed by uninstall or purge.\n', encoding='utf-8')
+
+
+def check_restarted_runtimes(base, token):
+    for lesson, code, expected in (
+        ('python-1', 'print("CI updated Python works")', 'CI updated Python works'),
+        ('web-1', 'console.log("CI updated JavaScript works")', 'CI updated JavaScript works'),
+    ):
+        result = call(base, '/api/run', token, dict(lessonId=lesson, code=code, mode='run'))
+        check(result.get('error') is None and result.get('stdout', '').strip() == expected,
+              f'{lesson}: the restarted app could not execute its runtime.')
+
+
 def stop_worker_tree(data):
     """Failure cleanup targets only the worker recorded by this isolated fixture."""
     try:
@@ -191,6 +208,7 @@ def main(install, archive):
         check(book.read_bytes() == book_original, 'The update changed the library book sentinel.')
         check(assistant.read_bytes() == assistant_original, 'The update changed assistant settings.')
         check(worker_file.read_bytes() == worker_original, 'The new release retained fixture-only worker modifications.')
+        check_restarted_runtimes(base, token)
         try:
             call(base, '/api/state')
             raise RuntimeError('The restarted server answered learner data without authentication.')
@@ -203,6 +221,8 @@ def main(install, archive):
         while (install / '.install-lock').exists() and time.monotonic() < deadline:
             time.sleep(.1)
         check(not (install / '.install-lock').exists(), 'The completed update did not release its installer lock.')
+        # The surrounding native CI workflow uninstalls/purges and must remove stale release code too.
+        create_failed_release_fixture(install)
         succeeded = True
     except Exception:
         print_update_diagnostics(install, data)

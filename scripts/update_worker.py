@@ -180,7 +180,7 @@ def run_installer(command, install, env, log):
 def installer_environment(install, data, port, target, light):
     # Do not inherit EW_ARCHIVE, Python injection variables, provider credentials or arbitrary installer options.
     allowed = ('PATH', 'HOME', 'LANG', 'SYSTEMROOT', 'WINDIR', 'USERPROFILE', 'LOCALAPPDATA', 'TEMP', 'TMP',
-               'PROCESSOR_ARCHITECTURE', 'PROCESSOR_ARCHITEW6432')
+               'PROCESSOR_ARCHITECTURE', 'PROCESSOR_ARCHITEW6432', 'PATHEXT', 'COMSPEC')
     env = {key: os.environ[key] for key in allowed if key in os.environ}
     env.update(EW_HOME=str(install), EW_RELEASE_TAG='v' + target, EW_KEEP_OLD='1', EW_NO_LAUNCH='1',
                EW_NO_SHORTCUTS='1', EW_LIGHT='1' if light else '0', EW_LOCK_PID=str(os.getpid()),

@@ -143,7 +143,7 @@ set_paths() {
   case $EW_HOME in /*) ;; *) EW_HOME=$(pwd)/$EW_HOME ;; esac
   APP=$EW_HOME/app DATA=$EW_HOME/data RUNTIME=$EW_HOME/runtime
   MARKER=$EW_HOME/.engineering-workshop
-  STAGE=$EW_HOME/.app-new OLD=$EW_HOME/.app-old WORK=$EW_HOME/.download
+  STAGE=$EW_HOME/.app-new OLD=$EW_HOME/.app-old APP_FAILED=$EW_HOME/.app-failed WORK=$EW_HOME/.download
   if [ "$OS" = macos ]; then
     SHORTCUT="$HOME/Applications/Engineering Workshop.app"
   else
@@ -198,7 +198,7 @@ prepare_home() {
   log "Engineering Workshop installer, $(date), $OS-$ARCH"
   # Finish an update that stopped after moving the old app out.
   if [ -d "$OLD" ] && [ ! -d "$APP" ]; then mv "$OLD" "$APP"; fi
-  rm -rf "$OLD" "$STAGE" "$WORK"
+  rm -rf "$OLD" "$APP_FAILED" "$STAGE" "$WORK"
   mkdir "$WORK"
 }
 
@@ -498,7 +498,7 @@ uninstall_app() {
   say "Removing Engineering Workshop..."
   stop_app
   if shortcut_is_ours; then rm -rf "$SHORTCUT"; fi
-  rm -rf "$APP" "$RUNTIME" "$STAGE" "$OLD" "$WORK" || fail "Could not remove everything in $EW_HOME."
+  rm -rf "$APP" "$RUNTIME" "$STAGE" "$OLD" "$APP_FAILED" "$WORK" || fail "Could not remove everything in $EW_HOME."
   if [ "$PURGE" = 1 ]; then
     rm -rf "$DATA" || fail "Could not remove $DATA."
     rm -f "$MARKER" "$LOG"

@@ -147,7 +147,8 @@ class UpdateTests(unittest.TestCase):
 
     def test_environment_drops_credentials_archive_override_and_keeps_fixed_parameters(self):
         with patch.dict(os.environ, {'OPENAI_API_KEY': 'secret', 'EW_ARCHIVE': '/untrusted', 'PYTHONPATH': '/untrusted',
-                                     'EW_KEEP_OLD': '0', 'PROCESSOR_ARCHITECTURE': 'x86', 'PROCESSOR_ARCHITEW6432': 'AMD64'}):
+                                     'EW_KEEP_OLD': '0', 'PROCESSOR_ARCHITECTURE': 'x86', 'PROCESSOR_ARCHITEW6432': 'AMD64',
+                                     'PATHEXT': '.COM;.EXE;.BAT;.CMD', 'COMSPEC': r'C:\Windows\System32\cmd.exe'}):
             env = update_worker.installer_environment(self.install, self.data, 7386, '1.3.0', True)
         for name in ('OPENAI_API_KEY', 'EW_ARCHIVE', 'PYTHONPATH'):
             self.assertNotIn(name, env)
@@ -160,6 +161,8 @@ class UpdateTests(unittest.TestCase):
         # Windows PowerShell 5.1 uses these when RuntimeInformation is unavailable.
         self.assertEqual(env['PROCESSOR_ARCHITECTURE'], 'x86')
         self.assertEqual(env['PROCESSOR_ARCHITEW6432'], 'AMD64')
+        self.assertIn('.EXE', env['PATHEXT'])
+        self.assertEqual(env['COMSPEC'], r'C:\Windows\System32\cmd.exe')
         self.assertEqual(update_worker.installer_environment(self.install, self.data, 7386, '1.3.0', False)['EW_REQUIRE_ML'], '1')
 
     def test_commands_are_argument_lists_on_windows_and_posix(self):
