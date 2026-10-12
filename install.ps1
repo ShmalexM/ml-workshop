@@ -37,7 +37,7 @@ param([switch]$Uninstall, [switch]$Purge)
         'node-v24.21.0-win-arm64.zip' = '8779b1bde1d39f8d420e3b57aa657b39891af434d3de44a919044cec06785921'
     }
     $MlNote = 'The PyTorch, TensorFlow, Modern AI stack and CUDA lessons need them; all other lessons work.'
-    $S = @{ SavedEnv = @{}; Log = $null; Shortcuts = $false; NodePlan = 'keep' }
+    $S = @{ SavedEnv = @{}; Log = $null; Shortcuts = $false; NodePlan = 'keep'; LockHeld = $false }
 
     function Say([string]$Text) { Write-Host $Text }
 
@@ -202,11 +202,31 @@ param([switch]$Uninstall, [switch]$Purge)
         $S.Work = Join-Path $S.Root '.download'
     }
 
+    function Lock-Install {
+        $S.Lock = Join-Path $S.Root '.install-lock'
+        $ownerFile = Join-Path $S.Lock 'pid'
+        $owner = if (Test-Path -LiteralPath $ownerFile) { (Get-Content -LiteralPath $ownerFile -Raw).Trim() } else { '' }
+        if ($env:EW_LOCK_PID -and $owner -eq $env:EW_LOCK_PID -and (Get-Process -Id ([int]$owner) -ErrorAction SilentlyContinue)) {
+            return # The detached updater owns this lock through restart or rollback.
+        }
+        try { New-Item -ItemType Directory -Path $S.Lock -ErrorAction Stop | Out-Null }
+        catch {
+            if ($owner -notmatch '^[0-9]+$') { Fail 'Another installer is starting. Try again in a moment.' }
+            if (Get-Process -Id ([int]$owner) -ErrorAction SilentlyContinue) { Fail 'Another installer is running. Wait for it to finish.' }
+            Remove-Item -LiteralPath $ownerFile -Force
+            Remove-Item -LiteralPath $S.Lock -Force
+            New-Item -ItemType Directory -Path $S.Lock -ErrorAction Stop | Out-Null
+        }
+        $S.LockHeld = $true
+        Set-Content -LiteralPath $ownerFile -Value $PID
+    }
+
     function Initialize-Root {
         if (((Test-Path -LiteralPath $S.App) -or (Test-Path -LiteralPath $S.Runtime) -or (Test-Path -LiteralPath $S.Data)) -and -not (Test-Path -LiteralPath $S.Marker)) {
             Fail "$($S.Root) has files that this installer did not create. Set EW_HOME to another folder."
         }
         foreach ($folder in $S.Root, $S.Data, $S.Runtime) { New-Folder $folder }
+        Lock-Install
         Set-Content -LiteralPath $S.Marker -Value 'Created by the Engineering Workshop installer.'
         $S.Log = Join-Path $S.Root 'install.log'
         Set-Content -LiteralPath $S.Log -Value "Engineering Workshop installer, $(Get-Date -Format o), $($S.Arch)" -Encoding UTF8
@@ -301,6 +321,7 @@ param([switch]$Uninstall, [switch]$Purge)
                 Say 'Downloading ML libraries (about 2 GB, this can take a while)...'
             }
             if (-not (Install-Requirements @())) {
+                if ($env:EW_REQUIRE_ML -eq '1') { Fail 'Could not update the ML libraries. The previous app is kept; check your connection and try again.' }
                 Say 'Could not install the ML libraries, so they were skipped. Run this command again later to retry.'
                 if (-not (Remove-Tree (Join-Path $S.Stage '.venv'))) { Fail 'Could not remove the unfinished Python environment.' }
                 $light = $true
@@ -354,7 +375,7 @@ param([switch]$Uninstall, [switch]$Purge)
         $python = Join-Path $S.App '.venv\Scripts\python.exe'
         $script = Join-Path $S.App 'scripts\installed.py'
         if ((Test-Path -LiteralPath $python) -and (Test-Path -LiteralPath $script)) {
-            if (-not (Invoke-Logged $python @($script, '--stop'))) { Write-Log 'Could not stop the running app.' }
+            if (-not (Invoke-Logged $python @($script, '--stop'))) { Fail 'Could not safely stop the running app. Close it, then try the update again.' }
         }
     }
 
@@ -371,7 +392,7 @@ param([switch]$Uninstall, [switch]$Purge)
             if (Test-Path -LiteralPath $S.Old) { [System.IO.Directory]::Move($S.Old, $S.App) }
             throw
         }
-        if (-not (Remove-Tree $S.Old)) { Write-Log "Could not remove $($S.Old); the next update removes it." }
+        if ($env:EW_KEEP_OLD -ne '1' -and -not (Remove-Tree $S.Old)) { Write-Log "Could not remove $($S.Old); the next update removes it." }
     }
 
     function Get-ShortcutPaths {
@@ -464,6 +485,7 @@ param([switch]$Uninstall, [switch]$Purge)
         }
         $S.Log = Join-Path $S.Root 'install.log'
         Set-Content -LiteralPath $S.Log -Value "Engineering Workshop uninstall, $(Get-Date -Format o)" -Encoding UTF8
+        Lock-Install
         Say 'Removing Engineering Workshop...'
         Stop-App
         Remove-Shortcuts
@@ -497,6 +519,10 @@ param([switch]$Uninstall, [switch]$Purge)
         [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12
         if ($Purge -and -not $Uninstall) { Fail '-Purge only works together with -Uninstall.' }
         Initialize-Platform
+        if ($env:EW_RELEASE_TAG) {
+            if ($env:EW_RELEASE_TAG -notmatch '^v(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})$') { Fail 'Invalid stable release tag.' }
+            $ReleaseUrl = 'https://github.com/ShmalexM/ml-workshop/releases/download/' + $env:EW_RELEASE_TAG
+        }
         if ($Uninstall) { Uninstall-App } else { Install-App }
     } catch {
         $failed = $true
@@ -506,6 +532,10 @@ param([switch]$Uninstall, [switch]$Purge)
             Write-Host "Details: $($S.Log)"
         }
     } finally {
+        if ($S.LockHeld) {
+            Remove-Item -LiteralPath (Join-Path $S.Lock 'pid') -Force -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $S.Lock -Force -ErrorAction SilentlyContinue
+        }
         foreach ($name in @($S.SavedEnv.Keys)) { Set-EnvValue $name $S.SavedEnv[$name] }
         [Environment]::CurrentDirectory = $savedDirectory
         Pop-Location
