@@ -53,6 +53,16 @@ def previous_version(version):
     return f'{major - 1}.0.0'
 
 
+def fixture_worker_source(original, archive):
+    source = original.decode('utf-8')
+    # Windows release archives preserve checkout CRLF; keep the fixture's newline style.
+    source, count = re.subn(r'(?m)^    return env(\r?\n)',
+                            lambda match: f'    env["EW_ARCHIVE"] = {str(archive)!r}  # CI fixture archive only'
+                            + match.group(1) + match.group(0), source)
+    check(count == 1, 'The fixture worker environment hook changed; review this check.')
+    return source.encode('utf-8')
+
+
 def stop_worker_tree(data):
     """Failure cleanup targets only the worker recorded by this isolated fixture."""
     try:
@@ -95,10 +105,7 @@ def main(install, archive):
     metadata = json.loads(package_original)
     candidate, previous = metadata['version'], previous_version(metadata['version'])
     metadata['version'] = previous
-    source = worker_original.decode('utf-8')
-    needle = '    return env\n'
-    check(source.count(needle) == 1, 'The fixture worker environment hook changed; review this check.')
-    source = source.replace(needle, f'    env["EW_ARCHIVE"] = {str(archive)!r}  # CI fixture archive only\n' + needle)
+    worker_fixture = fixture_worker_source(worker_original, archive)
     python = app / '.venv' / ('Scripts/python.exe' if os.name == 'nt' else 'bin/python')
     with socket.socket() as sock:
         sock.bind(('127.0.0.1', 0))
@@ -108,7 +115,7 @@ def main(install, archive):
     succeeded = False
     try:
         atomic_bytes(package, (json.dumps(metadata, indent=2) + '\n').encode('utf-8'))
-        atomic_bytes(worker_file, source.encode('utf-8'))
+        atomic_bytes(worker_file, worker_fixture)
         started = subprocess.run([str(python), str(app / 'scripts/installed.py'), '--no-open'],
                                  env=env, capture_output=True, text=True, timeout=120)
         check(started.returncode == 0, 'The simulated older fixture server did not start.')

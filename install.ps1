@@ -221,6 +221,14 @@ param([switch]$Uninstall, [switch]$Purge)
         Set-Content -LiteralPath $ownerFile -Value $PID
     }
 
+    function Unlock-Install {
+        if ($S.LockHeld) {
+            Remove-Item -LiteralPath (Join-Path $S.Lock 'pid') -Force -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $S.Lock -Force -ErrorAction SilentlyContinue
+            $S.LockHeld = $false
+        }
+    }
+
     function Initialize-Root {
         if (((Test-Path -LiteralPath $S.App) -or (Test-Path -LiteralPath $S.Runtime) -or (Test-Path -LiteralPath $S.Data)) -and -not (Test-Path -LiteralPath $S.Marker)) {
             Fail "$($S.Root) has files that this installer did not create. Set EW_HOME to another folder."
@@ -495,6 +503,7 @@ param([switch]$Uninstall, [switch]$Purge)
         if ($Purge) {
             if (-not (Remove-Tree $S.Data)) { Fail "Could not remove $($S.Data). Close any program that uses it, then run the command again." }
             Remove-Item -LiteralPath $S.Marker, $S.Log -Force
+            Unlock-Install
             try { [System.IO.Directory]::Delete($S.Root) } catch { }
             Say 'Removed Engineering Workshop and your progress.'
         } else {
@@ -532,10 +541,7 @@ param([switch]$Uninstall, [switch]$Purge)
             Write-Host "Details: $($S.Log)"
         }
     } finally {
-        if ($S.LockHeld) {
-            Remove-Item -LiteralPath (Join-Path $S.Lock 'pid') -Force -ErrorAction SilentlyContinue
-            Remove-Item -LiteralPath $S.Lock -Force -ErrorAction SilentlyContinue
-        }
+        Unlock-Install
         foreach ($name in @($S.SavedEnv.Keys)) { Set-EnvValue $name $S.SavedEnv[$name] }
         [Environment]::CurrentDirectory = $savedDirectory
         Pop-Location
