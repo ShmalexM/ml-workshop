@@ -8,6 +8,10 @@ Engineering Workshop is an app for learning machine learning and software engine
 
 ![A lesson in the See an example stage: a worked example, its output and a prediction question](docs/guided-lesson-screenshot.jpg)
 
+## New to coding?
+
+Start with [the beginner guide](docs/beginner-guide.md). On **Paths**, two optional questions about your coding experience and learning goals suggest a personal study order. New learners begin with **Python from zero**. You can change your answers later, and every lesson stays open.
+
 ## Install
 
 Paste one line into a terminal and press Enter. You do not need to install anything first, and you do not need admin rights.
@@ -60,7 +64,7 @@ The exercises are in Python, except the Web app engineering lessons, which use J
 
 Each lesson has three stages: **Understand**, **See an example** and **Try it yourself**. You read a short explanation, run a small example and answer a question about it. At the top of **Understand**, **You’ll use** lists the Python or JavaScript that the exercise needs, such as `zip` or `raise`, each linked to the lesson that teaches it. Then you write your own code. **Run code** (⌘ Enter, or Ctrl Enter on Linux and Windows) shows the output. **Check answer** (⌘ Shift Enter, or Ctrl Shift Enter) runs the checks and gives you XP the first time they all pass. Hints open one at a time, and the last step after them is **Show solution**. **Show solution** is also at the end of the exercise, so it works at any time, and **Compare with my code** marks the lines that differ from your draft. To leave the editor with the keyboard, press Esc, then Tab. Code suggestions are off unless you turn them on in **Settings**.
 
-All lessons are open from the start. On first launch, the **Paths** page asks whether you have written Python before; **No** opens Python from zero. A line under the opening text also says that most paths assume the basics from Python from zero, with a link to it. The page suggests an order for four roles, and **Progress → All lessons** lists every lesson with filters by path and status. In a lesson, the **Lessons** button opens the lesson list, and **Glossary** opens a searchable list of 143 terms. A word with a dotted underline is a glossary term: click it, or press Enter on it, to see its definition and the lesson that teaches it. See the [ML learning guide](docs/learning-plan.md).
+All lessons are open from the start. On first launch, **Paths** offers two optional questions about your experience and what you would like to learn or build. Your answers suggest a personal learning path with reasons for each step, completion progress and a next unfinished lesson. **Change answers** updates the plan while keeping your work. You can skip the questions and browse all paths. A line under the opening text also says that most paths assume the basics from Python from zero, with a link to it. The page suggests an order for four roles, and **Progress → All lessons** lists every lesson with filters by path and status. In a lesson, the **Lessons** button opens the lesson list, and **Glossary** opens a searchable list of 143 terms. A word with a dotted underline is a glossary term: click it, or press Enter on it, to see its definition and the lesson that teaches it. See the [ML learning guide](docs/learning-plan.md).
 
 **Projects** lists 12 public repositories, from Start small to Capstone, each pinned to one commit. A project gives setup commands for macOS/Linux and Windows, a command to run it with the output to expect, and 3 to 5 tasks. Each task links to the lines to read, says what to change and gives a command to check the result. You can paste the output to check it in the browser; the text is not saved. See [Learn from public projects](docs/project-learning.md).
 
@@ -100,9 +104,9 @@ The API key is saved in `data/assistant.json`, which only your user account can 
 
 ## Privacy and safety
 
-- The app runs on your computer. You do not need an account, and the app has no analytics or telemetry.
+- The app runs on your computer. You do not need an account, and the app has no analytics or telemetry. Opening **Settings → App updates** checks GitHub for the latest release; this sends no learning answers, code or notes.
 - The server listens only on `127.0.0.1`, so other computers cannot connect to it. The page in your browser can connect only to that server.
-- Your progress, drafts and notes are saved in `workshop.sqlite3` in the `data` folder. **Settings → Export progress and notes** saves a JSON copy. Review it before you share it, because it can contain your notes and project details. JSON import is planned. For a full restore, stop the app and copy back a `data` folder that you saved while the app was stopped.
+- Your learning-profile answers, progress, drafts and notes are saved in `workshop.sqlite3` in the `data` folder. **Settings → Export progress and notes** saves a JSON copy. Review it before you share it, because it can contain your notes and project details. JSON import is planned. For a full restore, stop the app and copy back a `data` folder that you saved while the app was stopped.
 - The lessons work offline. The framework lessons use small local inputs. They do not download models or call an LLM API.
 - The installer checks the app, uv, Node.js and every Python package against SHA-256 hashes before it uses them. [SECURITY.md](SECURITY.md#verify-a-download) shows how to check a release yourself.
 - Your code runs with your own user account's permissions, as when you run a script yourself. Each exercise runs in a new process and a temporary folder, with a 50-second time limit and a limit on returned output. On macOS and Linux, CPU time and file size are limited too. These limits do not isolate your code from your files, so only run code you trust.
@@ -125,7 +129,7 @@ Yes. The app and all lessons are free and open source under the [MIT license](LI
 
 ### How do I update or uninstall?
 
-To update, run the install command again. Your progress is kept.
+For copies installed with the install command, open **Settings → App updates**. When a new stable release is available, click **Update and restart**. The app downloads the release, checks its checksum, keeps your saved work, and reloads after restarting. Keep the app open while it updates. You can also rerun the install command to update or repair an older copy that has no update button.
 
 To uninstall, run the command for your system. This removes the app, and your progress stays in the `data` folder. Uninstall also deletes the AI assistant's settings and API key.
 

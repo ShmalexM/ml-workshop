@@ -41,6 +41,8 @@ Glossary guides resolve source section keys. Inference guides contain fixed prin
 
 `backend/portfolio.py` validates the bundled public selection in `backend/public_projects.json`, or an optional ignored `data/portfolio.json` override. Fresh clones get the curated public catalog; a personal project list belongs in the ignored override. The server reads only catalog metadata, not the referenced repositories. API responses supply catalog metadata and project state; token-protected writes persist timestamped notes and reviewed step indices in SQLite. Progress export version 3 includes the catalog and project state. Existing lesson IDs, draft caches, book storage and launcher identity remain compatible.
 
+`backend/learning_paths.py` validates a versioned learner profile and maps coding experience plus learning goal to an ordered set of existing course IDs. Authenticated `GET /api/learning-path` reads the profile and current recommendation; `POST /api/learning-path` saves validated answers or clears only the profile. The profile lives under `learnerProfile` in the existing SQLite settings table and is included in progress exports. Recommendations are computed locally from fixed goal sequences and saved lesson completions; no model, account or external request is needed. Changing answers never edits drafts, notes, completions or the current lesson. The Paths page offers optional onboarding, a beginner introduction and an editable recommended plan.
+
 The UI uses hash routes for Paths, lessons, Projects and Books. The suggested orders do not gate access. Marking a project step done is self-assessment and never awards lesson XP. Browser recovery caches survive refresh and stale server writes are rejected.
 
 ## Guided learning and solutions
@@ -61,6 +63,12 @@ The lesson UI begins in Understand (lesson text only), moves to See an example (
 `POST /api/assistant/chat` streams JSON lines (`meta`, `delta`, `thinking`, `ping`, `done`, `error`). A reader thread reads the provider with `http.client` and puts deltas on a queue; the request thread writes them to the browser and checks every 0.2 s whether the browser closed the connection or pressed Stop, then closes the provider socket. The route takes no lock that other requests use, so drafts, runs and reads continue during an answer. Upstream limits: connect 10 s, headers 90 s, 60 s between chunks, 10 s for an error body and 3 minutes in total (60 s for Test connection, 30 s for a model list). A deadline thread closes the socket when a limit passes. The parsers search only new bytes for line ends; a line or SSE event over 256 KB, or more than 4 MB of upstream bytes, ends the answer. Answers are cut at 64 KB.
 
 The front end is in `src/assistant/`. The chat state lives outside React (`store.ts`), so an answer keeps streaming when the drawer closes. The drawer is lazy-loaded. `context.ts` builds the lesson chips with fixed size limits, which the server checks again. `markdownParser.ts` parses a small Markdown subset in linear time and `Markdown.tsx` renders it as React elements, so raw HTML stays text; `tests/markdown_check.mjs` checks the parser in Node. `BattleScreen` turns the drawer off while it is mounted.
+
+## App updates
+
+Settings reads version and update status through authenticated `/api/update` routes. Checking contacts the fixed GitHub latest stable release endpoint; it sends no learning profile, code or notes. Only copies identified by the installer marker support automatic updates. Source checkouts receive manual guidance and are never pulled or rebuilt by the API.
+
+Applying an update runs a separate helper from the stable Python runtime outside `app/`. It uses the existing platform installer with a validated, pinned release tag, checksum verification and the original install root. Saved work remains in the sibling `data/` folder. The helper restarts on the same local port, and the UI reconnects and reloads. Update status persists outside the replaceable app folder. The previous app is retained until the new server is healthy; failure restores it. Active exercises and duplicate updates are rejected before installation.
 
 ## Native Mac window
 

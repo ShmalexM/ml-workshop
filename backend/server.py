@@ -24,11 +24,13 @@ from book_import import import_upload, ImportConflict, SUGGESTED
 from book_study import study_guides
 import game
 import assistant
+import learning_paths
 
 ROOT=Path(__file__).resolve().parents[1]
 # Same rule as the launcher: data/ in a clone, the data folder next to app/ in an installed copy.
 sys.path.append(str(ROOT/'scripts'))
 from platform_paths import data_dir, session_token
+import app_update
 SESSION_HELP='Open Engineering Workshop from its shortcut or start command to connect this browser.'
 # Health is polled by the launcher. Every other API route needs the token, book files included:
 # the Books page fetches covers, figures and originals with it, and the PDF reader sends it as a header.
@@ -38,14 +40,16 @@ BACKUP_NAME=re.compile(r'ml-workshop-(\d{8}-\d{6}-\d{6})(?:-(\d{1,2}))?\.json')
 KEEP_BACKUPS=10
 RUN_LOCK=threading.Lock()
 IMPORT_LOCK=threading.Lock()
+ASSISTANT_GATE=threading.Lock()
+ASSISTANT_MODELS_GATE=threading.Lock()
 VERSION=json.loads((ROOT/'package.json').read_text(encoding='utf-8'))['version']
 # Set by open_data(), which main() calls after reading the command line, so --help changes nothing on disk.
 # ASSISTANT is the optional AI assistant. Its settings and API key are in data/assistant.json, outside SQLite and backups.
-DATA=DB=TOKEN=LIBRARY=ASSISTANT=None
+DATA=DB=TOKEN=LIBRARY=ASSISTANT=UPDATES=None
 
 def open_data():
     """Create the data folder and database if needed, and load the session token."""
-    global DATA,DB,TOKEN,LIBRARY,ASSISTANT
+    global DATA,DB,TOKEN,LIBRARY,ASSISTANT,UPDATES
     # Files and folders this server creates are private to the user: 0600 files, 0700 folders.
     os.umask(0o077)
     DATA=data_dir()
@@ -60,6 +64,7 @@ def open_data():
     TOKEN=session_token(DATA).encode()
     LIBRARY=Library(DATA)
     ASSISTANT=assistant.Assistant(DATA)
+    UPDATES=app_update.Updater(ROOT,DATA,VERSION)
     with connect() as db:
         db.execute('CREATE TABLE IF NOT EXISTS drafts (lesson TEXT PRIMARY KEY, code TEXT, notes TEXT, updated INTEGER)')
         db.execute('CREATE TABLE IF NOT EXISTS completions (lesson TEXT PRIMARY KEY, at TEXT, xp INTEGER)')
@@ -118,8 +123,10 @@ def game_progress():
 def save_backup():
     folder=DATA/'backups';folder.mkdir(mode=0o700,exist_ok=True)
     stamp='ml-workshop-'+datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S-%f')
-    with connect() as db:game_export=game.export(db)
-    payload=dict(app='ml-workshop',version=3,projectState=project_state(),portfolio=load_portfolio(DATA),exportedAt=datetime.now(timezone.utc).isoformat(),readingState=reading_state(),game=game_export,**state())
+    with connect() as db:
+        game_export=game.export(db)
+        learner_profile=learning_paths.saved_profile(db)
+    payload=dict(app='ml-workshop',version=3,learnerProfile=learner_profile,projectState=project_state(),portfolio=load_portfolio(DATA),exportedAt=datetime.now(timezone.utc).isoformat(),readingState=reading_state(),game=game_export,**state())
     for attempt in range(100):
         name=stamp+(f'-{attempt}' if attempt else '')+'.json'
         try:descriptor=os.open(folder/name,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
@@ -237,6 +244,9 @@ class Handler(BaseHTTPRequestHandler):
         if path=='/api/session':return self.send({'ok':True})
         if path=='/api/curriculum':return self.send(public_curriculum())
         if path=='/api/state':return self.send(state())
+        if path=='/api/update':return self.send(UPDATES.status())
+        if path=='/api/learning-path':
+            with connect() as db:return self.send(learning_paths.state(db))
         if path=='/api/game':
             progress=game_progress()
             with connect() as db:return self.send(game.state(db,progress))
@@ -327,7 +337,31 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(body,dict):raise ValueError('Expected an object')
             path=urlparse(self.path).path
             # A streamed answer runs on this request's thread and takes no lock that other requests wait for.
+            if path=='/api/update/check':
+                try:return self.send(UPDATES.check(body))
+                except app_update.UpdateConflict as exc:return self.send({'error':str(exc)},409)
+            if path=='/api/update/apply':
+                app_update.exact_empty(body)
+                acquired=[]
+                try:
+                    for lock in (RUN_LOCK,IMPORT_LOCK,ASSISTANT_GATE,ASSISTANT_MODELS_GATE):
+                        if not lock.acquire(blocking=False):return self.send({'error':'Finish the running exercise, book import or assistant answer before updating.'},409)
+                        acquired.append(lock)
+                    try:return self.send(UPDATES.apply(body,self.server.server_port,save_backup))
+                    except app_update.UpdateConflict as exc:return self.send({'error':str(exc)},409)
+                finally:
+                    for lock in reversed(acquired):lock.release()
+            if path in ('/api/assistant/models','/api/assistant/test','/api/assistant/chat'):
+                gate=ASSISTANT_MODELS_GATE if path=='/api/assistant/models' else ASSISTANT_GATE
+                if not gate.acquire(blocking=False):return self.send({'error':assistant.MODELS_BUSY if path=='/api/assistant/models' else assistant.BUSY},409)
+                try:
+                    if UPDATES.busy():return self.send({'error':'An update is running. Try the assistant again when it finishes.'},409)
+                    return ASSISTANT.handle_post(self,path,body)
+                finally:gate.release()
             if path.startswith('/api/assistant/'):return ASSISTANT.handle_post(self,path,body)
+            if path=='/api/learning-path':
+                with connect() as db:result=learning_paths.save(db,body)
+                return self.send(result)
             if path=='/api/project/state':
                 project=next((p for p in load_portfolio(DATA)['projects'] if p['id']==body.get('projectId')),None)
                 if not project:raise ValueError('Unknown project')
@@ -386,6 +420,7 @@ class Handler(BaseHTTPRequestHandler):
                 if not isinstance(code,str) or len(code)>50000 or mode not in ('run','check'):raise ValueError('Invalid exercise request')
                 if not RUN_LOCK.acquire(blocking=False):return self.send({'error':'Another exercise is running. Try again when it finishes.'},409)
                 try:
+                    if UPDATES.busy():return self.send({'error':'An update is running. Exercises will be ready after it finishes.'},409)
                     result=execute(code,lesson['checks'] if mode=='check' else [],simulator=lesson['course']=='cuda',language=lesson.get('language','python'))
                     if mode=='check' and result['passed']:
                         now=datetime.now(timezone.utc).isoformat()
@@ -426,6 +461,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.send({'error':'Another book is being imported. Wait for it to finish, then try again.'},409)
         previous_timeout=self.connection.gettimeout()
         try:
+            if UPDATES.busy():return self.send({'error':'An update is running. Import the book after it finishes.'},409)
             with tempfile.TemporaryDirectory(prefix='.upload-',dir=DATA) as temporary:
                 source=Path(temporary)/('upload'+extension)
                 deadline=time.monotonic()+60

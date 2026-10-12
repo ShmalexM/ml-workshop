@@ -1,5 +1,7 @@
 # How to use the ML paths
 
+If you have hardly coded, begin with [Start here](beginner-guide.md), then answer the two optional questions on **Paths**. Your experience and goal produce a suggested order with explanations, progress and the next unfinished lesson. You can change your answers or browse any lesson. New learners and people with a little coding experience begin with Python from zero.
+
 Use one lesson per sitting. Ten to twenty focused minutes is a useful starting point; the in-app times are estimates rather than deadlines.
 
 1. **Understand:** read the explanation and the diagram.

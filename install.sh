@@ -39,9 +39,18 @@ fail() {
   exit 1
 }
 
+unlock_install() {
+  if [ "${INSTALL_LOCK_HELD:-0}" = 1 ]; then
+    rm -f "$INSTALL_LOCK/pid"
+    rmdir "$INSTALL_LOCK" 2>/dev/null || true
+    INSTALL_LOCK_HELD=0
+  fi
+}
+
 # Explain exits that did not come from fail(), such as Ctrl-C or an unexpected error.
 on_exit() {
   status=$?
+  unlock_install
   if [ "$status" != 0 ] && [ "$FAILED" = 0 ]; then
     say "Stopped before finishing." >&2
     if [ -n "$LOG" ] && [ -s "$LOG" ]; then say "Details: $LOG" >&2; fi
@@ -134,7 +143,7 @@ set_paths() {
   case $EW_HOME in /*) ;; *) EW_HOME=$(pwd)/$EW_HOME ;; esac
   APP=$EW_HOME/app DATA=$EW_HOME/data RUNTIME=$EW_HOME/runtime
   MARKER=$EW_HOME/.engineering-workshop
-  STAGE=$EW_HOME/.app-new OLD=$EW_HOME/.app-old WORK=$EW_HOME/.download
+  STAGE=$EW_HOME/.app-new OLD=$EW_HOME/.app-old APP_FAILED=$EW_HOME/.app-failed WORK=$EW_HOME/.download
   if [ "$OS" = macos ]; then
     SHORTCUT="$HOME/Applications/Engineering Workshop.app"
   else
@@ -156,11 +165,30 @@ check_tools() {
   have sha256sum || have shasum || fail "This computer is missing the 'sha256sum' command. Install it, then run this command again."
 }
 
+lock_install() {
+  INSTALL_LOCK=$EW_HOME/.install-lock
+  owner=$(cat "$INSTALL_LOCK/pid" 2>/dev/null || true)
+  if [ -n "${EW_LOCK_PID:-}" ] && [ "$owner" = "$EW_LOCK_PID" ] && kill -0 "$owner" 2>/dev/null; then
+    : # The detached updater owns this lock through restart or rollback.
+  elif mkdir "$INSTALL_LOCK" 2>/dev/null; then
+    INSTALL_LOCK_HELD=1
+  else
+    owner=$(cat "$INSTALL_LOCK/pid" 2>/dev/null || true)
+    case $owner in '' | *[!0-9]*) fail "Another installer is starting. Try again in a moment." ;; esac
+    if kill -0 "$owner" 2>/dev/null; then fail "Another installer is running. Wait for it to finish."; fi
+    rm -f "$INSTALL_LOCK/pid"
+    rmdir "$INSTALL_LOCK" 2>/dev/null && mkdir "$INSTALL_LOCK" || fail "Could not recover the interrupted installer lock."
+    INSTALL_LOCK_HELD=1
+  fi
+  if [ "$INSTALL_LOCK_HELD" = 1 ]; then say "$$" >"$INSTALL_LOCK/pid"; fi
+}
+
 prepare_home() {
   if { [ -e "$APP" ] || [ -e "$RUNTIME" ] || [ -e "$DATA" ]; } && [ ! -f "$MARKER" ]; then
     fail "$EW_HOME has files that this installer did not create. Set EW_HOME to another folder."
   fi
   mkdir -p "$EW_HOME" "$DATA" "$RUNTIME" || fail "Could not create $EW_HOME."
+  lock_install
   # Other accounts on this computer must not read progress, notes or the session token.
   # Older installs made these folders 0755.
   chmod 700 "$EW_HOME" "$DATA" || fail "Could not set the permissions of $EW_HOME."
@@ -170,7 +198,7 @@ prepare_home() {
   log "Engineering Workshop installer, $(date), $OS-$ARCH"
   # Finish an update that stopped after moving the old app out.
   if [ -d "$OLD" ] && [ ! -d "$APP" ]; then mv "$OLD" "$APP"; fi
-  rm -rf "$OLD" "$STAGE" "$WORK"
+  rm -rf "$OLD" "$APP_FAILED" "$STAGE" "$WORK"
   mkdir "$WORK"
 }
 
@@ -247,6 +275,7 @@ install_packages() {
       say "Downloading ML libraries (about 2 GB, this can take a while)..."
     fi
     if ! setup_packages; then
+      if [ "${EW_REQUIRE_ML:-0}" = 1 ]; then fail "Could not update the ML libraries. The previous app is kept; check your connection and try again."; fi
       say "Could not install the ML libraries, so they were skipped. Run this command again later to retry."
       rm -rf "$STAGE/.venv"
       light=1
@@ -302,7 +331,7 @@ prepare_node() {
 
 stop_app() {
   if [ -x "$APP/.venv/bin/python" ] && [ -f "$APP/scripts/installed.py" ]; then
-    run "$APP/.venv/bin/python" "$APP/scripts/installed.py" --stop || log "Could not stop the running app."
+    run "$APP/.venv/bin/python" "$APP/scripts/installed.py" --stop || fail "Could not safely stop the running app. Close it, then try the update again."
   fi
 }
 
@@ -320,7 +349,7 @@ swap_in() {
   esac
   if [ -d "$APP" ]; then mv "$APP" "$OLD"; fi
   mv "$STAGE" "$APP"
-  rm -rf "$OLD"
+  if [ "${EW_KEEP_OLD:-0}" != 1 ]; then rm -rf "$OLD"; fi
 }
 
 mac_app_id() {
@@ -343,6 +372,7 @@ make_mac_app() {
     return 0
   fi
   say "Adding Engineering Workshop to the Applications folder in your home folder..."
+  app_version=$("$APP/.venv/bin/python" -c 'import json,re,sys; v=json.load(open(sys.argv[1],encoding="utf-8"))["version"]; assert re.fullmatch(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)",v); print(v)' "$APP/package.json") || fail "Could not read a valid installed app version."
   contents=$WORK/bundle/Contents
   mkdir -p "$contents/MacOS" "$contents/Resources"
   cp "$APP/assets/Workshop.icns" "$contents/Resources/Workshop.icns"
@@ -357,8 +387,8 @@ make_mac_app() {
   <key>CFBundleIdentifier</key><string>$APP_ID</string>
   <key>CFBundleName</key><string>Engineering Workshop</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>1.0</string>
-  <key>CFBundleVersion</key><string>1</string>
+  <key>CFBundleShortVersionString</key><string>$app_version</string>
+  <key>CFBundleVersion</key><string>$app_version</string>
   <key>LSMinimumSystemVersion</key><string>11.0</string>
 </dict>
 </plist>
@@ -462,15 +492,17 @@ uninstall_app() {
     say "Engineering Workshop is not installed in $EW_HOME."
     return 0
   fi
+  lock_install
   LOG=$EW_HOME/install.log
   : >"$LOG"
   say "Removing Engineering Workshop..."
   stop_app
   if shortcut_is_ours; then rm -rf "$SHORTCUT"; fi
-  rm -rf "$APP" "$RUNTIME" "$STAGE" "$OLD" "$WORK" || fail "Could not remove everything in $EW_HOME."
+  rm -rf "$APP" "$RUNTIME" "$STAGE" "$OLD" "$APP_FAILED" "$WORK" || fail "Could not remove everything in $EW_HOME."
   if [ "$PURGE" = 1 ]; then
     rm -rf "$DATA" || fail "Could not remove $DATA."
     rm -f "$MARKER" "$LOG"
+    unlock_install
     rmdir "$EW_HOME" 2>/dev/null || true
     say "Removed Engineering Workshop and your progress."
   else
@@ -498,6 +530,7 @@ main() {
   umask 077
   LOG=
   FAILED=0
+  INSTALL_LOCK_HELD=0
   MODE=install_app
   PURGE=0
   trap on_exit EXIT
@@ -518,6 +551,10 @@ main() {
   if [ "$PURGE" = 1 ] && [ "$MODE" != uninstall_app ]; then fail "--purge only works together with --uninstall."; fi
   detect_platform
   set_paths
+  if [ -n "${EW_RELEASE_TAG:-}" ]; then
+    printf '%s\n' "$EW_RELEASE_TAG" | awk '$0 ~ /^v[0-9]+\.[0-9]+\.[0-9]+$/ {ok=1} END {exit !ok}' || fail "Invalid stable release tag."
+    RELEASE_URL=https://github.com/ShmalexM/ml-workshop/releases/download/$EW_RELEASE_TAG
+  fi
   "$MODE"
 }
 

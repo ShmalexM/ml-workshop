@@ -2,6 +2,19 @@
 
 This file lists the notable changes in each release. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and version numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-10-12
+
+### Added
+
+- A beginner introduction explaining code, output, running code, checking answers and using hints.
+- Optional experience and learning-goal questions on Paths, with a locally saved personalized study plan, reasons for each path and progress toward the next unfinished lesson. Answers can be changed without losing work, and all lessons remain available.
+- A beginner guide with a first-lesson walkthrough. Learning-profile answers are included in progress exports.
+- App updates in Settings: installed copies can check for the latest stable release and update and restart with one button. Updates keep saved work and use checksum-verified installer archives. Source checkouts show their version and manual update guidance.
+
+### Fixed
+
+- The native Mac app bundle reports the app version instead of a fixed 1.0.
+
 ## [1.2.0] - 2026-10-08
 
 ### Added

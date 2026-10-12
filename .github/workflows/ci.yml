@@ -136,6 +136,9 @@ jobs:
           fi
           test -e "$shortcut"
           bare "$python" tests/check_install.py "$EW_HOME"
+          # The test runner itself must use stable Python outside app/ on Windows and POSIX.
+          stable_python=$(bare "$python" -c 'import sys; print(sys._base_executable)')
+          bare "$stable_python" tests/check_update.py "$EW_HOME" "$EW_ARCHIVE"
           bare sh install.sh --uninstall
           test -f "$EW_HOME/data/keep.txt" && test -f "$EW_HOME/data/workshop.sqlite3"
           test ! -e "$EW_HOME/data/assistant.json"
@@ -171,6 +174,10 @@ jobs:
           if (-not $target.EndsWith('pythonw.exe') -or -not (Test-Path -LiteralPath $target)) { throw "Unexpected shortcut target $target" }
           & $python tests\check_install.py $env:EW_HOME
           if ($LASTEXITCODE) { throw 'The updated app failed its checks.' }
+          # Do not keep app\.venv\python.exe open while testing the real app replacement.
+          $stablePython = & $python -c 'import sys; print(sys._base_executable)'
+          & $stablePython tests\check_update.py $env:EW_HOME $env:EW_ARCHIVE
+          if ($LASTEXITCODE) { throw 'The real in-app update failed its checks.' }
           & ([scriptblock]::Create((Get-Content -Raw .\install.ps1))) -Uninstall
           foreach ($path in "$env:EW_HOME\data\keep.txt", "$env:EW_HOME\data\workshop.sqlite3") { if (-not (Test-Path -LiteralPath $path)) { throw "Uninstall removed $path" } }
           if (Test-Path -LiteralPath "$env:EW_HOME\data\assistant.json") { throw 'Uninstall left the assistant key file.' }

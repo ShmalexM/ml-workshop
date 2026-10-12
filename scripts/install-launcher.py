@@ -2,6 +2,7 @@
 from pathlib import Path
 import argparse
 import datetime
+import json
 import platform
 import plistlib
 import shutil
@@ -32,9 +33,10 @@ def main():
         (contents / folder).mkdir(parents=True, exist_ok=True)
     subprocess.run(['/usr/bin/xcrun', 'swiftc', '-O', '-target', platform.machine() + '-apple-macos13.0', '-swift-version', '5', '-framework', 'AppKit', '-framework', 'WebKit', '-o', str(contents / 'MacOS/EngineeringWorkshop'), str(ROOT / 'native/WorkshopApp.swift')], check=True)
     shutil.copyfile(ROOT / 'assets/Workshop.icns', contents / 'Resources/Workshop.icns')
+    version = json.loads((ROOT / 'package.json').read_text(encoding='utf-8'))['version']
     info = dict(CFBundleName=NAME, CFBundleDisplayName=NAME, CFBundleIdentifier=IDENTIFIER,
                 CFBundlePackageType='APPL', CFBundleExecutable='EngineeringWorkshop', CFBundleIconFile='Workshop',
-                CFBundleShortVersionString='1.0', CFBundleVersion='1', LSMinimumSystemVersion='13.0',
+                CFBundleShortVersionString=version, CFBundleVersion='1', LSMinimumSystemVersion='13.0',
                 NSPrincipalClass='NSApplication', NSHighResolutionCapable=True,
                 NSAppTransportSecurity={'NSAllowsLocalNetworking': True}, WorkshopRoot=str(ROOT))
     with (contents / 'Info.plist').open('wb') as f:
