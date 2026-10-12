@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import sys
 import time
+import traceback
 import urllib.request
 
 VERSION_PATTERN = re.compile(r'(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})')
@@ -280,6 +281,11 @@ def perform_update(install, data, port, target, previous, light):
         if old.is_dir():
             shutil.rmtree(old, ignore_errors=True)
     except Exception:
+        try:
+            with (data / 'update.log').open('a', encoding='utf-8') as log:
+                traceback.print_exc(file=log)
+        except OSError:
+            pass  # An unavailable diagnostic log must not prevent rollback.
         try:
             restored = rollback(install, data, port, previous, env)
         except Exception:

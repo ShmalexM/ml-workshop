@@ -78,13 +78,16 @@ def print_update_diagnostics(install, data):
         pass
     for path in (data / 'update-status.json', data / 'update.log', install / 'install.log', data / 'server.log'):
         try:
-            text = path.read_bytes()[-8000:].decode('utf-8', errors='replace')
+            text = path.read_bytes()[-8000:].decode('utf-8-sig', errors='replace')
         except OSError:
             continue
         for secret in secrets:
             if secret:
                 text = text.replace(secret, '[redacted]')
-        print(f'CI update diagnostic: {path.name}\n{text}', flush=True)
+        # Windows' stable Python may use cp1252 even when the log contains UTF-8.
+        encoding = getattr(sys.stdout, 'encoding', None) or 'utf-8'
+        output = f'CI update diagnostic: {path.name}\n{text}'
+        print(output.encode(encoding, errors='backslashreplace').decode(encoding), flush=True)
 
 
 def stop_worker_tree(data):
