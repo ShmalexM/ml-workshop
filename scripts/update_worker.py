@@ -157,8 +157,13 @@ def installer_command(installer, platform=None):
 
 
 def run_installer(command, install, env, log):
+    # PowerShell needs hidden-console semantics. DETACHED_PROCESS suppresses
+    # CREATE_NO_WINDOW and can make its console host exit without running the script.
+    # The worker is already orphaned; its installer child need not detach again.
+    options = (dict(creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW)
+               if os.name == 'nt' else detached_options())
     process = subprocess.Popen(command, cwd=install, env=env, stdin=subprocess.DEVNULL,
-                               stdout=log, stderr=log, **detached_options())
+                               stdout=log, stderr=log, **options)
     try:
         return process.wait(timeout=5400)
     except subprocess.TimeoutExpired:
@@ -270,7 +275,7 @@ def perform_update(install, data, port, target, previous, light):
         with (data / 'update.log').open('ab') as log:
             result = run_installer(installer_command(installer), install, env, log)
         if result:
-            raise RuntimeError('install')
+            raise RuntimeError(f'installer exited with code {result}')
         write_status(data, status='restarting', phase='Restarting Engineering Workshop.', error=None)
         restart(install, env)
         if not wait_healthy(port, data, target):
