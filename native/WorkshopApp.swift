@@ -91,7 +91,8 @@ final class WorkshopApp: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
     @objc private func about() {
-        NSApp.orderFrontStandardAboutPanel(options: [.applicationName: "Engineering Workshop", .applicationVersion: "1.0", .credits: NSAttributedString(string: "ML and software engineering lessons that run on this Mac.\nLessons, books and progress stay on this Mac.")])
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Unknown"
+        NSApp.orderFrontStandardAboutPanel(options: [.applicationName: "Engineering Workshop", .applicationVersion: version, .credits: NSAttributedString(string: "ML and software engineering lessons that run on this Mac.\nLessons, books and progress stay on this Mac.")])
     }
     @objc private func openInBrowser() { NSWorkspace.shared.open(sessionURL(webView.url.flatMap { isLocal($0) ? $0 : nil })) }
     private func isLocal(_ url: URL) -> Bool { url.scheme == "http" && url.host == "127.0.0.1" && url.port == 7318 }
