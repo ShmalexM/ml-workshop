@@ -347,11 +347,16 @@ def pdf_labels(reader, count, checksum):
     """
     if '/PageLabels' in reader.root_object:
         return [str(label)[:60] for label in reader.page_labels][:count], True
+    labels = edition_labels(count, checksum)
+    return (labels, True) if labels else ([str(i+1) for i in range(count)], False)
+
+def edition_labels(count, checksum):
+    """The printed page labels of a known edition with an offset, or None."""
     edition = KNOWN_EDITIONS.get(checksum, {})
-    if 'pageOffset' in edition:
-        front = edition.get('front', [])
-        return [front[i] if i < len(front) else str(max(1,i+1+edition['pageOffset'])) for i in range(count)], True
-    return [str(i+1) for i in range(count)], False
+    if 'pageOffset' not in edition:
+        return None
+    front = edition.get('front', [])
+    return [front[i] if i < len(front) else str(max(1,i+1+edition['pageOffset'])) for i in range(count)]
 
 def page_number(label):
     """True for labels that are page numbers, such as 12, iv or A-3, and false for names such as Cover."""
@@ -489,7 +494,11 @@ def split_legacy_book(folder, book):
 
 def upgrade_pdf_summary(folder, book):
     """Once, for a PDF imported before textPages and printedLabels were stored: count the pages
-    with text, check whether the PDF has page labels, and relabel a known edition."""
+    with text, decide whether its labels are printed page numbers, and relabel a known edition.
+
+    This runs in the server while it reads the summary, so it never opens the PDF. Labels that are
+    exactly 1 to N say nothing more than the page number, so the reader shows page n of N for them.
+    """
     book = dict(book)
     chapters = []
     for location in range(1,book['count']+1):
@@ -501,11 +510,8 @@ def upgrade_pdf_summary(folder, book):
     if not isinstance(book.get('textPages'),int):
         # Unknown pages count as text, so a damaged index never hides search.
         book['textPages'] = sum(1 if chapter is None else bool(chapter.get('text')) for chapter in chapters)
-    try:
-        from pypdf import PdfReader
-        labels, printed = pdf_labels(PdfReader(folder/book['sourceFile']), book['count'], book['sha256'])
-    except Exception:
-        labels, printed = None, True  # As before: the stored labels are shown as printed pages.
+    labels = edition_labels(book['count'], book['sha256'])
+    printed = bool(labels) or any(chapter and chapter.get('label')!=str(i+1) for i,chapter in enumerate(chapters))
     book['printedLabels'] = printed
     if labels and len(labels)==book['count'] and any(chapter and chapter.get('label')!=labels[i] for i,chapter in enumerate(chapters)):
         for i,chapter in enumerate(chapters):

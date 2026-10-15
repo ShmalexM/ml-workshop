@@ -897,6 +897,26 @@ class SecurityRegressionTests(FormatTestCase):
         self.assertNotIn('titleFromFile', json.loads((self.data/'library/plain/book.json').read_text()))
 
 
+    def test_older_pdf_summaries_upgrade_without_opening_the_pdf(self):
+        from pypdf import PdfWriter
+        writer = PdfWriter()
+        for _ in range(3):
+            writer.add_blank_page(width=100, height=100)
+        writer.set_page_label(0, 2, style='/r')
+        writer.write(self.root/'roman.pdf')
+        import_book(self.root/'roman.pdf', self.data, 'roman')
+        import_book(make_no_text_pdf(self.root/'plain.pdf', pages=3), self.data, 'plain')
+        for book_id in ('roman', 'plain'):
+            path = self.data/f'library/{book_id}/book.json'
+            stored = json.loads(path.read_text())
+            del stored['textPages'], stored['printedLabels']
+            path.write_text(json.dumps(stored))
+            (self.data/f'library/{book_id}/source.pdf').write_bytes(b'not a pdf any more')
+        with patch('pypdf.PdfReader', side_effect=AssertionError('the upgrade opened the PDF')):
+            library_ = Library(self.data)
+            self.assertEqual([library_.book(book_id)['printedLabels'] for book_id in ('roman', 'plain')], [True, False])
+
+
 class UnsupportedTests(FormatTestCase):
     def test_unsupported_types_get_a_clear_message(self):
         for name in ('notes.rtf', 'slides.pptx', 'sheet.xlsx', 'drawing.svg', 'archive.zip', 'script.js', 'noextension'):
