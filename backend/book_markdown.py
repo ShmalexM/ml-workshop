@@ -79,10 +79,28 @@ class TooLarge(ValueError):
 
 
 class Builder:
-    """Counts the elements one document creates."""
+    """Counts the elements one document creates, and joins text added in many small pieces.
+
+    text() holds pieces for one element until the next child is added through child() or
+    flush() is called, so a paragraph of many one-letter runs is joined once.
+    """
     def __init__(self, limit=None):
         self.count = 0
         self.limit = limit or MAX_NODES
+        self.pending = []
+        self.pending_parent = None
+
+    def text(self, parent, text):
+        if parent is not self.pending_parent:
+            self.flush()
+            self.pending_parent = parent
+        self.pending.append(text)
+
+    def flush(self):
+        if self.pending:
+            append_text(self.pending_parent, ''.join(self.pending))
+        self.pending = []
+        self.pending_parent = None
 
     def element(self, tag, attrib=None):
         self.count += 1
@@ -91,9 +109,28 @@ class Builder:
         return ET.Element(tag, attrib or {})
 
     def child(self, parent, tag, attrib=None):
+        self.flush()
         node = self.element(tag, attrib)
         parent.append(node)
         return node
+
+
+def add_nodes(parent, nodes):
+    """Append text and elements to parent, joining each run of text first.
+
+    Adding text one piece at a time copies the whole string each time, which is quadratic.
+    """
+    pending = []
+    for node in nodes:
+        if isinstance(node, str):
+            pending.append(node)
+            continue
+        if pending:
+            append_text(parent, ''.join(pending))
+            pending = []
+        parent.append(node)
+    if pending:
+        append_text(parent, ''.join(pending))
 
 
 def append_text(parent, text):
@@ -394,12 +431,7 @@ class Markdown:
 
     def inline(self, parent, text, depth, in_link=False):
         """Add the inline content of `text` to parent: code, emphasis, links, images and breaks."""
-        tokens = self.tokens(text, depth, in_link)
-        for node in self.emphasis(tokens):
-            if isinstance(node, str):
-                append_text(parent, node)
-            else:
-                parent.append(node)
+        add_nodes(parent, self.emphasis(self.tokens(text, depth, in_link)))
 
     def tokens(self, text, depth, in_link):
         b = self.builder
@@ -563,11 +595,7 @@ class Markdown:
                     used = 2 if opener.length >= 2 and token.length >= 2 else 1
                     tag = 'strong' if used == 2 else 'em'
                 node = self.builder.element(tag)
-                for child in children:
-                    if isinstance(child, str):
-                        append_text(node, child)
-                    else:
-                        node.append(child)
+                add_nodes(node, children)
                 if opener.length > used:
                     stack[-1][1].append(token.char * (opener.length - used))
                 stack[-1][1].append(node)

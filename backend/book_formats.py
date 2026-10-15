@@ -10,6 +10,7 @@ format has size, count and nesting limits, and a failed import leaves nothing be
 import base64
 import binascii
 import codecs
+from collections import Counter
 from html import escape
 from html.parser import HTMLParser
 import hashlib
@@ -33,6 +34,7 @@ MAX_DOC_IMAGE = 32 << 20       # one picture inside a Word file
 MAX_IMAGE_PIXELS = 64_000_000  # width × height of any stored image, and the frames of an animated GIF together
 MAX_SECTION_PIXELS = 256_000_000  # pictures in one section; a section with more is split at a block boundary
 MAX_HTML_DEPTH = 200
+AUTO_CLOSE_DEPTH = 16          # open elements an <li>, <td> or similar looks through to close its sibling
 MAX_DOCX_XML = 16 << 20        # word/document.xml, unpacked
 MAX_DOCX_PART = 4 << 20        # styles, numbering, relationships and properties, unpacked
 MAX_DOCX_DEPTH = 12            # tables inside tables, and content controls
@@ -459,9 +461,28 @@ class HtmlTree(HTMLParser):
         self.builder = builder
         self.root = builder.element('body')
         self.stack = [self.root]
+        # How many of each tag are open, so an end tag with nothing to close costs one lookup.
+        self.open = Counter()
+        # Text since the last element change, joined once: adding it piece by piece is quadratic.
+        self.text = []
         self.skipping = None
         self.title = []
         self.in_title = False
+
+    def flush(self):
+        if self.text:
+            append_text(self.stack[-1], ''.join(self.text))
+            self.text = []
+
+    def close_from(self, index):
+        self.flush()
+        for element in self.stack[index:]:
+            self.open[element.tag] -= 1
+        del self.stack[index:]
+
+    def close(self):
+        super().close()
+        self.flush()
 
     def handle_starttag(self, tag, attrs):
         if self.skipping:
@@ -477,22 +498,25 @@ class HtmlTree(HTMLParser):
         if tag in self.IGNORE:
             return
         closes, scope = self.AUTO_CLOSE.get(tag, (None, None))
-        if closes:
+        if closes and any(self.open[name] for name in closes):
+            # Look only near the top of the stack, as an open <li> is closed by the next one.
             found = None
-            for index in range(len(self.stack) - 1, 0, -1):
+            for index in range(len(self.stack) - 1, max(0, len(self.stack) - AUTO_CLOSE_DEPTH - 1), -1):
                 name = self.stack[index].tag
                 if name in scope:
                     break
                 if name in closes:
                     found = index
             if found:
-                del self.stack[found:]
+                self.close_from(found)
         elif tag in self.BLOCKS and len(self.stack) > 1 and self.stack[-1].tag == 'p':
-            self.stack.pop()
+            self.close_from(len(self.stack) - 1)
+        self.flush()
         element = self.builder.element(tag, {key: value or '' for key, value in attrs if key in self.KEEP})
         self.stack[-1].append(element)
         if tag not in self.VOID and len(self.stack) < MAX_HTML_DEPTH:
             self.stack.append(element)
+            self.open[tag] += 1
 
     def handle_startendtag(self, tag, attrs):
         self.handle_starttag(tag, attrs)
@@ -509,16 +533,19 @@ class HtmlTree(HTMLParser):
                 if not self.skipping[1]:
                     self.skipping = None
             return
+        if not self.open[tag]:
+            return
+        # Everything above the match closes, so the scan is paid for by the elements it removes.
         for index in range(len(self.stack) - 1, 0, -1):
             if self.stack[index].tag == tag:
-                del self.stack[index:]
+                self.close_from(index)
                 return
 
     def handle_data(self, data):
         if self.in_title:
             self.title.append(data)
         elif not self.skipping:
-            append_text(self.stack[-1], data)
+            self.text.append(data)
 
 
 def parse_html(text, builder):
@@ -742,13 +769,13 @@ class Docx:
         for node in run:
             name = local(node.tag)
             if name == 't':
-                append_text(target, node.text or '')
+                self.builder.text(target, node.text or '')
             elif name in ('tab', 'ptab'):
-                append_text(target, '\t')
+                self.builder.text(target, '\t')
             elif name in ('br', 'cr') and attribute(node, 'type') in (None, 'textWrapping'):
                 self.builder.child(target, 'br')
             elif name == 'noBreakHyphen':
-                append_text(target, '‑')
+                self.builder.text(target, '‑')
             elif name in ('drawing', 'pict', 'object'):
                 self.picture(target, node, depth)
             elif name == 'AlternateContent':
@@ -800,6 +827,7 @@ class Docx:
             heading = int(match.group(1)) if match else (1 if style.lower() == 'title' else None)
         element = self.builder.element(f'h{heading}' if heading and heading <= 6 else 'p')
         self.inline(element, node, depth)
+        self.builder.flush()
         if not ''.join(element.itertext()).strip() and not any(item.tag == 'img' for item in element.iter()):
             return None, None
         if style in self.code_styles:
@@ -848,20 +876,23 @@ class Docx:
 
     def blocks(self, container, depth=0):
         """Group list paragraphs into nested lists, and code-styled paragraphs into one code block."""
-        out, lists, code = [], [], None
+        out, lists, code, lines = [], [], None, []
         b = self.builder
+
+        def end_code():
+            if code is not None:
+                code.text = '\n'.join(lines)
+
         for element, kind in self.items(container, depth):
             if kind == 'code':
                 lists = []
-                text = ''.join(element.itertext())
                 if code is None:
                     pre = b.element('pre')
-                    code = b.child(pre, 'code')
+                    code, lines = b.child(pre, 'code'), []
                     out.append(pre)
-                    code.text = text
-                else:
-                    code.text += '\n' + text
+                lines.append(''.join(element.itertext()))
                 continue
+            end_code()
             code = None
             if kind is None:
                 lists = []
@@ -883,6 +914,7 @@ class Docx:
             item = b.child(lists[-1][1], 'li')
             item.text = element.text
             item.extend(list(element))
+        end_code()
         return out
 
 

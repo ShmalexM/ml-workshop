@@ -821,6 +821,23 @@ class SecurityRegressionTests(FormatTestCase):
                     self.load('one.html', '<p>x</p><table><tr><td>' + pictures + '</td></tr></table>', 'one')
 
 
+    def test_3_text_is_joined_once_in_markdown_html_and_word(self):
+        # Before: 2 MB of Markdown took 32 s, 8 MB of HTML about 18 s and 8 MB of unmatched end tags 12 s.
+        book = self.timed(10, self.load, 'stars.md', '*a ' * 700_000, 'stars')
+        self.assertEqual(len(self.library.chapter('stars', 1)['text']), len(('*a ' * 700_000).strip()))
+        self.timed(10, self.load, 'breaks.html', '<p>' + 'a<wbr>' * 1_400_000 + '</p>', 'breaks')
+        self.assertEqual(self.library.chapter('breaks', 1)['text'], 'a' * 1_400_000)
+        self.timed(15, self.load, 'ends.html', '<div>' * 199 + 'x' + '</q>' * 4_000_000, 'ends')
+        word = '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p>' \
+               + '<w:r><w:t>a</w:t></w:r>' * 650_000 + '</w:p></w:body></w:document>'
+        source = make_docx(self.root/'runs.docx', '', document=word)
+        self.timed(4, self.load, 'runs.docx', source, 'runs')  # Before: 4.7 s on this 15 MB document.
+        self.assertEqual(self.library.chapter('runs', 1)['text'], 'a' * 650_000)
+        code = make_docx(self.root/'code.docx', ''.join(para(f'line {n}', 'Code') for n in range(3)) + para('after'))
+        self.load('code.docx', code, 'code')
+        self.assertIn('<pre><code>line 0\nline 1\nline 2</code></pre><p>after</p>', self.library.chapter('code', 1)['html'])
+
+
 class UnsupportedTests(FormatTestCase):
     def test_unsupported_types_get_a_clear_message(self):
         for name in ('notes.rtf', 'slides.pptx', 'sheet.xlsx', 'drawing.svg', 'archive.zip', 'script.js', 'noextension'):
