@@ -1,7 +1,9 @@
-"""Local-only EPUB/PDF imports. Originals and extracted content live under data/.
+"""Local-only book imports. Originals and extracted content live under data/.
 
-Each book folder holds book.json (the summary: metadata, contents and assets) and
-chapters/<n>.json (one page or section each). The server caches summaries only.
+EPUB and PDF are read here; Markdown, text, HTML, Word, notebooks and images are read in
+book_formats.py with the same sanitizer and limits. Each book folder holds book.json (the
+summary: metadata, contents and assets) and chapters/<n>.json (one page or section each).
+The server caches summaries only.
 """
 from html import escape
 from html.parser import HTMLParser
@@ -44,6 +46,24 @@ MAX_IMAGES = 2000
 MAX_IMAGE_BYTES = 150 * 1024 * 1024
 MAX_TITLE = 300
 MAX_FIELD = 2000
+
+# File types the importer accepts, by extension, and the most each one may weigh. Text formats
+# expand into far more memory than their size while they are parsed, so their limits are lower.
+FORMATS = {'.pdf':'pdf','.epub':'epub','.md':'markdown','.markdown':'markdown','.txt':'text',
+           '.html':'html','.htm':'html','.docx':'docx','.ipynb':'ipynb',
+           '.png':'image','.jpg':'image','.jpeg':'image','.webp':'image','.gif':'image'}
+FORMAT_NAMES = {'pdf':'PDF','epub':'EPUB','markdown':'Markdown','text':'text','html':'HTML','docx':'Word',
+                'ipynb':'notebook','image':'image'}
+INPUT_LIMITS = {'pdf':MAX_BOOK_BYTES,'epub':MAX_BOOK_BYTES,'docx':MAX_BOOK_BYTES,'markdown':16 << 20,'text':16 << 20,
+                'html':32 << 20,'ipynb':50 << 20,'image':50 << 20}
+SUPPORTED = 'Choose a PDF, EPUB, Word (.docx), Markdown, text, HTML, Jupyter notebook or image (PNG, JPEG, WebP or GIF) file.'
+# How the server sends each original file. HTML goes out as text, so it can never open as a page.
+SOURCE_TYPES = {'.pdf':'application/pdf','.epub':'application/epub+zip','.md':'text/markdown; charset=utf-8',
+                '.markdown':'text/markdown; charset=utf-8','.txt':'text/plain; charset=utf-8',
+                '.html':'text/plain; charset=utf-8','.htm':'text/plain; charset=utf-8',
+                '.docx':'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                '.ipynb':'application/x-ipynb+json','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg',
+                '.webp':'image/webp','.gif':'image/gif'}
 
 # Book class names and ids get this prefix, so book HTML can never use the app's own CSS classes.
 BOOK_PREFIX = 'bk-'
@@ -89,10 +109,10 @@ def archive_path(base, relative):
         raise ValueError('Unsafe EPUB path')
     return name
 
-def read_member(archive, name):
-    """Read one EPUB file, counting bytes as they are unpacked instead of trusting the zip header."""
-    limit = MAX_SECTION_BYTES
-    message = f'A file inside this EPUB is larger than {megabytes(limit)} when unpacked, which is over the import limit.'
+def read_member(archive, name, limit=None, kind='EPUB'):
+    """Read one file from a zip, counting bytes as they are unpacked instead of trusting the zip header."""
+    limit = limit or MAX_SECTION_BYTES
+    message = f'A file inside this {kind} is larger than {megabytes(limit)} when unpacked, which is over the import limit.'
     if archive.getinfo(name).file_size > limit:
         raise ValueError(message)
     with archive.open(name) as stream:
@@ -104,15 +124,16 @@ def read_member(archive, name):
 class _RootElement(Exception):
     pass
 
-def parse_xml(raw):
-    """Parse EPUB XML. Only short, plain entities such as nbsp are accepted.
+def parse_xml(raw, kind='EPUB'):
+    """Parse EPUB or Word XML. Only short, plain entities such as nbsp are accepted.
 
-    Nested or long entity declarations can expand a few lines into gigabytes.
+    Nested or long entity declarations can expand a few lines into gigabytes, and external
+    entities would read other files, so both are refused before the document is parsed.
     """
     scanner = pyexpat.ParserCreate()
     def declared(name, is_parameter, value, *_):
         if is_parameter or value is None or len(value)>16 or '&' in value:
-            raise ValueError('This EPUB declares XML entities that the importer does not accept.')
+            raise ValueError(f'This {kind} declares XML entities that the importer does not accept.')
     def root(*_):
         raise _RootElement  # Entities can only be declared before the root element.
     scanner.EntityDeclHandler = declared
@@ -167,9 +188,9 @@ def sanitized_html(element, chapter_path, book_id, chapters, assets):
         try:
             name = archive_path(posixpath.dirname(chapter_path), element.get('src',''))
         except ValueError:
-            return f'<p class="{BOOK_PREFIX}unavailable-media">Remote image omitted from this offline copy.</p>'
+            return f'<span class="{BOOK_PREFIX}unavailable-media">Remote image omitted from this offline copy.</span>'
         if name not in assets:
-            return f'<p class="{BOOK_PREFIX}unavailable-media">Image was not included in the source EPUB.</p>'
+            return f'<span class="{BOOK_PREFIX}unavailable-media">Image was not included in the imported file.</span>'
         attrs.update(src=f'/api/library/{book_id}/asset/{quote(assets[name], safe="/")}',
                      alt=element.get('alt','Book illustration'), loading='lazy', tabindex='0', role='button')
     elif tag == 'a':
@@ -211,17 +232,25 @@ def prefix_stored_html(html):
     return ''.join(parser.parts)
 
 class ChapterWriter:
-    """Write chapters/<n>.json one at a time, and stop when the book's output limit is reached."""
-    def __init__(self, folder, message):
+    """Write chapters/<n>.json one at a time, and stop when the book's output limit is reached.
+
+    text_pages counts the chapters with searchable text; a PDF with none has no text layer.
+    """
+    def __init__(self, folder, message, section_limit=None):
         self.folder = Path(folder)/'chapters'
         self.folder.mkdir()
         self.message = message
+        self.section_limit = section_limit
         self.total = 0
+        self.text_pages = 0
     def add(self, document):
         raw = json.dumps(document, ensure_ascii=False).encode('utf-8')
+        if self.section_limit and len(raw) > self.section_limit:
+            raise ValueError(f'One section of this file is larger than {megabytes(self.section_limit)} after import, which is over the import limit.')
         self.total += len(raw)
         if self.total > MAX_OUTPUT_BYTES:
             raise ValueError(self.message)
+        self.text_pages += bool(document.get('text'))
         (self.folder/f"{document['location']}.json").write_bytes(raw)
 
 def copy_image(archive, name, folder, limit):
@@ -292,7 +321,7 @@ def import_epub(source, folder, book_id):
             writer.add({**item,'text':normalized(' '.join(body.itertext())),
                         'html':sanitized_html(body,name,book_id,chapters,assets)})
             del root, body
-        return dict(title=field('title',source.stem),author=field('creator'),format='epub',
+        return dict(title=field('title',source.stem),author=field('creator'),format='epub',textPages=writer.text_pages,
                     rights=field('rights','Rights remain with the source authors.',MAX_FIELD),sourceUrl=web_url(field('source',limit=MAX_FIELD)),
                     attribution='Original text, diagrams, captions, and attributions from the supplied EPUB. Reader layout adapted; image files unchanged.',
                     count=len(toc),toc=toc,assets=image_records,
@@ -332,12 +361,17 @@ def import_pdf(source, folder, book_id):
                 sourceUrl='',attribution='Original PDF preserved unchanged, including vector diagrams, embedded fonts, pictures, and page labels.',
                 count=count,toc=toc,assets=[])
 
-def import_book(source, data_dir, book_id):
+def import_book(source, data_dir, book_id, name=None):
+    """Import one file as a book. name, the original file name without its extension, is the
+    title when the file has none; it defaults to the source file's own name."""
     source = Path(source).expanduser().resolve()
     if not BOOK_ID.fullmatch(book_id):
         raise ValueError('Use a lowercase book ID with letters, numbers and hyphens')
-    if source.suffix.lower() not in ('.epub','.pdf') or source.stat().st_size>MAX_BOOK_BYTES:
-        raise ValueError('Choose an EPUB or PDF no larger than 100 MB')
+    kind = FORMATS.get(source.suffix.lower())
+    if not kind:
+        raise ValueError(SUPPORTED)
+    if source.stat().st_size>INPUT_LIMITS[kind]:
+        raise ValueError(f'Choose a {FORMAT_NAMES[kind]} file no larger than {megabytes(INPUT_LIMITS[kind])}.')
     root = Path(data_dir)/'library';root.mkdir(parents=True,exist_ok=True)
     checksum = digest(source)
     target = root/book_id
@@ -361,10 +395,17 @@ def import_book(source, data_dir, book_id):
         folder = Path(temporary)
         extension = source.suffix.lower()
         shutil.copyfile(source,folder/('source'+extension))
-        result = (import_epub if extension=='.epub' else import_pdf)(source,folder,book_id)
+        if kind=='epub':
+            result = import_epub(source,folder,book_id)
+        elif kind=='pdf':
+            result = import_pdf(source,folder,book_id)
+        else:
+            import book_formats
+            result = book_formats.IMPORTERS[kind](source,folder,book_id,(name or source.stem)[:MAX_TITLE])
         if not result['count']:
             raise ValueError('The book has no readable pages or sections')
-        result.update(id=book_id,sha256=checksum,sourceFile='source'+extension,bytes=source.stat().st_size,importVersion=IMPORT_VERSION)
+        result.update(id=book_id,sha256=checksum,sourceFile='source'+extension,sourceExtension=extension[1:],
+                      bytes=source.stat().st_size,importVersion=IMPORT_VERSION)
         write_json(folder/'book.json',result)
         # Rename only a complete import into the visible library. No partially loaded books.
         if refresh:
@@ -422,7 +463,7 @@ def checked_summary(book, book_id):
     wrong = [key for key,kind in SUMMARY_FIELDS.items() if not isinstance(book.get(key),kind)]
     if wrong:
         raise ValueError('book.json has missing or invalid fields: ' + ', '.join(wrong))
-    if book['id']!=book_id or book['format'] not in ('pdf','epub'):
+    if book['id']!=book_id or book['format'] not in FORMAT_NAMES:
         raise ValueError('book.json names another book or format')
     return book
 
@@ -519,7 +560,9 @@ class Library:
     def asset(self,book_id,name):
         book = self.book(book_id)
         allowed = {item['path']:item['mediaType'] for item in book['assets']}
-        allowed[book['sourceFile']] = 'application/pdf' if book['format']=='pdf' else 'application/epub+zip'
+        allowed[book['sourceFile']] = SOURCE_TYPES.get(PurePosixPath(book['sourceFile']).suffix.lower(),'application/octet-stream')
+        if book['format']=='image' and book.get('sourceType') in IMAGE_TYPES:
+            allowed[book['sourceFile']] = book['sourceType']
         if name not in allowed:
             raise KeyError('Unknown book asset')
         path = (self.root/book_id/name).resolve()

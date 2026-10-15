@@ -7,7 +7,7 @@ import sys
 import tempfile
 import time
 
-from library import Library, UnreadableBook, digest, import_book, normalized
+from library import FORMAT_NAMES, FORMATS, Library, UnreadableBook, digest, import_book, normalized
 
 SUGGESTED = {'gpu-glossary': 'GPU Glossary', 'inference-engineering': 'Inference Engineering',
              'harness-guide': "An engineer's guide to harnesses"}
@@ -68,12 +68,12 @@ def import_checked_upload(source, data_dir, filename, suggested):
                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=PARSE_TIMEOUT,
             )
         except subprocess.TimeoutExpired:
-            raise ValueError('This book took too long to process. Try a smaller or repaired PDF or EPUB.') from None
+            raise ValueError('This file took too long to import. Try a smaller or repaired copy.') from None
         if result.returncode:
             try:
                 message = json.loads(result.stdout)['error']
             except (ValueError, KeyError, TypeError):
-                message = 'Could not read this book. Try a fresh, unencrypted PDF or EPUB.'
+                message = unreadable_message(filename)
             raise ValueError(message)
         library.root.mkdir(parents=True, exist_ok=True)
         target = library.root/book_id
@@ -86,8 +86,15 @@ def import_checked_upload(source, data_dir, filename, suggested):
     return book_id, False
 
 
+def unreadable_message(filename):
+    kind = FORMATS.get(Path(filename).suffix.lower())
+    if kind in ('pdf', 'epub'):
+        return f'Could not read this book. Try a fresh, unencrypted {FORMAT_NAMES[kind]}.'
+    return f'Could not read this {FORMAT_NAMES.get(kind, "")} file. Check that it opens in another app, then try again.'.replace('this  file', 'this file')
+
+
 def parse(source, destination, book_id, filename, expected_title):
-    book = import_book(source, destination, book_id)
+    book = import_book(source, destination, book_id, Path(filename).stem)
     if book['title'] == Path(source).stem:
         book['title'] = Path(filename).stem
     if expected_title and normalized(expected_title).casefold() not in normalized(book['title']).casefold():
@@ -115,6 +122,9 @@ if __name__ == '__main__':
     except MemoryError:
         print(json.dumps({'error': 'This book needs more memory to import than the import limit allows.'}))
         sys.exit(1)
+    except RecursionError:
+        print(json.dumps({'error': 'This file is nested too deeply to import.'}))
+        sys.exit(1)
     except Exception:
-        print(json.dumps({'error': 'Could not read this book. Try a fresh, unencrypted PDF or EPUB.'}))
+        print(json.dumps({'error': unreadable_message(sys.argv[4] if len(sys.argv) > 4 else '')}))
         sys.exit(1)

@@ -19,7 +19,7 @@ import traceback
 from courses import BY_ID, LESSONS, public_curriculum
 from runner import execute, node_binary
 from portfolio import load_portfolio, task_progress
-from library import Library, MAX_BOOK_BYTES
+from library import Library, MAX_BOOK_BYTES, FORMATS, FORMAT_NAMES, INPUT_LIMITS, SUPPORTED, megabytes
 from book_import import import_upload, ImportConflict, SUGGESTED
 from book_study import study_guides
 import game
@@ -439,6 +439,19 @@ class Handler(BaseHTTPRequestHandler):
             traceback.print_exc()
             self.send({'error':'The local server hit an error. Saved progress is safe. Details are in data/server.log.'},500)
 
+    def receive_file(self,target,length,seconds=60):
+        """Stream a request body to target, with a deadline for the whole upload."""
+        deadline=time.monotonic()+seconds
+        with target.open('wb') as stream:
+            remaining=length;self.body_read=True
+            while remaining:
+                timeout=deadline-time.monotonic()
+                if timeout<=0:raise TimeoutError()
+                self.connection.settimeout(min(timeout,15))
+                block=self.rfile.read1(min(65536,remaining))
+                if not block:raise ValueError('The file upload was interrupted. Choose the file again to retry.')
+                stream.write(block);remaining-=len(block)
+
     def import_book_file(self):
         """Receive raw file bytes, with separate limits from small JSON exercise writes."""
         try:
@@ -446,15 +459,20 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError:
             return self.send({'error':'Invalid file size.'},400)
         if length<1 or length>MAX_BOOK_BYTES:
-            return self.send({'error':'Choose a non-empty PDF or EPUB no larger than 100 MB.'},413)
+            return self.send({'error':'Choose a non-empty file no larger than 100 MB.'},413)
         if self.headers.get('Transfer-Encoding') or self.headers.get('Content-Type','').split(';')[0]!='application/octet-stream':
-            return self.send({'error':'Expected a PDF or EPUB file upload.'},415)
+            return self.send({'error':'Expected a file upload.'},415)
         query=parse_qs(urlparse(self.path).query)
         filename=query.get('filename',[''])[0]
         suggested=query.get('book',[''])[0]
         extension=Path(filename).suffix.lower()
-        if not filename or len(filename)>240 or '/' in filename or '\\' in filename or any(ord(c)<32 for c in filename) or extension not in ('.pdf','.epub'):
-            return self.send({'error':'Choose a PDF or EPUB file.'},400)
+        if not filename or len(filename)>240 or '/' in filename or '\\' in filename or any(ord(c)<32 for c in filename):
+            return self.send({'error':'Choose a file to import.'},400)
+        if extension not in FORMATS:
+            return self.send({'error':f'This file type is not supported. {SUPPORTED}'},400)
+        if length>INPUT_LIMITS[FORMATS[extension]]:
+            kind=FORMATS[extension]
+            return self.send({'error':f'Choose a {FORMAT_NAMES[kind]} file no larger than {megabytes(INPUT_LIMITS[kind])}.'},413)
         if suggested and suggested not in SUGGESTED:
             return self.send({'error':'Unknown suggested book.'},400)
         if not IMPORT_LOCK.acquire(blocking=False):
@@ -464,16 +482,7 @@ class Handler(BaseHTTPRequestHandler):
             if UPDATES.busy():return self.send({'error':'An update is running. Import the book after it finishes.'},409)
             with tempfile.TemporaryDirectory(prefix='.upload-',dir=DATA) as temporary:
                 source=Path(temporary)/('upload'+extension)
-                deadline=time.monotonic()+60
-                with source.open('wb') as stream:
-                    remaining=length;self.body_read=True
-                    while remaining:
-                        timeout=deadline-time.monotonic()
-                        if timeout<=0:raise TimeoutError()
-                        self.connection.settimeout(min(timeout,15))
-                        block=self.rfile.read1(min(65536,remaining))
-                        if not block:raise ValueError('The file upload was interrupted. Choose the file again to retry.')
-                        stream.write(block);remaining-=len(block)
+                self.receive_file(source,length)
                 self.connection.settimeout(previous_timeout)
                 book_id,already=import_upload(source,DATA,filename,suggested)
                 self.send(dict(book=LIBRARY.summary(book_id),guides=[g for g in study_guides(LIBRARY) if g['bookId']==book_id],
