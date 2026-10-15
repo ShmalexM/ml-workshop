@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'backend'))
 import book_study
 from book_study import GUIDES, HARNESS_GUIDE_EDITION, study_guides
 from courses import BY_ID
-from library import Library, import_book
+from library import KNOWN_EDITIONS, Library, import_book
 
 HARNESS_GUIDES = ['harness-role', 'harness-instructions', 'harness-disclosure', 'harness-rpi',
                   'harness-subagents', 'harness-choose', 'harness-routing', 'harness-review']
@@ -57,6 +57,13 @@ class BookStudyTests(unittest.TestCase):
         self.assertEqual(study_guides(ScannedGuide(sha='another-edition')), [])
         self.assertEqual(study_guides(ScannedGuide(format='epub')), [])
         self.assertEqual([g['id'] for g in study_guides(ScannedGuide(), 'harness-6')], ['harness-disclosure'])
+
+    def test_guide_edition_is_the_known_edition_of_its_card(self):
+        # The importer matches the untitled harness guide PDF to its card by this checksum, and labels
+        # PDF page n as printed page n - 1, which is what the reading titles say.
+        edition = KNOWN_EDITIONS[HARNESS_GUIDE_EDITION]
+        self.assertEqual(edition['book'], 'harness-guide')
+        self.assertEqual((edition['pageOffset'], edition['front']), (-1, ['Cover']))
 
     def test_every_book_card_is_a_suggested_book_with_guides(self):
         from book_import import SUGGESTED
