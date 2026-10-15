@@ -2,6 +2,12 @@
 
 This file lists the notable changes in each release. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and version numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Onboarding headings no longer show a green outline after a mouse click; the run message says the first PyTorch or TensorFlow run can take up to 30 seconds; Python from zero lesson 2 shows the expected rate as `2.0`; and **Test connection** in Settings → AI assistant says when it saved your changes first.
+
 ## [1.3.0] - 2026-10-12
 
 ### Added

@@ -36,25 +36,27 @@ export default function AssistantSettings(){
   setConfig(next);setForm(formOf(next));setKey('')
   return next
  }
+ const savedText=(next:AssistantConfig)=>next.keyRemoved?'Saved. The saved key was removed because the address changed.':'Saved.'
  async function toggle(on:boolean){
   setEnabled(on);setStatus(null)
   // Turning it on only shows the form. Turning it off saves at once.
   if(!on&&config!.enabled)await run(async()=>{setConfig(await api<AssistantConfig>('/assistant/config',{enabled:false}));setStatus({text:'The assistant is off.'})})
  }
- const saveNow=()=>run(async()=>{const next=await save();setStatus({text:next.keyRemoved?'Saved. The saved key was removed because the address changed.':'Saved.'})})
+ const saveNow=()=>run(async()=>{setStatus({text:savedText(await save())})})
  const listModels=()=>run(async()=>{if(dirty)await save();const r=await api<{models:string[]}>('/assistant/models',{});setModels(r.models);setStatus({text:r.models.length?`Found ${r.models.length} models. Pick one in the Model field.`:'The provider listed no models.'})})
+ // Testing uses the saved settings, so unsaved changes are saved first and every message says so.
  const test=()=>run(async()=>{
-  if(dirty)await save()
+  const saved=dirty?savedText(await save())+' ':''
   const current={abort:new AbortController(),id:randomId()};testing.current=current;setTestRunning(true)
-  setStatus({text:'Waiting for the model. This can take up to a minute.'})
+  setStatus({text:saved+'Waiting for the model. This can take up to a minute.'})
   try{
    const response=await authorized('/api/assistant/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:current.id}),signal:current.abort.signal})
    const r=await response.json() as {model:string;seconds:number;reply:string;error?:string}
    if(!response.ok)throw new Error(r.error||'The local server could not complete this request.')
-   setStatus({text:`Connected. ${r.model} answered in ${r.seconds} s${r.reply?`: “${r.reply.slice(0,60)}”`:'.'}`})
+   setStatus({text:`${saved}Connected. ${r.model} answered in ${r.seconds} s${r.reply?`: “${r.reply.slice(0,60)}”`:'.'}`})
   }catch(e){
-   if(current.abort.signal.aborted){setStatus({text:'Test stopped.'});return}
-   throw e
+   if(current.abort.signal.aborted){setStatus({text:saved+'Test stopped.'});return}
+   throw saved?new Error(saved+(e as Error).message):e
   }finally{if(testing.current===current)testing.current=null;setTestRunning(false)}
  })
  /** Stop: close the request, and tell the server in case the close is not seen. */
