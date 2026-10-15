@@ -821,6 +821,17 @@ class SecurityRegressionTests(FormatTestCase):
                     self.load('one.html', '<p>x</p><table><tr><td>' + pictures + '</td></tr></table>', 'one')
 
 
+    def test_2_repeated_headings_get_ids_in_linear_time(self):
+        # Before: 50,000 empty headings ran the worker to its 90-second limit.
+        with self.assertRaisesRegex(ValueError, 'more than 2,000 sections'):
+            self.timed(5, self.load, 'headings.md', '#\n' * 50_000)
+        notebook = make_ipynb(self.root/'headings.ipynb', [{'cell_type': 'markdown', 'metadata': {}, 'source': '#\n' * 50_000}])
+        with self.assertRaisesRegex(ValueError, 'more than 2,000 sections'):
+            self.timed(5, self.load, 'headings.ipynb', notebook)
+        used = {}
+        self.assertEqual([book_markdown.heading_slug(text, used) for text in ('A', 'A', 'a-1', 'A', 'A')], ['a', 'a-1', 'a-1-1', 'a-2', 'a-3'])
+        self.assertNothingPublished()
+
     def test_3_text_is_joined_once_in_markdown_html_and_word(self):
         # Before: 2 MB of Markdown took 32 s, 8 MB of HTML about 18 s and 8 MB of unmatched end tags 12 s.
         book = self.timed(10, self.load, 'stars.md', '*a ' * 700_000, 'stars')

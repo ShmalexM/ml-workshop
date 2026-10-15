@@ -143,13 +143,24 @@ def append_text(parent, text):
 
 
 def heading_slug(text, used):
-    """A GitHub-style id for a heading, unique within the document."""
+    """A GitHub-style id for a heading, unique within the document.
+
+    used maps each id given so far to the last number added to it, so a repeated heading
+    costs one step, not one step per earlier copy.
+    """
     slug = unicodedata.normalize('NFKC', text).strip().lower()
     slug = re.sub(r'[^\w\- ]', '', slug).replace(' ', '-')[:80] or 'section'
-    candidate, n = slug, 1
-    while candidate in used:
-        candidate = f'{slug}-{n}'; n += 1
-    used.add(candidate)
+    if slug not in used:
+        used[slug] = 0
+        return slug
+    n = used[slug]
+    while True:
+        n += 1
+        candidate = f'{slug}-{n}'
+        if candidate not in used:
+            break
+    used[slug] = n
+    used[candidate] = 0
     return candidate
 
 
@@ -173,7 +184,7 @@ class Markdown:
     def __init__(self, builder=None):
         self.builder = builder or Builder()
         self.references = {}
-        self.slugs = set()
+        self.slugs = {}
 
     # Block structure -------------------------------------------------------------------------
 
