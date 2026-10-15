@@ -862,6 +862,31 @@ class SecurityRegressionTests(FormatTestCase):
         self.assertEqual(html.count('Image was not included'), 1)
 
 
+    def test_5_a_card_takes_only_its_formats_and_a_real_title(self):
+        import book_import
+        def parse(name, content, card):
+            destination = Path(tempfile.mkdtemp(dir=self.root))
+            book_import.parse(write(self.root/name, content), destination, card, name, book_import.SUGGESTED[card])
+            return json.loads((destination/'library'/card/'book.json').read_text())
+        # Before: untitled text named "GPU Glossary.txt" filled the glossary card, and Markdown whose
+        # title only mentioned Inference Engineering filled that card.
+        with self.assertRaisesRegex(ValueError, 'The GPU Glossary card takes a PDF, EPUB or Markdown file. To read this text file, use Add another book.'):
+            parse('GPU Glossary.txt', 'Some notes', 'gpu-glossary')
+        with self.assertRaisesRegex(ValueError, 'The Inference Engineering card takes a PDF or EPUB file'):
+            parse('notes.md', '---\ntitle: Notes, not Inference Engineering\n---\n# Notes\n\ntext', 'inference-engineering')
+        with self.assertRaisesRegex(ValueError, 'no title inside it'):
+            parse('GPU Glossary.md', 'Text without a heading.', 'gpu-glossary')
+        book = parse('copy.md', '# GPU Glossary\n\n## What is a CUDA Kernel?\n\ntext', 'gpu-glossary')
+        self.assertEqual((book['id'], book['format'], book['title']), ('gpu-glossary', 'markdown', 'GPU Glossary'))
+        self.assertNotIn('titleFromFile', book)
+        notes = write(self.root/'harness notes.md', 'no heading here')
+        with patch.dict(library.KNOWN_EDITIONS, {library.digest(notes): dict(book='harness-guide', title='Harness notes')}):
+            self.assertEqual(parse('harness notes.md', 'no heading here', 'harness-guide')['id'], 'harness-guide')
+        # A command-line import keeps the flag out of book.json.
+        import_book(write(self.root/'plain.txt', 'words'), self.data, 'plain')
+        self.assertNotIn('titleFromFile', json.loads((self.data/'library/plain/book.json').read_text()))
+
+
 class UnsupportedTests(FormatTestCase):
     def test_unsupported_types_get_a_clear_message(self):
         for name in ('notes.rtf', 'slides.pptx', 'sheet.xlsx', 'drawing.svg', 'archive.zip', 'script.js', 'noextension'):

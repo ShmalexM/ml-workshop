@@ -363,11 +363,13 @@ def front_matter(text):
 def import_markdown(source, folder, book_id, name):
     title, text = front_matter(read_text(source, 'Markdown').replace('\r\n', '\n'))
     blocks = Markdown(Builder()).convert(text)
-    title = title or next((''.join(block.itertext()) for block in blocks if block.tag == 'h1'), '') or name
+    found = title or next((''.join(block.itertext()) for block in blocks if block.tag == 'h1'), '')
+    title = found or name
     images = Images(folder)
     toc, text_pages = write_chapters(split_sections(blocks, images), folder, book_id, images, title)
     return summary(title, 'markdown', toc, images, text_pages,
-                   'Converted from the supplied Markdown file. Raw HTML, scripts and images from outside the file are not included.')
+                   'Converted from the supplied Markdown file. Raw HTML, scripts and images from outside the file are not included.',
+                   titleFromFile=not found)
 
 
 # Plain text -----------------------------------------------------------------------------------
@@ -432,7 +434,8 @@ def import_text(source, folder, book_id, name):
         writer.add({**item, 'text': lib.normalized(' '.join(paragraphs)),
                     'html': ''.join(f'<p>{escape(paragraph, quote=False)}</p>' for paragraph in paragraphs)})
     images = Images(folder)
-    return summary(name, 'text', toc, images, writer.text_pages, 'Plain text from the supplied file. Line breaks are kept for monospace reading.')
+    return summary(name, 'text', toc, images, writer.text_pages, 'Plain text from the supplied file. Line breaks are kept for monospace reading.',
+                   titleFromFile=True)
 
 
 # HTML -----------------------------------------------------------------------------------------
@@ -615,9 +618,10 @@ def import_html(source, folder, book_id, name):
     images = Images(folder)
     store_inline_images(tree.root, images, 'inline')
     blocks = content_blocks(tree.root, builder)
-    title = lib.normalized(''.join(tree.title)) or section_title(blocks) or name
+    found = lib.normalized(''.join(tree.title)) or section_title(blocks)
+    title = found or name
     toc, text_pages = write_chapters(split_sections(blocks, images), folder, book_id, images, title)
-    return summary(title, 'html', toc, images, text_pages,
+    return summary(title, 'html', toc, images, text_pages, titleFromFile=not found, attribution=
                    'Converted from the supplied HTML file. Scripts, styles, forms, embedded pages and remote images are not included.')
 
 
@@ -959,9 +963,10 @@ def import_docx(source, folder, book_id, name):
         body = child(document, 'body')
         blocks = reader.blocks(body) if body is not None else []
         del document
-        title = title or section_title(blocks) or name
+        found = title or section_title(blocks)
+        title = found or name
         toc, text_pages = write_chapters(split_sections(blocks, reader.images), folder, book_id, reader.images, title)
-    return summary(title, 'docx', toc, reader.images, text_pages,
+    return summary(title, 'docx', toc, reader.images, text_pages, titleFromFile=not found, attribution=
                    'Converted from the supplied Word file: headings, paragraphs, lists, tables and pictures. Page layout, headers, footnotes and comments are not included.',
                    author=author)
 
@@ -1104,9 +1109,10 @@ def import_ipynb(source, folder, book_id, name):
     reader = Notebook(folder, language)
     blocks = reader.cells(cells)
     del notebook, cells
-    title = joined(metadata.get('title')) or next((''.join(block.itertext()) for block in blocks if block.tag == 'h1'), '') or name
+    found = joined(metadata.get('title')) or next((''.join(block.itertext()) for block in blocks if block.tag == 'h1'), '')
+    title = found or name
     toc, text_pages = write_chapters(split_sections(blocks, reader.images), folder, book_id, reader.images, title)
-    return summary(title, 'ipynb', toc, reader.images, text_pages,
+    return summary(title, 'ipynb', toc, reader.images, text_pages, titleFromFile=not found, attribution=
                    'Shown from the supplied notebook as it was saved. Cells never run here; HTML and JavaScript outputs are not run.')
 
 
@@ -1131,7 +1137,7 @@ def import_image(source, folder, book_id, name):
     images.assets['image'] = original
     toc, text_pages = write_chapters([[figure]], folder, book_id, images, name)
     toc[0]['label'] = '1'
-    return summary(name, 'image', toc, images, text_pages,
+    return summary(name, 'image', toc, images, text_pages, titleFromFile=True, attribution=
                    f'The supplied image, unchanged: {size[0]:,} × {size[1]:,} pixels.', cover=original, sourceType=kind)
 
 

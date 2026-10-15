@@ -11,6 +11,8 @@ from library import FORMAT_NAMES, FORMATS, KNOWN_EDITIONS, Library, UnreadableBo
 
 SUGGESTED = {'gpu-glossary': 'GPU Glossary', 'inference-engineering': 'Inference Engineering',
              'harness-guide': "An engineer's guide to harnesses"}
+# The file types each card takes. A verified edition in KNOWN_EDITIONS matches its card whatever its type.
+CARD_FORMATS = {'gpu-glossary': ('pdf', 'epub', 'markdown'), 'inference-engineering': ('pdf', 'epub'), 'harness-guide': ('pdf',)}
 PARSE_TIMEOUT = 90
 # Staging folders older than this belong to a server that stopped mid-import or mid-removal.
 STALE_STAGING_SECONDS = 3600
@@ -100,14 +102,24 @@ def file_title(filename):
     return ' '.join(stem.replace('_', ' ').split()) or stem
 
 
+def format_list(formats):
+    names = [FORMAT_NAMES[kind] for kind in formats]
+    return names[0] if len(names) == 1 else ', '.join(names[:-1]) + ' or ' + names[-1]
+
+
 def parse(source, destination, book_id, filename, expected_title):
     book = import_book(source, destination, book_id, file_title(filename))
-    untitled = book['title'] == Path(source).stem
-    if untitled:
+    # A title made from the file name says nothing about the file, so it cannot match a card.
+    untitled = book.pop('titleFromFile', False) or book['title'] == Path(source).stem
+    if book['title'] == Path(source).stem:
         book['title'] = file_title(filename)
-    # A verified edition matches its card by checksum, whatever its title; others must carry the card's title.
+    # A verified edition matches its card by checksum. Other files must be of a type the card takes and carry its title.
     known = KNOWN_EDITIONS.get(book['sha256'], {}).get('book') == book_id
-    if expected_title and not known and normalized(expected_title).casefold() not in normalized(book['title']).casefold():
+    formats = CARD_FORMATS.get(book_id, ('pdf', 'epub'))
+    if expected_title and not known and book['format'] not in formats:
+        raise ValueError(f'The {expected_title} card takes a {format_list(formats)} file. '
+                         f'To read this {FORMAT_NAMES[book["format"]]} file, use Add another book.')
+    if expected_title and not known and (untitled or normalized(expected_title).casefold() not in normalized(book['title']).casefold()):
         if untitled:
             raise ValueError(f'This file has no title inside it, and it is not a copy of {expected_title} that Workshop knows. '
                              'To read it anyway, use Add another book.')

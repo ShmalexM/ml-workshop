@@ -443,6 +443,8 @@ def import_book(source, data_dir, book_id, name=None):
             result = book_formats.IMPORTERS[kind](source,folder,book_id,(name or source.stem)[:MAX_TITLE])
         if not result['count']:
             raise ValueError('The book has no readable pages or sections')
+        # titleFromFile: the converted file had no title of its own. The book card check reads it; book.json does not keep it.
+        title_from_file = result.pop('titleFromFile',False)
         result.update(id=book_id,sha256=checksum,sourceFile='source'+extension,sourceExtension=extension[1:],
                       bytes=source.stat().st_size,importVersion=IMPORT_VERSION)
         write_json(folder/'book.json',result)
@@ -459,7 +461,7 @@ def import_book(source, data_dir, book_id, name=None):
             (folder/'book.json').replace(target/'book.json')
         else:
             folder.rename(target)
-    return result
+    return {**result,'titleFromFile':True} if title_from_file else result
 
 def split_legacy_book(folder, book):
     """Move the chapters of a version 1 book.json, which held the whole book, into chapter files.
