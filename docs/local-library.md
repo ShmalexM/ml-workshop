@@ -6,7 +6,7 @@ Open **Books** in Engineering Workshop. Imported PDFs and EPUBs are available of
 
 Open **Books**. The **GPU Glossary** and **Inference Engineering** cards each have a drop area and **Choose file** button. Drop one PDF or EPUB onto the matching card, or choose it from your computer. **Read on Modal** opens the online glossary; **Get a free copy** opens Baseten's download page. The app does not download or bundle either book for you.
 
-Modal publishes the *GPU Glossary* as a website, with its Markdown source on [GitHub](https://github.com/modal-labs/gpu-glossary) under CC BY 4.0. There is no official EPUB or PDF, so the card accepts a copy you made yourself. Baseten offers *Inference Engineering* as a free PDF or EPUB.
+Modal publishes the *GPU Glossary* as a website, with its Markdown source on [GitHub](https://github.com/modal-labs/gpu-glossary) under CC BY 4.0. There is no official EPUB or PDF, so the card accepts a copy you made yourself. Baseten offers *Inference Engineering* as a free PDF.
 
 Uploads show progress, followed by a chapter/search preparation step. When **Ready to read** appears, choose **Read book** or **Open book**; no reload or terminal command is needed. On the Mac app, **Choose file** opens a native file picker.
 
