@@ -2,7 +2,7 @@
 from textwrap import dedent
 
 COURSES_ENGINEERING = [
-    dict(id='harness',title='Agent harness engineering',subtitle='State, tools, budgets and evaluation',icon='workflow',color='green'),
+    dict(id='harness',title='Agent harness engineering',subtitle='State, tools, context, budgets and evaluation',icon='workflow',color='green'),
     dict(id='backend',title='Backend & API engineering',subtitle='Contracts, idempotency and pagination',icon='server',color='blue'),
     dict(id='web',title='Web app engineering',subtitle='JavaScript state, async results and data flow',icon='code',color='orange'),
     dict(id='rl',title='Reinforcement learning',subtitle='Environment steps, returns and value updates',icon='gamepad',color='green'),
@@ -143,6 +143,330 @@ def can_step(steps, max_steps, spent, next_cost, budget):
 [('Allows exact cost boundary','can_step(2,3,8,2,10) is True'),('Stops at the step boundary','can_step(3,3,0,1,10) is False'),('Rejects unaffordable work','can_step(0,5,8,3,10) is False'),('Rejects invalid accounting','raises(ValueError,lambda:can_step(0,5,0,-1,10))')],['Next step cost', 'Check both limits', 'Run or stop'],
 ('Test equality at each limit. Equal cost is affordable, while equal step count means the '
  'limit is reached.'))
+# Lessons 5 to 8 manage what enters the model's context. They come before lesson 4, so scoring a
+# trace stays the last lesson of the path. Lesson IDs never change, because progress is keyed by them.
+add('harness',5,'Load instructions within a budget',
+('Instruction files such as AGENTS.md are added at the start of every session. They go into '
+ 'the context window: all the text the model can take in for one answer. A model follows only '
+ 'so many instructions reliably at once. That limit is its instruction budget, and rules past it '
+ 'are more likely to be missed. So load the files a task needs, and leave the rest out.'),
+'required files first, then optional files by rank, while the total fits',
+('Sizes are counted in tokens. Take a budget of 1,000 tokens. The required project.md, 300 '
+ 'tokens, loads first. Optional files follow in rank order, rank 1 first, and rank does not '
+ 'apply to required files. testing.md, 500 tokens, fits: 800 used. style.md, 400 tokens, would '
+ 'make 1,200, so it is skipped. deploy.md, 150 tokens, still fits after it: 950 used. If the '
+ 'required files alone are over the budget, raise an error. Dropping a required file silently '
+ 'would hide the problem.'),
+['Raise ValueError if budget or any file’s "tokens" is negative, or if the required files '
+ 'together need more than budget.',
+ 'Sort the optional files by "rank" without changing the caller’s list. Files with the same '
+ 'rank keep their original order.',
+ 'Return the names from select_docs(docs, budget): the required files in their original order, '
+ 'then each optional file that still fits. Skip a file that does not fit and try the next one.'],
+['Split docs into two lists with comprehensions: the files whose "required" value is True, and '
+ 'the rest. sorted(optional, key=lambda doc: doc["rank"]) returns a new list and keeps files '
+ 'with equal ranks in their original order.',
+ 'raise stops the function with an error. For example, if age < 0: raise ValueError("age must '
+ 'not be negative") rejects a negative age. Raise one when the tokens of the required files add '
+ 'up to more than budget.',
+ 'Start a running total, used, at the size of the required files. For each optional file, if '
+ 'used + doc["tokens"] <= budget, append its name and add its tokens to used. Do not break out '
+ 'of the loop when a file is too big.'],
+'''
+def select_docs(docs, budget):
+    # Return the names of the files to load, in load order.
+    return []
+
+docs = [
+    {"name": "project.md", "tokens": 300, "required": True, "rank": 0},
+    {"name": "style.md", "tokens": 400, "required": False, "rank": 2},
+    {"name": "testing.md", "tokens": 500, "required": False, "rank": 1},
+    {"name": "deploy.md", "tokens": 150, "required": False, "rank": 3},
+]
+print(select_docs(docs, 1000))
+''',
+'''
+def select_docs(docs, budget):
+    if budget < 0 or any(doc["tokens"] < 0 for doc in docs):
+        raise ValueError("Sizes and the budget must not be negative")
+    required = [doc for doc in docs if doc["required"]]
+    optional = sorted([doc for doc in docs if not doc["required"]], key=lambda doc: doc["rank"])
+    used = sum(doc["tokens"] for doc in required)
+    if used > budget:
+        raise ValueError("The required files do not fit the budget")
+    names = [doc["name"] for doc in required]
+    for doc in optional:
+        if used + doc["tokens"] <= budget:
+            names.append(doc["name"])
+            used += doc["tokens"]
+    return names
+''',
+[('Loads required files first, then optional files by rank',
+  'select_docs([{"name": "a.md", "tokens": 10, "required": False, "rank": 2}, {"name": "b.md", '
+  '"tokens": 10, "required": False, "rank": 1}, {"name": "rules.md", "tokens": 10, "required": '
+  'True, "rank": 5}], 100) == ["rules.md", "b.md", "a.md"]'),
+ ('Skips a file that does not fit and tries the next one',
+  'select_docs([{"name": "project.md", "tokens": 300, "required": True, "rank": 0}, {"name": '
+  '"style.md", "tokens": 400, "required": False, "rank": 2}, {"name": "testing.md", "tokens": '
+  '500, "required": False, "rank": 1}, {"name": "deploy.md", "tokens": 150, "required": False, '
+  '"rank": 3}], 1000) == ["project.md", "testing.md", "deploy.md"]'),
+ ('Loads a file that fills the budget exactly',
+  'select_docs([{"name": "rules.md", "tokens": 600, "required": True, "rank": 0}, {"name": '
+  '"api.md", "tokens": 400, "required": False, "rank": 1}], 1000) == ["rules.md", "api.md"]'),
+ ('Raises ValueError for required files over the budget and for negative sizes',
+  'raises(ValueError, lambda: select_docs([{"name": "rules.md", "tokens": 1200, "required": True, '
+  '"rank": 0}], 1000)) and raises(ValueError, lambda: select_docs([{"name": "a.md", "tokens": -5, '
+  '"required": False, "rank": 1}], 100))'),
+ ('Keeps equal ranks in order and leaves the caller’s list unchanged',
+  '(lambda docs: select_docs(docs, 100) == ["b.md", "a.md", "c.md"] and [doc["name"] for doc in '
+  'docs] == ["b.md", "c.md", "a.md"])([{"name": "b.md", "tokens": 10, "required": False, "rank": '
+  '1}, {"name": "c.md", "tokens": 10, "required": False, "rank": 2}, {"name": "a.md", "tokens": 10, '
+  '"required": False, "rank": 1}])')],
+['Instruction files', 'Fit the token budget', 'Loaded context'],
+'Test a file that fills the budget exactly, and a large optional file followed by a small one.')
+add('harness',6,'Find a command in its help text',
+('Loading the full manual of a command-line tool up front can cost thousands of tokens in the '
+ 'context window on every call, even when the task uses a single command. Progressive disclosure '
+ 'starts from a short overview of what is available and loads the details of one item only '
+ 'when the task needs it. For a command-line tool, the text that tool --help prints is that '
+ 'overview. It matters most for in-house tools that no model has seen before.'),
+'tool --help → choose one command → tool command --help → its options',
+('Help text is plain text in sections. A heading such as "Commands:" starts at the left edge. '
+ 'Each entry under it is indented, and its first word is its name. A blank or unindented line '
+ 'ends the section. In the entry "publish  Upload a package to a server", the name is publish; '
+ '"server" is only part of the description. Here run(command) stands for running a shell command and '
+ 'returns what it prints. The checks give discover a run that knows only the pages a careful '
+ 'agent needs. Asking it for any other page raises KeyError.'),
+['In section(text, title), return the first word of each indented, nonblank line after the line '
+ 'title + ":". Stop at the first blank or unindented line after that heading.',
+ 'In discover(run, tool, command), get the names in the Commands section of run(f"{tool} '
+ '--help"). Raise ValueError if command is not one of them, before running anything else.',
+ 'Return the names in the Options section of run(f"{tool} {command} --help").'],
+['text.splitlines() gives the lines. Keep a flag, inside = False, and set it to True when a line '
+ 'equals title + ":". While inside is True, a line that starts with two spaces and is not blank '
+ 'is an entry, and line.split()[0] is its name. Any other line ends the section: break out of '
+ 'the loop.',
+ 'raise stops the function with an error. For example, if not names: raise ValueError("names is '
+ 'empty") rejects an empty list. In discover, raise one when command is not in the list from the '
+ 'Commands section.',
+ 'discover calls section twice: section(run(f"{tool} --help"), "Commands"), then, once command '
+ 'is in that list, section(run(f"{tool} {command} --help"), "Options").'],
+'''
+def section(text, title):
+    # Return the names listed under the heading title + ":".
+    return []
+
+def discover(run, tool, command):
+    # Read the list of commands, then the help of one command only.
+    return None
+
+PAGES = {
+    "shipit --help": """Usage: shipit <command>
+
+Commands:
+  build    Package the app
+  publish  Upload a package to a server
+
+Options:
+  --help   Show this help
+""",
+    "shipit publish --help": """Usage: shipit publish [--env NAME] [--dry-run]
+
+Options:
+  --env NAME   Server group to use
+  --dry-run    Print the steps only
+""",
+}
+
+def run(command):
+    print("$", command)
+    return PAGES[command]
+
+print(discover(run, "shipit", "publish"))
+''',
+'''
+def section(text, title):
+    names = []
+    inside = False
+    for line in text.splitlines():
+        if inside and line.startswith("  ") and line.strip():
+            names.append(line.split()[0])
+        elif inside:
+            break
+        elif line == title + ":":
+            inside = True
+    return names
+
+def discover(run, tool, command):
+    commands = section(run(f"{tool} --help"), "Commands")
+    if command not in commands:
+        raise ValueError(f"{tool} has no command named {command}")
+    return section(run(f"{tool} {command} --help"), "Options")
+''',
+[('Reads the names in one section and stops at a blank line',
+  'section("Commands:\\n  build    Package the app\\n  publish  Upload a package\\n\\nOptions:\\n'
+  '  --help   Show this help\\n", "Commands") == ["build", "publish"]'),
+ ('Stops at an unindented line',
+  'section("Options:\\n  --env NAME   Server group\\nNotes:\\n  --old   Removed\\n", "Options") '
+  '== ["--env"]'),
+ ('Returns the options of the chosen command',
+  'discover({"shipit --help": "Commands:\\n  build    Package the app\\n  publish  Upload a '
+  'package to a server\\n", "shipit publish --help": "Usage: shipit publish [--env NAME]\\n\\n'
+  'Options:\\n  --env NAME   Server group to use\\n  --dry-run    Print the steps only\\n"}'
+  '.__getitem__, "shipit", "publish") == ["--env", "--dry-run"]'),
+ ('Reads no help page that the task does not need',
+  'discover({"tool --help": "Commands:\\n  a   First\\n  b   Second\\n  c   Third\\n", '
+  '"tool c --help": "Options:\\n  --x   Extra output\\n"}.__getitem__, "tool", "c") == ["--x"]'),
+ ('Rejects a word that is only in a description, before running anything else',
+  'raises(ValueError, lambda: discover({"shipit --help": "Commands:\\n  build    Package the '
+  'app\\n  publish  Upload a package to a server\\n"}.__getitem__, "shipit", "server"))')],
+['tool --help', 'Choose one command', 'Its options'],
+'Ask for "server", a word that is only in a description. It must not count as a command.',20)
+add('harness',7,'Gate actions by phase',
+('Research → Plan → Implement divides a task into three phases that differ in what they may '
+ 'change. While researching, the agent only reads. While planning, the one thing it writes is '
+ 'the plan, and a person must approve that plan. Code changes wait for implementation, which '
+ 'begins from the approved plan and none of the earlier conversation. A harness can hold the '
+ 'agent to these rules with a gate: before it runs a proposed action, it asks whether the '
+ 'current phase allows it.'),
+'phase + action + plan approval → allow or refuse',
+('Each phase allows a set of actions. In "research", "read" and "search" are allowed and "edit" '
+ 'is refused. "plan" also allows "write_plan". "implement" allows "edit" and "test", but only '
+ 'after a person has set plan["approved"] to True. A plan dictionary whose "approved" value is '
+ 'False has the key and is still not approved. When implementation starts, its context holds '
+ 'only the numbered steps of the plan. The research history stays behind, so the new phase '
+ 'starts with a clean context window.'),
+['In gate(phase, action, plan), raise ValueError for any phase other than "research", "plan" '
+ 'and "implement".',
+ 'Return whether the phase allows action. In "implement", refuse every action unless plan is not '
+ 'None and plan["approved"] is True.',
+ 'In fresh_context(history, plan), raise ValueError unless the plan is approved. Return a new list '
+ 'of numbered steps such as "1. Add a test". Leave history out of it and unchanged.'],
+['Keep a dictionary from each phase to the set of actions it allows, and check membership with '
+ 'in. Write the approval test once, plan is not None and plan.get("approved") is True, and use '
+ 'it in both functions.',
+ 'raise stops the function with an error. For example, if age < 0: raise ValueError("age must '
+ 'not be negative") rejects a negative age. Raise one in gate when phase is not a key of your '
+ 'dictionary, and in fresh_context when the plan is not approved.',
+ 'enumerate(plan["steps"], start=1) gives (1, first step), (2, second step) and so on. Build the '
+ 'list with a comprehension and the f-string f"{number}. {step}".'],
+'''
+def gate(phase, action, plan):
+    # Return True when the phase allows this action.
+    return None
+
+def fresh_context(history, plan):
+    # Return the numbered plan steps that start implementation.
+    return None
+
+plan = {"steps": ["Add a failing test", "Fix the parser"], "approved": False}
+print(gate("research", "edit", plan))
+print(gate("implement", "edit", plan))
+''',
+'''
+def approved(plan):
+    return plan is not None and plan.get("approved") is True
+
+def gate(phase, action, plan):
+    allowed = {
+        "research": {"read", "search"},
+        "plan": {"read", "search", "write_plan"},
+        "implement": {"read", "search", "edit", "test"},
+    }
+    if phase not in allowed:
+        raise ValueError(f"Unknown phase: {phase}")
+    if phase == "implement" and not approved(plan):
+        return False
+    return action in allowed[phase]
+
+def fresh_context(history, plan):
+    if not approved(plan):
+        raise ValueError("The plan is not approved")
+    return [f"{number}. {step}" for number, step in enumerate(plan["steps"], start=1)]
+''',
+[('Research can read but not edit',
+  'gate("research", "read", None) is True and gate("research", "edit", None) is False'),
+ ('Planning can write the plan but not edit code',
+  'gate("plan", "write_plan", None) is True and gate("plan", "edit", {"steps": ["x"], '
+  '"approved": True}) is False'),
+ ('Edits wait for an approved plan',
+  'gate("implement", "edit", {"steps": ["x"], "approved": False}) is False and gate("implement", '
+  '"edit", None) is False and gate("implement", "edit", {"steps": ["x"], "approved": True}) is True'),
+ ('Rejects an unknown phase', 'raises(ValueError, lambda: gate("deploy", "read", None))'),
+ ('Starts implementation with only the approved steps',
+  '(lambda history: fresh_context(history, {"steps": ["Add a test", "Fix the bug"], "approved": '
+  'True}) == ["1. Add a test", "2. Fix the bug"] and history == ["read parser.py"])(["read '
+  'parser.py"]) and raises(ValueError, lambda: fresh_context([], {"steps": ["x"], "approved": '
+  'False}))')],
+['Proposed action', 'Check phase and approval', 'Run or refuse'],
+'Test a plan whose "approved" value is False. Having the key is not the same as being approved.')
+add('harness',8,'Keep subagent work out of the main context',
+('A subagent is a separate agent run with its own context window. The main agent hands it one '
+ 'task and receives a short result. Whatever the subagent opens while it works, such as many '
+ 'files or a long log, stays in its own context. A useful test: if the later steps will use only '
+ 'the answer, the task can go to a subagent.'),
+'tasks → one subagent each → one short line per task',
+('Say you need to know which of several services still call an old API. Each service goes to '
+ 'its own subagent, which reads that service’s code. Here worker(task) stands for one subagent '
+ 'run. It returns a dictionary with "notes", everything it read, and "answer", what it found. The '
+ 'main agent keeps one line per task, such as "billing: 2 calls in invoices.py", cut to a '
+ 'character limit. If a subagent fails, its line says "failed" and the other lines are kept. A harness would run the '
+ 'subagents at the same time. Here they run one after another, which keeps the results easy to '
+ 'check.'),
+['Raise ValueError from fan_out(tasks, worker, limit) if limit is less than 3, the length of '
+ '"...".',
+ 'For each task, call worker(task) and build f"{task}: {answer}". If worker raises an exception, '
+ 'use f"{task}: failed" instead and go on with the next task.',
+ 'Shorten a line longer than limit to its first limit - 3 characters followed by "...". Return '
+ 'the lines in task order, without any notes.'],
+['Loop over tasks and append one line per task to a list named summaries. Put the worker call '
+ 'inside try: and build the normal line there. In except Exception:, build the "failed" line.',
+ 'raise stops the function with an error. For example, if age < 0: raise ValueError("age must '
+ 'not be negative") rejects a negative age. Raise one at the start of fan_out when limit < 3.',
+ 'if len(line) > limit: line = line[:limit - 3] + "...". A line whose length equals limit stays '
+ 'as it is.'],
+'''
+def fan_out(tasks, worker, limit):
+    # Return one short line per task.
+    return []
+
+def worker(task):
+    findings = {"billing": "2 calls in invoices.py", "search": "no calls found"}
+    notes = [f"{task}/file_{n}.py read" for n in range(300)]
+    return {"notes": notes, "answer": findings[task]}
+
+print(fan_out(["billing", "search"], worker, 25))
+''',
+'''
+def fan_out(tasks, worker, limit):
+    if limit < 3:
+        raise ValueError("The limit must leave room for ...")
+    summaries = []
+    for task in tasks:
+        try:
+            line = f"{task}: {worker(task)['answer']}"
+        except Exception:
+            line = f"{task}: failed"
+        if len(line) > limit:
+            line = line[:limit - 3] + "..."
+        summaries.append(line)
+    return summaries
+''',
+[('Returns one line per task, in task order, without the notes',
+  'fan_out(["billing", "search"], lambda task: {"notes": ["file read"] * 200, "answer": '
+  'task.upper()}, 40) == ["billing: BILLING", "search: SEARCH"]'),
+ ('Keeps a line whose length equals the limit',
+  'fan_out(["auth"], lambda task: {"notes": [], "answer": "none"}, 10) == ["auth: none"]'),
+ ('Shortens a long line to the limit',
+  'fan_out(["billing"], lambda task: {"notes": [], "answer": "2 calls in invoices.py"}, 15) == '
+  '["billing: 2 c..."]'),
+ ('A failed subagent does not stop the others',
+  'fan_out(["a", "bad", "c"], lambda task: {"notes": [], "answer": {"a": "ok", "c": "ok"}[task]}, '
+  '20) == ["a: ok", "bad: failed", "c: ok"]'),
+ ('Rejects a limit with no room for the dots',
+  'raises(ValueError, lambda: fan_out(["a"], lambda task: {"notes": [], "answer": "ok"}, 2))')],
+['Tasks', 'One subagent each', 'Short summaries'],
+'Test a line whose length equals the limit. It must come back unchanged.')
 add('harness',4,'Score a run from its trace',
 ('A final answer can look correct even when the required tool failed. A trace is a list of '
  'recorded events. Check the successful tool events as well as the last final answer.'),

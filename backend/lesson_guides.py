@@ -509,6 +509,43 @@ print(sorted(successful))
 print(events[-1]["answer"])
 ''',"['lookup']\n7",['Collect names only from tool events with ok set to True.',
  'Read the final answer separately so it cannot hide a failed tool.'],'If the tool event’s ok becomes False, what is printed?',["['lookup'] then 7", '[] then False', '[] then 7'],2,'The failed event is excluded from successful. The recorded final answer stays 7.')
+add('harness-5','''
+budget = 500
+used = 0
+loaded = []
+for name, tokens in [("project.md", 200), ("testing.md", 250), ("history.md", 120)]:
+    if used + tokens <= budget:
+        loaded.append(name)
+        used += tokens
+print(loaded, used)
+''',"['project.md', 'testing.md'] 450",['project.md and testing.md fit together: 200 + 250 = 450 tokens.',
+ 'history.md would raise the total to 570, which is over 500, so the loop skips it.'],'If budget becomes 600, what is printed?',["['project.md', 'testing.md'] 450", "['project.md', 'testing.md', 'history.md'] 570", "['project.md', 'history.md'] 320"],1,'450 + 120 is 570, which fits a budget of 600, so all three files load.')
+add('harness-6','''
+help_text = """Commands:
+  build    Package the app
+  publish  Upload a package to a server
+"""
+names = [line.split()[0] for line in help_text.splitlines() if line.startswith("  ")]
+print(names)
+print("server" in names, "server" in help_text)
+''',"['build', 'publish']\nFalse True",['Only the indented lines are entries, and the first word of each is a command name.',
+ '"server" is in the text, inside a description, but it is not a command name.'],'If the publish line becomes "  server   Upload a package", what is the second line printed?',['True True', 'False True', 'True False'],0,'server is now the first word of an entry, so it is a command name, and it is still in the text.')
+add('harness-7','''
+allowed = {"research": {"read", "search"}, "implement": {"read", "edit"}}
+plan = {"steps": ["Fix the parser"], "approved": False}
+phase, action = "implement", "edit"
+print(action in allowed[phase] and plan["approved"] is True)
+''','False',['"edit" is in the set for "implement", so the phase allows it.',
+ 'The plan is not approved yet, so the whole test is False and the edit is refused.'],'If "approved": False becomes "approved": True, what is printed?',['False', 'None', 'True'],2,'Both conditions now hold: the implement phase allows "edit", and the plan is approved.')
+add('harness-8','''
+notes = [f"file_{n}.py read" for n in range(300)]
+line = "billing: " + "2 calls in invoices.py"
+limit = 15
+if len(line) > limit:
+    line = line[:limit - 3] + "..."
+print(len(notes), line)
+''','300 billing: 2 c...',['The subagent read 300 files, but only line goes back to the main agent.',
+ 'line has 31 characters, so it keeps the first 12 and adds "..." to make 15.'],'If limit becomes 40, what is printed?',['300 billing: 2 calls in invoices.py', '300 billing: 2 calls in invoic...', '40 billing: 2 calls in invoices.py'],0,'31 characters fit within 40, so the line is not shortened. The notes still number 300.')
 add('backend-1',"raw_title = '  Train a model  '\ntitle = raw_title.strip()\nprint(title)\nprint(bool(title))",'Train a model\nTrue',['Normalize harmless formatting first.','Check that a meaningful value remains after normalization.'],'If raw_title becomes three spaces, what is printed?',['A blank line, then True', 'A blank line, then False', 'None, then False'],1,('strip removes all three spaces. The empty string prints a blank line and bool("") is '
  'False.'))
 add('backend-2','''

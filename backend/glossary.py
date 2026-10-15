@@ -366,6 +366,19 @@ term('agent', 'Agent',
      'A program that chooses actions. In reinforcement learning it learns from rewards; in an '
      'agent harness, a language model proposes the actions.', ['agent', 'agents'],
      ['rl', 'harness'], lesson='rl-1')
+term('context-window', 'Context window',
+     'All the text a language model can take in for one answer: instructions, messages and tool '
+     'output. Its size is a fixed number of tokens.', ['context window', 'context windows'],
+     lesson='harness-5')
+term('instruction-budget', 'Instruction budget',
+     'How many instructions a model can follow reliably at the same time. Instructions past that '
+     'number are more likely to be missed.', ['instruction budget'], lesson='harness-5')
+term('progressive-disclosure', 'Progressive disclosure',
+     'Giving an agent a short list of what is available, and loading the details of one item only '
+     'when the task needs it.', ['progressive disclosure'], lesson='harness-6')
+term('subagent', 'Subagent',
+     'A separate agent run with its own context window. It does one task and sends back a short '
+     'result.', ['subagent', 'subagents'], lesson='harness-8')
 term('environment', 'Environment',
      'In reinforcement learning, the world the agent acts in. It takes an action and returns '
      'an observation and a reward.', ['environment'], ['rl'], lesson='rl-1')
