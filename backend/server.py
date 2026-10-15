@@ -21,6 +21,7 @@ from runner import execute, node_binary
 from portfolio import load_portfolio, task_progress
 from library import Library, MAX_BOOK_BYTES, FORMATS, FORMAT_NAMES, INPUT_LIMITS, SUPPORTED, megabytes
 from book_import import import_upload, ImportConflict, SUGGESTED
+import book_ocr
 from book_study import study_guides
 import game
 import assistant
@@ -40,6 +41,9 @@ BACKUP_NAME=re.compile(r'ml-workshop-(\d{8}-\d{6}-\d{6})(?:-(\d{1,2}))?\.json')
 KEEP_BACKUPS=10
 RUN_LOCK=threading.Lock()
 IMPORT_LOCK=threading.Lock()
+# One OCR page at a time: Tesseract uses several cores.
+OCR_LOCK=threading.Lock()
+OCR_ROUTE=re.compile(r'/api/library/([a-z0-9][a-z0-9-]{0,79})/ocr')
 ASSISTANT_GATE=threading.Lock()
 ASSISTANT_MODELS_GATE=threading.Lock()
 VERSION=json.loads((ROOT/'package.json').read_text(encoding='utf-8'))['version']
@@ -223,7 +227,7 @@ class Handler(BaseHTTPRequestHandler):
         if not self.allowed(token=path.startswith('/api/') and not PUBLIC_API.fullmatch(path)):return
         if path=='/api/portfolio':return self.send(dict(**load_portfolio(DATA),projectState=project_state()))
         if path=='/api/library':
-            return self.send(dict(books=LIBRARY.catalog(),unreadable=LIBRARY.unreadable(),guides=study_guides(LIBRARY),readingState=reading_state()))
+            return self.send(dict(books=LIBRARY.catalog(),unreadable=LIBRARY.unreadable(),guides=study_guides(LIBRARY),readingState=reading_state(),ocr=book_ocr.status()))
         if path=='/api/library/search':
             query=parse_qs(parsed.query)
             try:return self.send(dict(results=LIBRARY.search(query.get('q',[''])[0],query.get('book',[None])[0])))
@@ -327,6 +331,8 @@ class Handler(BaseHTTPRequestHandler):
     def handle_post(self):
         if not self.allowed():return
         if urlparse(self.path).path=='/api/library/import':return self.import_book_file()
+        ocr=OCR_ROUTE.fullmatch(urlparse(self.path).path)
+        if ocr:return self.ocr_page(ocr.group(1))
         try:
             length=int(self.headers.get('Content-Length','0'))
             if length<1 or length>128000:return self.send({'error':'Request exceeds the local exercise size limit.'},413)
@@ -344,8 +350,8 @@ class Handler(BaseHTTPRequestHandler):
                 app_update.exact_empty(body)
                 acquired=[]
                 try:
-                    for lock in (RUN_LOCK,IMPORT_LOCK,ASSISTANT_GATE,ASSISTANT_MODELS_GATE):
-                        if not lock.acquire(blocking=False):return self.send({'error':'Finish the running exercise, book import or assistant answer before updating.'},409)
+                    for lock in (RUN_LOCK,IMPORT_LOCK,OCR_LOCK,ASSISTANT_GATE,ASSISTANT_MODELS_GATE):
+                        if not lock.acquire(blocking=False):return self.send({'error':'Finish the running exercise, book import, OCR or assistant answer before updating.'},409)
                         acquired.append(lock)
                     try:return self.send(UPDATES.apply(body,self.server.server_port,save_backup))
                     except app_update.UpdateConflict as exc:return self.send({'error':str(exc)},409)
@@ -496,6 +502,43 @@ class Handler(BaseHTTPRequestHandler):
         finally:
             self.connection.settimeout(previous_timeout)
             IMPORT_LOCK.release()
+
+    def ocr_page(self,book_id):
+        """Read one rendered page with Tesseract and store its text for search."""
+        try:length=int(self.headers.get('Content-Length','0'))
+        except ValueError:return self.send({'error':'Invalid file size.'},400)
+        if length<1 or length>book_ocr.MAX_PAGE_BYTES:
+            return self.send({'error':'Send one page image of at most 25 MB.'},413)
+        if self.headers.get('Transfer-Encoding') or self.headers.get('Content-Type','').split(';')[0]!='image/png':
+            return self.send({'error':'Expected a PNG page image.'},415)
+        try:page=int(parse_qs(urlparse(self.path).query).get('page',['0'])[0])
+        except ValueError:return self.send({'error':'Unknown page.'},400)
+        try:book=LIBRARY.book(book_id)
+        except KeyError:return self.send({'error':'Unknown book'},404)
+        if book['format'] not in ('pdf','image') or book.get('textPages',1):
+            return self.send({'error':'This book already has a text layer.'},400)
+        if not book_ocr.tesseract_command():
+            return self.send({'error':'Tesseract is not installed.','install':book_ocr.status()['install']},409)
+        if not OCR_LOCK.acquire(blocking=False):
+            return self.send({'error':'OCR is already running on another page. Wait for it to finish.'},409)
+        previous_timeout=self.connection.gettimeout()
+        try:
+            if UPDATES.busy():return self.send({'error':'An update is running. Try OCR again when it finishes.'},409)
+            with tempfile.TemporaryDirectory(prefix='.upload-',dir=DATA) as temporary:
+                image=Path(temporary)/'page.png'
+                self.receive_file(image,length,30)
+                self.connection.settimeout(previous_timeout)
+                text=book_ocr.recognize(image.read_bytes(),temporary)
+            summary=LIBRARY.set_ocr_text(book_id,page,text)
+            self.send(dict(book=summary,page=page,characters=len(text.strip())))
+        except LookupError as exc:self.send({'error':str(exc)},409)
+        except KeyError:self.send({'error':'Unknown book'},404)
+        except ValueError as exc:self.send({'error':str(exc)},400)
+        except TimeoutError:self.send({'error':'The page upload timed out. Try OCR again.'},408)
+        except (BrokenPipeError,ConnectionResetError):pass
+        finally:
+            self.connection.settimeout(previous_timeout)
+            OCR_LOCK.release()
 
 def main():
     parser=argparse.ArgumentParser(description='Serve Engineering Workshop on 127.0.0.1. The data folder is ML_WORKSHOP_DATA_DIR, or data/ by default.')

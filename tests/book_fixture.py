@@ -117,3 +117,27 @@ def make_ipynb(path, cells, metadata=None):
     notebook = {'nbformat': 4, 'nbformat_minor': 5, 'cells': cells,
                 'metadata': metadata if metadata is not None else {'kernelspec': {'language': 'python', 'name': 'python3'}}}
     return write(path, json.dumps(notebook))
+
+def make_no_text_pdf(path, pages=2, outline=False):
+    """A PDF whose pages hold only vector shapes and an image, with no text layer."""
+    from pypdf import PdfWriter
+    from pypdf.generic import ArrayObject, DecodedStreamObject, DictionaryObject, NameObject, NumberObject, StreamObject
+    import zlib
+    writer = PdfWriter()
+    for number in range(pages):
+        page = writer.add_blank_page(width=300, height=400)
+        image = StreamObject()
+        image._data = zlib.compress(b'\x40\x80\xc0\xff' * 4)
+        image.update({NameObject('/Type'): NameObject('/XObject'), NameObject('/Subtype'): NameObject('/Image'),
+                      NameObject('/Width'): NumberObject(4), NameObject('/Height'): NumberObject(4),
+                      NameObject('/ColorSpace'): NameObject('/DeviceGray'), NameObject('/BitsPerComponent'): NumberObject(8),
+                      NameObject('/Filter'): NameObject('/FlateDecode')})
+        page[NameObject('/Resources')] = DictionaryObject({NameObject('/XObject'): DictionaryObject({NameObject('/Im1'): writer._add_object(image)})})
+        content = DecodedStreamObject()
+        content.set_data(f'0 0 1 rg 20 20 260 {100 + number * 10} re f q 100 0 0 100 100 250 cm /Im1 Do Q'.encode())
+        page[NameObject('/Contents')] = writer._add_object(content)
+    if outline:
+        writer.add_outline_item('Cover art', 0)
+        writer.add_outline_item('Back page', pages - 1)
+    writer.write(path)
+    return Path(path)

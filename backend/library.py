@@ -64,6 +64,9 @@ SOURCE_TYPES = {'.pdf':'application/pdf','.epub':'application/epub+zip','.md':'t
                 '.docx':'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
                 '.ipynb':'application/x-ipynb+json','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg',
                 '.webp':'image/webp','.gif':'image/gif'}
+# OCR reads at most this many pages of one book. Each page has its own time limit (book_ocr.py).
+MAX_OCR_PAGES = 300
+MAX_OCR_TEXT = 256 * 1024
 
 # Book class names and ids get this prefix, so book HTML can never use the app's own CSS classes.
 BOOK_PREFIX = 'bk-'
@@ -356,10 +359,11 @@ def import_pdf(source, folder, book_id):
         toc = [dict(title=f'Page {label}',location=i+1,label=label,depth=0) for i,label in enumerate(labels[:count])]
     meta = reader.metadata or {}
     # PDF vectors, embedded fonts and original image streams remain in source.pdf.
-    return dict(title=str(meta.get('/Title') or source.stem)[:MAX_TITLE],author=str(meta.get('/Author') or '')[:MAX_TITLE],format='pdf',
+    # A PDF made of artwork or scans has no text layer: it still reads as pages, and OCR can add text.
+    return dict(title=str(meta.get('/Title') or source.stem).strip()[:MAX_TITLE] or source.stem,author=str(meta.get('/Author') or '')[:MAX_TITLE],format='pdf',
                 rights='Personal local copy. Copyright remains with the publisher; not included in the open-source app.',
                 sourceUrl='',attribution='Original PDF preserved unchanged, including vector diagrams, embedded fonts, pictures, and page labels.',
-                count=count,toc=toc,assets=[])
+                count=count,toc=toc,assets=[],textPages=writer.text_pages)
 
 def import_book(source, data_dir, book_id, name=None):
     """Import one file as a book. name, the original file name without its extension, is the
@@ -446,10 +450,26 @@ def split_legacy_book(folder, book):
     finally:
         shutil.rmtree(staging,ignore_errors=True)
 
+def count_text_pages(folder, book):
+    """Count the pages with text in a PDF imported before textPages was stored, once."""
+    pages = 0
+    for location in range(1,book['count']+1):
+        try:
+            pages += bool(json.loads((folder/'chapters'/f'{location}.json').read_text(encoding='utf-8')).get('text'))
+        except (OSError,ValueError,AttributeError):
+            pages += 1  # Unknown pages count as text, so a damaged index never hides search.
+    book = {**book,'textPages':pages}
+    try:
+        write_json(folder/'.book.json.partial',book)
+        os.replace(folder/'.book.json.partial',folder/'book.json')
+    except OSError:
+        pass
+    return book
+
 # Summaries only, keyed by book.json path and file identity. Chapters are read from disk per request.
 # A book.json that cannot be read is cached as None, so its warning is logged once per file version.
 _SUMMARIES = {}
-_SUMMARY_LOCK = threading.Lock()
+_SUMMARY_LOCK = threading.RLock()
 LOG = logging.getLogger('library')
 # Fields the server and the reader use from book.json.
 SUMMARY_FIELDS = {'id':str,'title':str,'format':str,'count':int,'toc':list,'assets':list,'sourceFile':str,'sha256':str}
@@ -501,6 +521,10 @@ class Library:
                     stat = path.stat()
                     key = (stat.st_mtime_ns,stat.st_size,stat.st_ino)
                 checked_summary(book,book_id)
+                if book['format']=='pdf' and not isinstance(book.get('textPages'),int):
+                    book = count_text_pages(folder,book)
+                    stat = path.stat()
+                    key = (stat.st_mtime_ns,stat.st_size,stat.st_ino)
             except FileNotFoundError:
                 raise KeyError('Unknown book') from None
             except (OSError,ValueError,TypeError,KeyError,AttributeError) as error:
@@ -569,6 +593,30 @@ class Library:
         if not path.is_relative_to((self.root/book_id).resolve()):
             raise KeyError('Unknown book asset')
         return path,allowed[name]
+
+    def set_ocr_text(self,book_id,location,text):
+        """Store the OCR text of one page of a book without a text layer, so search can find it.
+
+        Pages are read in order: ocrPages counts the pages read so far, from page 1.
+        """
+        with _SUMMARY_LOCK:
+            book = dict(self.book(book_id))
+            if book['format'] not in ('pdf','image') or book.get('textPages',1):
+                raise ValueError('This book already has a text layer.')
+            done = book.get('ocrPages',0)
+            if not 1<=location<=min(book['count'],MAX_OCR_PAGES) or location>done+1:
+                raise ValueError('Read the pages in order, starting from page 1.')
+            folder = self.folder(book_id)
+            chapter_path = folder/'chapters'/f'{location}.json'
+            chapter = json.loads(chapter_path.read_text(encoding='utf-8'))
+            chapter.update(text=normalized(text)[:MAX_OCR_TEXT],ocr=True)
+            write_json(folder/'chapters'/'.ocr.partial',chapter)
+            os.replace(folder/'chapters'/'.ocr.partial',chapter_path)
+            book['ocrPages'] = max(done,location)
+            write_json(folder/'.book.json.partial',book)
+            os.replace(folder/'.book.json.partial',folder/'book.json')
+            _SUMMARIES.pop(folder/'book.json',None)
+        return self.summary(book_id)
 
     def remove(self,book_id):
         """Delete one imported book's folder. Notes and reading position live in SQLite and stay."""

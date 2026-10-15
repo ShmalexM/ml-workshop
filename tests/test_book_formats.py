@@ -19,9 +19,10 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT/'backend'))
 import book_formats
 import book_markdown
+import book_ocr
 import library
 from library import Library, import_book
-from book_fixture import docx_body, make_docx, make_ipynb, para, png, write
+from book_fixture import docx_body, make_docx, make_ipynb, make_no_text_pdf, para, png, write
 from test_library import Attributes, app_class_names
 
 IMAGE_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image'
@@ -476,8 +477,72 @@ class ImageTests(FormatTestCase):
         self.assertNothingPublished()
 
 
+class NoTextPdfTests(FormatTestCase):
+    def test_pdf_without_a_text_layer_imports_with_page_contents(self):
+        book = import_book(make_no_text_pdf(self.root/'art.pdf', pages=3), self.data, 'art')
+        self.assertEqual((book['count'], book['textPages'], book['title']), (3, 0, 'art'))
+        self.assertEqual([entry['title'] for entry in book['toc']], ['Page 1', 'Page 2', 'Page 3'])
+        self.assertEqual(self.library.chapter('art', 2)['text'], '')
+        self.assertEqual(self.library.search('anything', 'art'), [])
+        outlined = import_book(make_no_text_pdf(self.root/'outlined.pdf', pages=3, outline=True), self.data, 'outlined')
+        self.assertEqual([(entry['title'], entry['location']) for entry in outlined['toc']], [('Cover art', 1), ('Back page', 3)])
+
+    def test_older_pdf_imports_gain_a_text_page_count_once(self):
+        import_book(make_no_text_pdf(self.root/'art.pdf'), self.data, 'art')
+        path = self.data/'library/art/book.json'
+        stored = json.loads(path.read_text())
+        del stored['textPages']
+        path.write_text(json.dumps(stored))
+        self.assertEqual(Library(self.data).book('art')['textPages'], 0)
+        self.assertEqual(json.loads(path.read_text())['textPages'], 0)
+
+    def test_ocr_text_is_stored_in_page_order_and_searchable(self):
+        import_book(make_no_text_pdf(self.root/'art.pdf', pages=3), self.data, 'art')
+        with self.assertRaisesRegex(ValueError, 'in order'):
+            self.library.set_ocr_text('art', 2, 'too early')
+        summary = self.library.set_ocr_text('art', 1, 'Harness  engineering\n guide')
+        self.assertEqual((summary['ocrPages'], summary['textPages']), (1, 0))
+        self.assertEqual(self.library.chapter('art', 1), {**self.library.chapter('art', 1), 'text': 'Harness engineering guide', 'ocr': True})
+        self.library.set_ocr_text('art', 2, 'Second page words')
+        self.library.set_ocr_text('art', 1, 'Harness engineering guide, read again')
+        self.assertEqual(self.library.book('art')['ocrPages'], 2)
+        self.assertEqual([hit['location'] for hit in self.library.search('engineering', 'art')], [1])
+        for location in (0, 4):
+            with self.assertRaises(ValueError):
+                self.library.set_ocr_text('art', location, 'x')
+        import_book(write(self.root/'notes.md', '# Notes\n\ntext'), self.data, 'notes')
+        with self.assertRaisesRegex(ValueError, 'already has a text layer'):
+            self.library.set_ocr_text('notes', 1, 'x')
+        self.assertEqual(sorted(p.name for p in (self.data/'library/art').iterdir()), ['book.json', 'chapters', 'source.pdf'])
+        self.assertEqual(sorted(p.name for p in (self.data/'library/art/chapters').iterdir()), ['1.json', '2.json', '3.json'])
+
+    def test_tesseract_is_optional_and_time_limited(self):
+        with patch.object(book_ocr.shutil, 'which', return_value=None), patch.dict(book_ocr.KNOWN_PATHS, clear=True):
+            self.assertEqual(book_ocr.status()['available'], False)
+            self.assertIn('Tesseract', book_ocr.status()['install'])
+            with self.assertRaises(LookupError):
+                book_ocr.recognize(png(10, 10), self.root)
+        with patch.object(book_ocr, 'tesseract_command', return_value=[sys.executable, '-c', 'import time; time.sleep(10)']), patch.object(book_ocr, 'PAGE_SECONDS', 0.5):
+            with self.assertRaisesRegex(ValueError, 'longer than 0.5 seconds'):
+                book_ocr.recognize(png(10, 10), self.root)
+        with patch.object(book_ocr, 'tesseract_command', return_value=[sys.executable, '-c', 'import sys; print("words from " + sys.argv[1][-8:])']):
+            self.assertEqual(book_ocr.recognize(png(10, 10), self.root).strip(), 'words from page.png')
+            for raw in (b'<html>', jpeg(10, 10), png(1, 1)[:16] + struct.pack('>II', 10_000, 10_000) + png(1, 1)[24:]):
+                with self.assertRaisesRegex(ValueError, 'PNG image'):
+                    book_ocr.recognize(raw, self.root)
+        self.assertEqual(list(self.root.glob('.ocr-*')), [])
+
+
+FAKE_TESSERACT = """import sys
+data = open(sys.argv[1], 'rb').read()
+if not data.startswith(b'\\x89PNG') or sys.argv[2] != 'stdout':
+    sys.exit(2)
+print('Recognized harness words, page width ' + str(int.from_bytes(data[16:20], 'big')))
+"""
+
+
 class FormatServerTests(unittest.TestCase):
-    """Uploads of every format through a disposable server."""
+    """Uploads of every format through a disposable server, with a stand-in for Tesseract on PATH."""
     @classmethod
     def setUpClass(cls):
         import os, socket, subprocess
@@ -485,10 +550,19 @@ class FormatServerTests(unittest.TestCase):
         cls.tmp = tempfile.TemporaryDirectory(prefix='book-formats-test-', ignore_cleanup_errors=True)
         cls.root = Path(cls.tmp.name)
         cls.data = cls.root/'data'
+        tools = cls.root/'tools'
+        tools.mkdir()
+        script = write(tools/'fake_tesseract.py', FAKE_TESSERACT)
+        if os.name == 'nt':
+            write(tools/'tesseract.cmd', f'@"{sys.executable}" "{script}" %*\r\n')
+        else:
+            interpreter = sys.executable if ' ' not in sys.executable else '/usr/bin/env python3'
+            launcher = write(tools/'tesseract', f'#!{interpreter}\n' + FAKE_TESSERACT)
+            launcher.chmod(0o755)
         with socket.socket() as sock:
             sock.bind(('127.0.0.1', 0)); cls.port = sock.getsockname()[1]
         cls.url = f'http://127.0.0.1:{cls.port}'
-        env = {**os.environ, 'ML_WORKSHOP_DATA_DIR': str(cls.data)}
+        env = {**os.environ, 'ML_WORKSHOP_DATA_DIR': str(cls.data), 'PATH': str(tools) + os.pathsep + os.environ.get('PATH', '')}
         cls.proc = subprocess.Popen([sys.executable, str(ROOT/'backend/server.py'), '--port', str(cls.port)], env=env,
                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         cls.token = server_token(cls.url, cls.data, cls.proc)
@@ -592,6 +666,37 @@ class FormatServerTests(unittest.TestCase):
                 status, result = self.upload(filename, raw)
                 self.assertEqual(status, 400, result)
         self.assertEqual(list(self.data.glob('.upload-*')) + list(self.data.glob('.parse-*')), [])
+
+    def test_pdf_without_text_layer_and_ocr(self):
+        source = make_no_text_pdf(self.root/'Harness guide.pdf', pages=3)
+        status, result = self.upload('Harness guide.pdf', source.read_bytes())
+        self.assertEqual(status, 200, result)
+        book = result['book']
+        self.assertEqual((book['title'], book['textPages'], [entry['title'] for entry in book['toc']]), ('Harness guide', 0, ['Page 1', 'Page 2', 'Page 3']))
+        library_data, _ = self.get('/api/library')
+        self.assertEqual(library_data['ocr']['available'], True)
+        self.assertEqual(library_data['ocr']['maxPages'], library.MAX_OCR_PAGES)
+        route = f"/api/library/{book['id']}/ocr?page="
+        self.assertEqual(self.request('POST', route + '1', png(50, 70), 'image/jpeg')[0], 415)
+        self.assertEqual(self.request('POST', route + '1', png(50, 70), 'image/png', {'X-Workshop-Token': 'wrong'})[0], 403)
+        self.assertEqual(self.request('POST', route + '1', png(50, 70), 'image/png', {'Origin': 'https://example.org'})[0], 403)
+        status, result, _ = self.request('POST', route + '2', png(50, 70), 'image/png')
+        self.assertEqual(status, 400); self.assertIn('in order', result['error'])
+        status, result, _ = self.request('POST', route + '1', b'<html>not a png</html>', 'image/png')
+        self.assertEqual(status, 400); self.assertIn('PNG image', result['error'])
+        status, result, _ = self.request('POST', route + '1', png(612, 792), 'image/png')
+        self.assertEqual(status, 200, result)
+        self.assertEqual((result['book']['ocrPages'], result['book']['textPages']), (1, 0))
+        chapter, _ = self.get(f"/api/library/{book['id']}/chapter/1")
+        self.assertEqual((chapter['text'], chapter['ocr']), ('Recognized harness words, page width 612', True))
+        hits, _ = self.get(f"/api/library/search?q=harness+words&book={book['id']}")
+        self.assertEqual([hit['location'] for hit in hits['results']], [1])
+        self.assertEqual(self.request('POST', '/api/library/missing-book/ocr?page=1', png(5, 5), 'image/png')[0], 404)
+        status, text_book = self.upload('ocr-notes.md', b'# Notes\n\ntext')
+        status, result, _ = self.request('POST', f"/api/library/{text_book['book']['id']}/ocr?page=1", png(5, 5), 'image/png')
+        self.assertEqual(status, 400); self.assertIn('already has a text layer', result['error'])
+        self.assertEqual(list(self.data.glob('.upload-*')) + list(self.data.glob('.ocr-*')), [])
+
 
 class UnsupportedTests(FormatTestCase):
     def test_unsupported_types_get_a_clear_message(self):
