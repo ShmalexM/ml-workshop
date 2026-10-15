@@ -19,7 +19,7 @@ import traceback
 from courses import BY_ID, LESSONS, public_curriculum
 from runner import execute, node_binary
 from portfolio import load_portfolio, task_progress
-from library import Library, MAX_BOOK_BYTES, FORMATS, FORMAT_NAMES, INPUT_LIMITS, SUPPORTED, megabytes
+from library import Library, MAX_BOOK_BYTES, MAX_OCR_PAGES, FORMATS, FORMAT_NAMES, INPUT_LIMITS, SUPPORTED, megabytes
 from book_import import import_upload, ImportConflict, SUGGESTED
 import book_ocr
 from book_study import study_guides
@@ -517,6 +517,9 @@ class Handler(BaseHTTPRequestHandler):
         except KeyError:return self.send({'error':'Unknown book'},404)
         if book['format'] not in ('pdf','image') or book.get('textPages',1):
             return self.send({'error':'This book already has a text layer.'},400)
+        # Check the page before reading the image, so a wrong page never costs a Tesseract run.
+        if not 1<=page<=min(book['count'],MAX_OCR_PAGES) or page>book.get('ocrPages',0)+1:
+            return self.send({'error':'Read the pages in order, starting from page 1.'},400)
         if not book_ocr.tesseract_command():
             return self.send({'error':'Tesseract is not installed.','install':book_ocr.status()['install']},409)
         if not OCR_LOCK.acquire(blocking=False):

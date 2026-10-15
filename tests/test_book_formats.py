@@ -578,7 +578,9 @@ class NoTextPdfTests(FormatTestCase):
         self.assertEqual(list(self.root.glob('.ocr-*')), [])
 
 
-FAKE_TESSERACT = """import sys
+FAKE_TESSERACT = """import os, sys
+with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'runs.log'), 'a') as log:
+    log.write(sys.argv[1] + '\\n')
 data = open(sys.argv[1], 'rb').read()
 if not data.startswith(b'\\x89PNG') or sys.argv[2] != 'stdout':
     sys.exit(2)
@@ -725,12 +727,20 @@ class FormatServerTests(unittest.TestCase):
         self.assertEqual(self.request('POST', route + '1', png(50, 70), 'image/jpeg')[0], 415)
         self.assertEqual(self.request('POST', route + '1', png(50, 70), 'image/png', {'X-Workshop-Token': 'wrong'})[0], 403)
         self.assertEqual(self.request('POST', route + '1', png(50, 70), 'image/png', {'Origin': 'https://example.org'})[0], 403)
-        status, result, _ = self.request('POST', route + '2', png(50, 70), 'image/png')
-        self.assertEqual(status, 400); self.assertIn('in order', result['error'])
+        runs = self.root/'tools'/'runs.log'
+        # Before: a page out of order ran Tesseract first, for up to 60 seconds, and was refused after.
+        for page in ('2', '4', '0', '-1', '301'):
+            started = time.monotonic()
+            status, result, _ = self.request('POST', route + page, png(50, 70), 'image/png')
+            self.assertEqual(status, 400); self.assertIn('in order', result['error'])
+            self.assertLess(time.monotonic() - started, 2)
+        self.assertFalse(runs.exists())
         status, result, _ = self.request('POST', route + '1', b'<html>not a png</html>', 'image/png')
         self.assertEqual(status, 400); self.assertIn('PNG image', result['error'])
+        self.assertFalse(runs.exists())
         status, result, _ = self.request('POST', route + '1', png(612, 792), 'image/png')
         self.assertEqual(status, 200, result)
+        self.assertEqual(len(runs.read_text().splitlines()), 1)
         self.assertEqual((result['book']['ocrPages'], result['book']['textPages']), (1, 0))
         chapter, _ = self.get(f"/api/library/{book['id']}/chapter/1")
         self.assertEqual((chapter['text'], chapter['ocr']), ('Recognized harness words, page width 612', True))
