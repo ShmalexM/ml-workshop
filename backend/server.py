@@ -532,7 +532,7 @@ class Handler(BaseHTTPRequestHandler):
             summary=LIBRARY.set_ocr_text(book_id,page,text)
             self.send(dict(book=summary,page=page,characters=len(text.strip())))
         except LookupError as exc:self.send({'error':str(exc)},409)
-        except KeyError:self.send({'error':'Unknown book'},404)
+        except (KeyError,FileNotFoundError):self.send({'error':'Unknown book'},404)  # Removed while OCR ran.
         except ValueError as exc:self.send({'error':str(exc)},400)
         except TimeoutError:self.send({'error':'The page upload timed out. Try OCR again.'},408)
         except (BrokenPipeError,ConnectionResetError):pass

@@ -640,7 +640,7 @@ class Library:
         book = self.book(book_id)
         allowed = {item['path']:item['mediaType'] for item in book['assets']}
         allowed[book['sourceFile']] = SOURCE_TYPES.get(PurePosixPath(book['sourceFile']).suffix.lower(),'application/octet-stream')
-        if book['format']=='image' and book.get('sourceType') in IMAGE_TYPES:
+        if book['format']=='image' and book.get('sourceType') in ('image/png','image/jpeg','image/gif','image/webp'):
             allowed[book['sourceFile']] = book['sourceType']
         if name not in allowed:
             raise KeyError('Unknown book asset')
