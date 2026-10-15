@@ -64,6 +64,14 @@ SOURCE_TYPES = {'.pdf':'application/pdf','.epub':'application/epub+zip','.md':'t
                 '.docx':'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
                 '.ipynb':'application/x-ipynb+json','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg',
                 '.webp':'image/webp','.gif':'image/gif'}
+# Verified editions of suggested books, by SHA-256. A known edition matches its card even when the
+# file has no title inside it. pageOffset maps PDF page n to printed page n + pageOffset when the PDF
+# has no page labels; front names the pages before printed page 1.
+KNOWN_EDITIONS = {
+    # Baseten's harness guide: 22 pages of artwork, no title metadata and no page labels. Page 1 is the cover.
+    'c7092f4702a5732610b725cfc20897ce87a5bf80e7a28479405b42225bb12453': dict(
+        book='harness-guide', title="An engineer's guide to harnesses", author='Alex Ker and Zak Keener', pageOffset=-1, front=['Cover']),
+}
 # OCR reads at most this many pages of one book. Each page has its own time limit (book_ocr.py).
 MAX_OCR_PAGES = 300
 MAX_OCR_TEXT = 256 * 1024
@@ -331,7 +339,30 @@ def import_epub(source, folder, book_id):
                     count=len(toc),toc=toc,assets=image_records,
                     cover=assets.get(next((archive_path(base,e.get('href')) for e in manifest.values() if 'cover-image' in e.get('properties','').split()),'')))
 
-def import_pdf(source, folder, book_id):
+def pdf_labels(reader, count, checksum):
+    """Page labels, and whether they are the book's printed page numbers.
+
+    A PDF without page labels gets its page numbers, which are not printed page numbers,
+    unless it is a known edition with an offset.
+    """
+    if '/PageLabels' in reader.root_object:
+        return [str(label)[:60] for label in reader.page_labels][:count], True
+    edition = KNOWN_EDITIONS.get(checksum, {})
+    if 'pageOffset' in edition:
+        front = edition.get('front', [])
+        return [front[i] if i < len(front) else str(max(1,i+1+edition['pageOffset'])) for i in range(count)], True
+    return [str(i+1) for i in range(count)], False
+
+def page_number(label):
+    """True for labels that are page numbers, such as 12, iv or A-3, and false for names such as Cover."""
+    return any(c.isdigit() for c in label) or bool(re.fullmatch(r'[ivxlcdm]+', label, re.I))
+
+def page_title(label, location, printed):
+    if not printed or not label:
+        return f'Page {location}'
+    return f'Page {label}' if page_number(label) else label
+
+def import_pdf(source, folder, book_id, checksum=None):
     from pypdf import PdfReader
     reader = PdfReader(source)
     if reader.is_encrypted:
@@ -340,10 +371,10 @@ def import_pdf(source, folder, book_id):
     count = len(reader.pages)
     if count>MAX_PDF_PAGES:
         raise ValueError(f'This PDF has more than {MAX_PDF_PAGES:,} pages, which is over the import limit.')
-    labels = [str(label)[:60] for label in reader.page_labels]
+    labels, printed = pdf_labels(reader, count, checksum)
     writer = ChapterWriter(folder, f'The text in this PDF is larger than {megabytes(MAX_OUTPUT_BYTES)}, which is over the import limit.')
     for i,page in enumerate(reader.pages):
-        writer.add(dict(location=i+1,label=labels[i],title=f'Page {labels[i]}',text=normalized(page.extract_text() or '')))
+        writer.add(dict(location=i+1,label=labels[i],title=page_title(labels[i],i+1,printed),text=normalized(page.extract_text() or '')))
     toc = []
     def walk(outline,depth=0):
         for item in outline:
@@ -357,14 +388,17 @@ def import_pdf(source, folder, book_id):
                     toc.append(dict(title=str(item.title)[:MAX_TITLE],location=page,label=labels[page-1],depth=max(depth-1,0)))
     walk(reader.outline)
     if not toc:
-        toc = [dict(title=f'Page {label}',location=i+1,label=label,depth=0) for i,label in enumerate(labels[:count])]
+        toc = [dict(title=page_title(label,i+1,printed),location=i+1,label=label,depth=0) for i,label in enumerate(labels[:count])]
     meta = reader.metadata or {}
+    edition = KNOWN_EDITIONS.get(checksum, {})
     # PDF vectors, embedded fonts and original image streams remain in source.pdf.
     # A PDF made of artwork or scans has no text layer: it still reads as pages, and OCR can add text.
-    return dict(title=str(meta.get('/Title') or source.stem).strip()[:MAX_TITLE] or source.stem,author=str(meta.get('/Author') or '')[:MAX_TITLE],format='pdf',
+    # printedLabels is false when the labels are only PDF page numbers, so the reader does not call them printed pages.
+    return dict(title=(str(meta.get('/Title') or '').strip() or edition.get('title') or source.stem)[:MAX_TITLE],
+                author=(str(meta.get('/Author') or '').strip() or edition.get('author',''))[:MAX_TITLE],format='pdf',
                 rights='Personal local copy. Copyright remains with the publisher; not included in the open-source app.',
                 sourceUrl='',attribution='Original PDF preserved unchanged, including vector diagrams, embedded fonts, pictures, and page labels.',
-                count=count,toc=toc,assets=[],textPages=writer.text_pages)
+                count=count,toc=toc,assets=[],textPages=writer.text_pages,printedLabels=printed)
 
 def import_book(source, data_dir, book_id, name=None):
     """Import one file as a book. name, the original file name without its extension, is the
@@ -403,7 +437,7 @@ def import_book(source, data_dir, book_id, name=None):
         if kind=='epub':
             result = import_epub(source,folder,book_id)
         elif kind=='pdf':
-            result = import_pdf(source,folder,book_id)
+            result = import_pdf(source,folder,book_id,checksum)
         else:
             import book_formats
             result = book_formats.IMPORTERS[kind](source,folder,book_id,(name or source.stem)[:MAX_TITLE])
@@ -451,15 +485,35 @@ def split_legacy_book(folder, book):
     finally:
         shutil.rmtree(staging,ignore_errors=True)
 
-def count_text_pages(folder, book):
-    """Count the pages with text in a PDF imported before textPages was stored, once."""
-    pages = 0
+def upgrade_pdf_summary(folder, book):
+    """Once, for a PDF imported before textPages and printedLabels were stored: count the pages
+    with text, check whether the PDF has page labels, and relabel a known edition."""
+    book = dict(book)
+    chapters = []
     for location in range(1,book['count']+1):
         try:
-            pages += bool(json.loads((folder/'chapters'/f'{location}.json').read_text(encoding='utf-8')).get('text'))
-        except (OSError,ValueError,AttributeError):
-            pages += 1  # Unknown pages count as text, so a damaged index never hides search.
-    book = {**book,'textPages':pages}
+            chapter = json.loads((folder/'chapters'/f'{location}.json').read_text(encoding='utf-8'))
+            chapters.append(chapter if isinstance(chapter,dict) else None)
+        except (OSError,ValueError):
+            chapters.append(None)
+    if not isinstance(book.get('textPages'),int):
+        # Unknown pages count as text, so a damaged index never hides search.
+        book['textPages'] = sum(1 if chapter is None else bool(chapter.get('text')) for chapter in chapters)
+    try:
+        from pypdf import PdfReader
+        labels, printed = pdf_labels(PdfReader(folder/book['sourceFile']), book['count'], book['sha256'])
+    except Exception:
+        labels, printed = None, True  # As before: the stored labels are shown as printed pages.
+    book['printedLabels'] = printed
+    if labels and len(labels)==book['count'] and any(chapter and chapter.get('label')!=labels[i] for i,chapter in enumerate(chapters)):
+        for i,chapter in enumerate(chapters):
+            if chapter:
+                chapter.update(label=labels[i],title=page_title(labels[i],i+1,printed))
+                write_json(folder/'chapters'/'.label.partial',chapter)
+                os.replace(folder/'chapters'/'.label.partial',folder/'chapters'/f'{i+1}.json')
+        book['toc'] = [{**entry,'label':labels[entry['location']-1],
+                        **({'title':page_title(labels[entry['location']-1],entry['location'],printed)} if entry.get('title','').startswith('Page ') else {})}
+                       for entry in book['toc'] if isinstance(entry,dict) and isinstance(entry.get('location'),int) and 1<=entry['location']<=book['count']]
     try:
         write_json(folder/'.book.json.partial',book)
         os.replace(folder/'.book.json.partial',folder/'book.json')
@@ -522,8 +576,8 @@ class Library:
                     stat = path.stat()
                     key = (stat.st_mtime_ns,stat.st_size,stat.st_ino)
                 checked_summary(book,book_id)
-                if book['format']=='pdf' and not isinstance(book.get('textPages'),int):
-                    book = count_text_pages(folder,book)
+                if book['format']=='pdf' and (not isinstance(book.get('textPages'),int) or 'printedLabels' not in book):
+                    book = upgrade_pdf_summary(folder,book)
                     stat = path.stat()
                     key = (stat.st_mtime_ns,stat.st_size,stat.st_ino)
             except FileNotFoundError:

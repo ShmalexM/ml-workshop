@@ -500,10 +500,46 @@ class NoTextPdfTests(FormatTestCase):
         import_book(make_no_text_pdf(self.root/'art.pdf'), self.data, 'art')
         path = self.data/'library/art/book.json'
         stored = json.loads(path.read_text())
-        del stored['textPages']
+        del stored['textPages'], stored['printedLabels']
         path.write_text(json.dumps(stored))
-        self.assertEqual(Library(self.data).book('art')['textPages'], 0)
+        self.assertEqual((Library(self.data).book('art')['textPages'], Library(self.data).book('art')['printedLabels']), (0, False))
         self.assertEqual(json.loads(path.read_text())['textPages'], 0)
+
+    def test_page_labels_are_printed_pages_only_when_the_pdf_has_them(self):
+        from pypdf import PdfWriter
+        plain = import_book(make_no_text_pdf(self.root/'plain.pdf', pages=2), self.data, 'plain')
+        self.assertEqual((plain['printedLabels'], [entry['title'] for entry in plain['toc']]), (False, ['Page 1', 'Page 2']))
+        writer = PdfWriter()
+        for _ in range(4):
+            writer.add_blank_page(width=100, height=100)
+        writer.set_page_label(0, 1, style='/r')
+        writer.set_page_label(2, 3, style='/D', start=1)
+        writer.write(self.root/'labelled.pdf')
+        labelled = import_book(self.root/'labelled.pdf', self.data, 'labelled')
+        self.assertEqual(labelled['printedLabels'], True)
+        self.assertEqual([(entry['title'], entry['label']) for entry in labelled['toc']], [('Page i', 'i'), ('Page ii', 'ii'), ('Page 1', '1'), ('Page 2', '2')])
+
+    def test_a_known_edition_gets_its_title_and_printed_page_offset(self):
+        source = make_no_text_pdf(self.root/'an_engineers_guide.pdf', pages=4)
+        sha = library.digest(source)
+        edition = dict(book='harness-guide', title="An engineer's guide to harnesses", author='Alex Ker and Zak Keener', pageOffset=-1, front=['Cover'])
+        with patch.dict(library.KNOWN_EDITIONS, {sha: edition}):
+            book = import_book(source, self.data, 'guide')
+            self.assertEqual((book['title'], book['author'], book['printedLabels']), (edition['title'], edition['author'], True))
+            self.assertEqual([(entry['title'], entry['label']) for entry in book['toc']], [('Cover', 'Cover'), ('Page 1', '1'), ('Page 2', '2'), ('Page 3', '3')])
+            self.assertEqual(self.library.chapter('guide', 4)['label'], '3')
+            # A copy imported before the offset existed is relabelled once, notes and position untouched.
+            path = self.data/'library/guide/book.json'
+            stored = json.loads(path.read_text())
+            del stored['printedLabels']
+            stored['toc'] = [{**entry, 'label': str(entry['location']), 'title': f"Page {entry['location']}"} for entry in stored['toc']]
+            path.write_text(json.dumps(stored))
+            for n in range(1, 5):
+                chapter_path = self.data/f'library/guide/chapters/{n}.json'
+                chapter_path.write_text(json.dumps({**json.loads(chapter_path.read_text()), 'label': str(n), 'title': f'Page {n}'}))
+            upgraded = Library(self.data).book('guide')
+            self.assertEqual([entry['label'] for entry in upgraded['toc']], ['Cover', '1', '2', '3'])
+            self.assertEqual(Library(self.data).chapter('guide', 2)['label'], '1')
 
     def test_ocr_text_is_stored_in_page_order_and_searchable(self):
         import_book(make_no_text_pdf(self.root/'art.pdf', pages=3), self.data, 'art')
@@ -708,9 +744,33 @@ class FormatServerTests(unittest.TestCase):
 
 
 class SuggestedCardTests(FormatTestCase):
-    def test_titles_from_file_names_read_as_words(self):
+    """A suggested book's card checks the file's title, or accepts a verified edition by checksum."""
+    def parse(self, source, card, title):
         import book_import
+        # The worker parses into a new folder each time.
+        destination = Path(tempfile.mkdtemp(dir=self.root))
+        book_import.parse(source, destination, card, source.name, title)
+        return json.loads((destination/'library'/card/'book.json').read_text())
+
+    def test_known_edition_matches_its_card_without_a_title(self):
+        import book_import
+        source = make_no_text_pdf(self.root/'an_engineers_guide_to_harnesses.pdf', pages=3)
+        title = "An engineer's guide to harnesses"
+        with self.assertRaisesRegex(ValueError, 'no title inside it, and it is not a copy of'):
+            self.parse(source, 'harness-guide', title)
+        with patch.dict(library.KNOWN_EDITIONS, {library.digest(source): dict(book='harness-guide', title=title, pageOffset=-1, front=['Cover'])}):
+            book = self.parse(source, 'harness-guide', title)
+            self.assertEqual((book['id'], book['title']), ('harness-guide', title))
+            with self.assertRaisesRegex(ValueError, 'titled'):
+                self.parse(source, 'inference-engineering', 'Inference Engineering')
         self.assertEqual(book_import.file_title('an_engineers_guide__to_harnesses.pdf'), 'an engineers guide to harnesses')
+
+    def test_a_titled_file_for_another_book_names_both_titles(self):
+        from pypdf import PdfWriter
+        writer = PdfWriter(); writer.add_blank_page(width=100, height=100); writer.add_metadata({'/Title': 'Some other book'})
+        writer.write(self.root/'other.pdf')
+        with self.assertRaisesRegex(ValueError, 'titled “Some other book”, not Inference Engineering'):
+            self.parse(self.root/'other.pdf', 'inference-engineering', 'Inference Engineering')
 
 
 class UnsupportedTests(FormatTestCase):

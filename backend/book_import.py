@@ -7,7 +7,7 @@ import sys
 import tempfile
 import time
 
-from library import FORMAT_NAMES, FORMATS, Library, UnreadableBook, digest, import_book, normalized
+from library import FORMAT_NAMES, FORMATS, KNOWN_EDITIONS, Library, UnreadableBook, digest, import_book, normalized
 
 SUGGESTED = {'gpu-glossary': 'GPU Glossary', 'inference-engineering': 'Inference Engineering',
              'harness-guide': "An engineer's guide to harnesses"}
@@ -102,10 +102,16 @@ def file_title(filename):
 
 def parse(source, destination, book_id, filename, expected_title):
     book = import_book(source, destination, book_id, file_title(filename))
-    if book['title'] == Path(source).stem:
+    untitled = book['title'] == Path(source).stem
+    if untitled:
         book['title'] = file_title(filename)
-    if expected_title and normalized(expected_title).casefold() not in normalized(book['title']).casefold():
-        raise ValueError(f'This file is titled “{book["title"][:120]}”. Choose your copy of {expected_title}, or use Add another book.')
+    # A verified edition matches its card by checksum, whatever its title; others must carry the card's title.
+    known = KNOWN_EDITIONS.get(book['sha256'], {}).get('book') == book_id
+    if expected_title and not known and normalized(expected_title).casefold() not in normalized(book['title']).casefold():
+        if untitled:
+            raise ValueError(f'This file has no title inside it, and it is not a copy of {expected_title} that Workshop knows. '
+                             'To read it anyway, use Add another book.')
+        raise ValueError(f'This file is titled “{book["title"][:120]}”, not {expected_title}. Choose your copy of {expected_title}, or use Add another book.')
     (Path(destination)/'library'/book_id/'book.json').write_text(json.dumps(book, ensure_ascii=False), encoding='utf-8')
 
 
