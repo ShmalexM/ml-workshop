@@ -2,7 +2,7 @@
 
 This file lists the notable changes in each release. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and version numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.4.0] - 2026-10-15
 
 ### Added
 
@@ -174,6 +174,8 @@ First public release.
 - Setup and launch scripts for Apple silicon Macs, and an optional launcher in your Applications folder.
 - CI that runs every lesson on macOS and the API tests on Linux.
 
+[1.4.0]: https://github.com/ShmalexM/ml-workshop/compare/v1.3.0...v1.4.0
+[1.3.0]: https://github.com/ShmalexM/ml-workshop/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/ShmalexM/ml-workshop/compare/v1.1.2...v1.2.0
 [1.1.2]: https://github.com/ShmalexM/ml-workshop/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/ShmalexM/ml-workshop/compare/v1.1.0...v1.1.1
