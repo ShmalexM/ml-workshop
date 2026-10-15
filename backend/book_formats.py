@@ -1040,16 +1040,21 @@ class Notebook:
                 self.builder.child(parent, 'p', {'class': 'cell-note'}).text = 'This output is interactive and is not shown here.'
 
     def attachments(self, blocks, attachments, index):
-        """Markdown cells can show images saved in the cell (attachment:name)."""
-        for number, image in enumerate(item for block in blocks for item in block.iter('img')):
+        """Markdown cells can show images saved in the cell (attachment:name).
+
+        Each attachment is decoded and checked once, however often the cell shows it.
+        """
+        stored = {}
+        for image in (item for block in blocks for item in block.iter('img')):
             src = image.get('src', '')
             if not src.startswith('attachment:'):
                 continue
-            stored = 'missing'
-            data = mapping(mapping(attachments).get(unquote(src[11:])))
-            if self.image_output(ET.Element('div'), data, f'attachment/{index}/{number}'):
-                stored = f'attachment/{index}/{number}'
-            image.set('src', stored)
+            key = unquote(src[11:])
+            if key not in stored:
+                name = f'attachment/{index}/{len(stored)}'
+                data = mapping(mapping(attachments).get(key))
+                stored[key] = name if self.image_output(ET.Element('div'), data, name) else 'missing'
+            image.set('src', stored[key])
 
     def cells(self, cells):
         blocks = []

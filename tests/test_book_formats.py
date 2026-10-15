@@ -849,6 +849,19 @@ class SecurityRegressionTests(FormatTestCase):
         self.assertIn('<pre><code>line 0\nline 1\nline 2</code></pre><p>after</p>', self.library.chapter('code', 1)['html'])
 
 
+    def test_4_a_notebook_attachment_is_decoded_once(self):
+        # Before: one cell showing a 9 MB attachment 3,000 times ran the worker to its 90-second limit.
+        picture = png(20, 20)
+        attachment = base64.b64encode(picture + b'\x00' * (2 << 20)).decode()  # 2 MB, decoded once
+        cell = {'cell_type': 'markdown', 'metadata': {}, 'source': '# Plot\n\n' + '![x](attachment:a.png) ' * 3000 + '![y](attachment:none.png)',
+                'attachments': {'a.png': {'image/png': attachment}}}
+        book = self.timed(5, self.load, 'attached.ipynb', make_ipynb(self.root/'attached.ipynb', [cell]))
+        self.assertEqual(len(book['assets']), 1)
+        html = self.html()
+        self.assertEqual(html.count(f'/api/library/doc/asset/{book["assets"][0]["path"]}'), 3000)
+        self.assertEqual(html.count('Image was not included'), 1)
+
+
 class UnsupportedTests(FormatTestCase):
     def test_unsupported_types_get_a_clear_message(self):
         for name in ('notes.rtf', 'slides.pptx', 'sheet.xlsx', 'drawing.svg', 'archive.zip', 'script.js', 'noextension'):
