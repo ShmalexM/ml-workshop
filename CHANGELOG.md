@@ -9,6 +9,14 @@ This file lists the notable changes in each release. The format follows [Keep a 
 - Four lessons in Agent harness engineering, placed before Score a run from its trace so that it stays the last lesson: Load instructions within a budget, Find a command in its help text, Gate actions by phase, and Keep subagent work out of the main context. They cover choosing instruction files under a token budget, reading `--help` output one command at a time, refusing edits until a plan is approved, and returning short subagent summaries. The app now has 76 lessons in 13 paths.
 - Four glossary terms: context window, instruction budget, progressive disclosure and subagent. The glossary has 147 terms.
 - A book card for Baseten's *An engineer's guide to harnesses*, with eight reading guides that link its pages to the agent harness lessons. The guide is a free PDF from Baseten and is not included.
+- Books imports Word (.docx), Markdown, plain text, HTML, Jupyter notebook and image (PNG, JPEG, WebP, GIF) files, alongside PDF and EPUB. They open in the same reader, with search, bookmarks, notes and a saved position. Each type has its own size limit, and the file passes through the same filter as EPUB chapters: no scripts, no remote resources, and notebooks never run.
+- Each book shows a format badge. A file of another type gets a message that lists the supported types.
+- PDFs made of artwork or scans import and read page by page, with a plain note that search is not available. With Tesseract installed, **Make searchable (OCR)** reads the pages on this computer and adds their text to search.
+- A verified edition of a suggested book is recognized by its checksum, so Baseten's harness guide PDF, which has no title inside it, matches its card.
+
+### Fixed
+
+- The PDF reader called every PDF page number a printed page. It now says **Page n of N** when the PDF has no page labels, and a known edition with offset numbering shows its printed page numbers.
 
 ### Fixed
 
