@@ -4,6 +4,12 @@ This file lists the notable changes in each release. The format follows [Keep a 
 
 ## [Unreleased]
 
+### Added
+
+- Four lessons in Agent harness engineering, placed before Score a run from its trace so that it stays the last lesson: Load instructions within a budget, Find a command in its help text, Gate actions by phase, and Keep subagent work out of the main context. They cover choosing instruction files under a token budget, reading `--help` output one command at a time, refusing edits until a plan is approved, and returning short subagent summaries. The app now has 76 lessons in 13 paths.
+- Four glossary terms: context window, instruction budget, progressive disclosure and subagent. The glossary has 147 terms.
+- A book card for Baseten's *An engineer's guide to harnesses*, with eight reading guides that link its pages to the agent harness lessons. The guide is a free PDF from Baseten and is not included.
+
 ### Fixed
 
 - Onboarding headings no longer show a green outline after a mouse click; the run message says the first PyTorch or TensorFlow run can take up to 30 seconds; Python from zero lesson 2 shows the expected rate as `2.0`; and **Test connection** in Settings → AI assistant says when it saved your changes first.

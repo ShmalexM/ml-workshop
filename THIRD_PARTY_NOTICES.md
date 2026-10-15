@@ -56,5 +56,6 @@ Engineering Workshop links to these books. It does not include their text, figur
 
 - *GPU Glossary* by Modal Labs, Inc. and contributors, https://modal.com/gpu-glossary. Text under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/); many diagrams are adapted from NVIDIA material under other terms.
 - *Inference Engineering* by Philip Kiely, Baseten Books. © 2026 Baseten Labs, Inc. All rights reserved. https://www.baseten.co/inference-engineering/
+- *An engineer's guide to harnesses: Where they stand today and what's ahead* by Alex Ker and Zak Keener, Baseten. © 2026 Baseten Labs, Inc. All rights reserved. https://www.baseten.co/harness-engineering-guide/
 
-Both were references for the CUDA, GPU and inference material. Neither publisher is affiliated with this project.
+The first two were references for the CUDA, GPU and inference material. The harness guide was a reference for agent harness lessons 5 to 8 and their reading guides; the lesson text, examples and code are original, and the guide is not included. No publisher is affiliated with this project.

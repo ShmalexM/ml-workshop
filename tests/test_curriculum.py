@@ -61,8 +61,8 @@ SOLUTION_RUNS = PrefetchedRuns(solution_and_starter_calls)
 
 class CurriculumTests(unittest.TestCase):
     def test_every_solution_and_starter(self):
-        self.assertEqual(len(LESSONS),72)
-        self.assertEqual(len({l['id'] for l in LESSONS}),72)
+        self.assertEqual(len(LESSONS),76)
+        self.assertEqual(len({l['id'] for l in LESSONS}),76)
         for lesson in LESSONS:
             with self.subTest(lesson=lesson['id']):
                 require_lesson_modules(self, lesson)

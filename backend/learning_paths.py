@@ -35,7 +35,7 @@ PATHS = {
         summary='Practice framework-free request handling, agent control, retrieval and evaluation with local recorded data. These exercises do not call a model service.',
         courses=(
             ('backend', 'Start with validated inputs and repeatable API behavior for agent tools.'),
-            ('harness', 'Control run state, allowed tool inputs, budgets and evaluation.'),
+            ('harness', 'Control run state, allowed tool inputs, budgets and the context each step loads, then evaluate runs.'),
             ('data', 'Prepare and evaluate the retrieved context that an agent workflow can use.'),
             ('reliability', 'Build on backend skills to handle retries, telemetry and release decisions.'),
         )),

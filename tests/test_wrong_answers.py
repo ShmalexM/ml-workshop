@@ -187,6 +187,76 @@ WRONG_ANSWERS["foundations-4"] = [("returns a list instead of a tuple", changed(
     "foundations-4", "return (rows[:train_end], rows[train_end:val_end], rows[val_end:])",
     "return [rows[:train_end], rows[train_end:val_end], rows[val_end:]]"))]
 
+# Agent harness lessons 5 to 8: loading context, help pages, phase gates and subagents.
+WRONG_ANSWERS.update({
+    "harness-5": [
+        ("stops at the first optional file that does not fit", changed(
+            "harness-5", "            used += doc['tokens']\n",
+            "            used += doc['tokens']\n        else:\n            break\n")),
+        ("skips a file that fills the budget exactly", changed(
+            "harness-5", "used + doc['tokens'] <= budget", "used + doc['tokens'] < budget")),
+        ("drops required files that are over the budget instead of raising", changed(
+            "harness-5", "    if used > budget:\n        raise ValueError('The required files do not fit the budget')\n", "")),
+        ("sorts the caller's list in place", functions("harness-5", select_docs="""def select_docs(docs, budget):
+    if budget < 0 or any(doc['tokens'] < 0 for doc in docs):
+        raise ValueError('negative size')
+    docs.sort(key=lambda doc: (not doc['required'], doc['rank']))
+    names, used = [], 0
+    for doc in docs:
+        if doc['required'] or used + doc['tokens'] <= budget:
+            names.append(doc['name'])
+            used += doc['tokens']
+    if used > budget:
+        raise ValueError('over budget')
+    return names
+""")),
+    ],
+    "harness-6": [
+        ("reads the help of every command first", functions("harness-6", discover="""def discover(run, tool, command):
+    commands = section(run(f'{tool} --help'), 'Commands')
+    pages = {name: run(f'{tool} {name} --help') for name in commands}
+    if command not in pages:
+        raise ValueError('unknown command')
+    return section(pages[command], 'Options')
+""")),
+        ("looks for the command anywhere in the help text", functions("harness-6", discover="""def discover(run, tool, command):
+    top = run(f'{tool} --help')
+    if command not in top:
+        raise ValueError('unknown command')
+    return section(run(f'{tool} {command} --help'), 'Options')
+""")),
+        ("does not stop at the end of the section", changed(
+            "harness-6", "        elif inside:\n            break\n", "")),
+    ],
+    "harness-7": [
+        ("lets edits run before the plan is approved", changed(
+            "harness-7", "    if phase == 'implement' and (not approved(plan)):\n        return False\n", "")),
+        ("treats a plan with an approved key as approved", changed(
+            "harness-7", "plan.get('approved') is True", "'approved' in plan")),
+        ("carries the research history into the new context", changed(
+            "harness-7", "return [f'{number}. {step}'", "return history + [f'{number}. {step}'")),
+        ("allows edits while planning", changed(
+            "harness-7", "{'read', 'search', 'write_plan'}", "{'read', 'search', 'write_plan', 'edit'}")),
+    ],
+    "harness-8": [
+        ("lets one failed subagent stop the run", functions("harness-8", fan_out="""def fan_out(tasks, worker, limit):
+    if limit < 3:
+        raise ValueError('limit too small')
+    summaries = []
+    for task in tasks:
+        line = f"{task}: {worker(task)['answer']}"
+        if len(line) > limit:
+            line = line[:limit - 3] + '...'
+        summaries.append(line)
+    return summaries
+""")),
+        ("shortens a line that fits exactly", changed(
+            "harness-8", "if len(line) > limit:", "if len(line) >= limit:")),
+        ("adds the dots after cutting to the limit", changed(
+            "harness-8", "line[:limit - 3] + '...'", "line[:limit] + '...'")),
+    ],
+})
+
 # Python from zero. Lessons 1 and 2 check top-level variables, so their
 # mistakes are whole programs; the others replace the reference functions.
 WRONG_ANSWERS.update({
@@ -842,6 +912,56 @@ def derivative(value):
   return rows.filter(row => row.title.toUpperCase().indexOf(wanted) !== -1)
     .sort((a, b) => b.priority - a.priority || a.id - b.id);
 }
+""")],
+    "harness-5": [("sorts positions and skips with continue", """def select_docs(docs, budget):
+    if budget < 0:
+        raise ValueError('negative budget')
+    for doc in docs:
+        if doc['tokens'] < 0:
+            raise ValueError('negative size')
+    names = []
+    used = 0
+    for doc in docs:
+        if doc['required']:
+            names.append(doc['name'])
+            used += doc['tokens']
+    if used > budget:
+        raise ValueError('required files do not fit')
+    order = sorted(range(len(docs)), key=lambda i: (docs[i]['rank'], i))
+    for i in order:
+        doc = docs[i]
+        if doc['required'] or used + doc['tokens'] > budget:
+            continue
+        names.append(doc['name'])
+        used += doc['tokens']
+    return names
+""")],
+    "harness-6": [("parses sections with a regular expression", """import re
+
+def section(text, title):
+    match = re.search('^' + re.escape(title) + ':\\n((?:  .*\\S.*\\n?)*)', text, re.MULTILINE)
+    if not match:
+        return []
+    return [line.split()[0] for line in match.group(1).splitlines()]
+
+def discover(run, tool, command):
+    if command not in section(run(tool + ' --help'), 'Commands'):
+        raise ValueError('no such command: ' + command)
+    return section(run(tool + ' ' + command + ' --help'), 'Options')
+""")],
+    "harness-8": [("shortens in a helper and catches errors in another", """def shorten(line, limit):
+    return line if len(line) <= limit else line[:limit - 3] + '...'
+
+def summary(task, worker):
+    try:
+        return task + ': ' + worker(task)['answer']
+    except Exception:
+        return task + ': failed'
+
+def fan_out(tasks, worker, limit):
+    if limit < 3:
+        raise ValueError('limit too small')
+    return [shorten(summary(task, worker), limit) for task in tasks]
 """)],
 }
 

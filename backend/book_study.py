@@ -1,9 +1,13 @@
 """Reading guides with source locations and related lessons."""
 import re
 
-# These printed-page locators were checked against this PDF edition. Other
+# These printed-page locators were checked against these PDF editions. Other
 # editions/formats remain readable, but must not be linked to unrelated pages.
 INFERENCE_GUIDE_EDITION = 'b297183c38ffc7ffa30100e1aab0af3b1c20b49778939ee976522fe39ac0df89'
+# Baseten's harness guide is 22 scanned pages with no text layer, so its guides link
+# by PDF page number only: location n is printed page n - 1, after the cover.
+HARNESS_GUIDE_EDITION = 'c7092f4702a5732610b725cfc20897ce87a5bf80e7a28479405b42225bb12453'
+PDF_EDITIONS = {'inference-engineering': INFERENCE_GUIDE_EDITION, 'harness-guide': HARNESS_GUIDE_EDITION}
 GUIDES = [{'id': 'gpu-threads',
   'bookId': 'gpu-glossary',
   'title': 'From a kernel to a grid',
@@ -162,7 +166,86 @@ GUIDES = [{'id': 'gpu-threads',
   'question': 'Specify a workload, concurrency sweep, warmup, latency percentiles, throughput, '
               'error rate, and quality check. Which signals would tell you to stop increasing '
               'concurrency?',
-  'lessons': ['reliability-4', 'data-4']}]
+  'lessons': ['reliability-4', 'data-4']},
+ {'id': 'harness-role',
+  'bookId': 'harness-guide',
+  'title': 'Separate the model from the harness',
+  'readings': [(3, 'What a harness does · p. 2')],
+  'focus': 'List the work the harness does around each model call: building the context, running '
+           'tools and checking their results.',
+  'question': 'Name three things your agent setup does on every turn that the model itself never '
+              'does. Which of them would you test first, and with what recorded data?',
+  'lessons': ['harness-1', 'harness-2']},
+ {'id': 'harness-instructions',
+  'bookId': 'harness-guide',
+  'title': 'Keep instruction files short',
+  'readings': [(3, 'Keep your .md files lean and human-written · p. 2'),
+               (4, 'Progressive disclosure · p. 3')],
+  'focus': 'Count what an always-loaded instruction file costs, and decide which parts could load '
+           'only when a task asks for them.',
+  'question': 'Take an instruction file you use. Which lines does every task need? Which could move '
+              'to a separate, clearly named file that loads only on request?',
+  'lessons': ['harness-5']},
+ {'id': 'harness-disclosure',
+  'bookId': 'harness-guide',
+  'title': 'Load details on demand',
+  'readings': [(4, 'CLIs · p. 3'), (5, 'Skills · p. 4'), (5, 'MCP tools · p. 4')],
+  'focus': 'Compare three ways to show an agent a short index first: help pages, skill '
+           'descriptions and tool search.',
+  'question': 'For an internal command-line tool that no model has seen, write the shortest '
+              'instruction that lets an agent find the rest by itself. What does it cost per '
+              'session compared with the full manual?',
+  'lessons': ['harness-6']},
+ {'id': 'harness-rpi',
+  'bookId': 'harness-guide',
+  'title': 'Research, plan, then implement',
+  'readings': [(6, 'Use RPI to work in a higher abstraction · p. 5')],
+  'focus': 'Give each phase one job, and put a person’s review between the plan and the changes.',
+  'question': 'Which actions should a harness refuse during research? What should the '
+              'implementation phase start with, and what should it leave behind?',
+  'lessons': ['harness-7', 'harness-1']},
+ {'id': 'harness-subagents',
+  'bookId': 'harness-guide',
+  'title': 'Hand work to subagents',
+  'readings': [(6, 'Use subagents to maintain clean context · p. 5'),
+               (7, 'Parallel fan-out and pipelines · p. 6')],
+  'focus': 'Decide which tasks need only their result in the main context, and which need their '
+           'steps.',
+  'question': 'Name one task where the main agent needs only the outcome and one where it needs '
+              'the steps. Which would you give to a subagent, and how long may its summary be?',
+  'lessons': ['harness-8']},
+ {'id': 'harness-choose',
+  'bookId': 'harness-guide',
+  'title': 'Choose and measure a harness',
+  'readings': [(8, 'Takeaway: Commit · p. 7'),
+               (10, 'Buy, customize, or build? · p. 9'),
+               (11, 'Properties of a useful harness · p. 10')],
+  'focus': 'Rate a harness on the properties your work depends on, and keep a log of what went '
+           'wrong in each failed run.',
+  'question': 'Pick the two properties from the list that matter most for your work. What trace or '
+              'test would show whether a harness has them?',
+  'lessons': ['harness-4', 'harness-3']},
+ {'id': 'harness-routing',
+  'bookId': 'harness-guide',
+  'title': 'Route work across models',
+  'readings': [(14, 'The future: routing across subagents · p. 13'),
+               (15, 'Serving for performance · p. 14')],
+  'focus': 'Match tasks to models by difficulty and price, then check what each choice costs and '
+           'how long it takes.',
+  'question': 'Write a routing rule for a quick search, a long code change and a final review. '
+              'Which numbers would tell you the rule is wrong?',
+  'lessons': ['harness-3', 'harness-8', 'reliability-4']},
+ {'id': 'harness-review',
+  'bookId': 'harness-guide',
+  'title': 'Review the work of many agents',
+  'readings': [(17, 'Harness + model is becoming one artifact · p. 16'),
+               (19, 'Depots: centralize your agents · p. 18'),
+               (21, 'Review is the new work · p. 20')],
+  'focus': 'Decide which agent results a program can check and which ones a person has to look '
+           'at.',
+  'question': 'Which checks could run on an agent’s change before a person looks at it? Which '
+              'decisions should stay with a person?',
+  'lessons': ['harness-4', 'reliability-4']}]
 
 def section_name(text):
     """Reduce a section title or file name to its terms.
@@ -185,7 +268,7 @@ def study_guides(library, lesson_id=None):
             book = library.book(guide['bookId'])
         except KeyError:
             continue
-        if guide['bookId'] == 'inference-engineering' and (book['format'] != 'pdf' or book['sha256'] != INFERENCE_GUIDE_EDITION):
+        if guide['bookId'] in PDF_EDITIONS and (book['format'] != 'pdf' or book['sha256'] != PDF_EDITIONS[guide['bookId']]):
             continue
         keys = {item.get('key'):item['location'] for item in book['toc']}
         # Modal publishes no official EPUB, so copies differ. Glossary readings match the source

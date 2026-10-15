@@ -9,7 +9,8 @@ import time
 
 from library import Library, UnreadableBook, digest, import_book, normalized
 
-SUGGESTED = {'gpu-glossary': 'GPU Glossary', 'inference-engineering': 'Inference Engineering'}
+SUGGESTED = {'gpu-glossary': 'GPU Glossary', 'inference-engineering': 'Inference Engineering',
+             'harness-guide': "An engineer's guide to harnesses"}
 PARSE_TIMEOUT = 90
 # Staging folders older than this belong to a server that stopped mid-import or mid-removal.
 STALE_STAGING_SECONDS = 3600
