@@ -2,6 +2,14 @@
 
 This file lists the notable changes in each release. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and version numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Four lessons in Agent harness engineering, placed before Score a run from its trace so that it stays the last lesson: Load instructions within a budget, Find a command in its help text, Gate actions by phase, and Keep subagent work out of the main context. They cover choosing instruction files under a token budget, reading `--help` output one command at a time, refusing edits until a plan is approved, and returning short subagent summaries. The app now has 76 lessons in 13 paths.
+- Four glossary terms: context window, instruction budget, progressive disclosure and subagent. The glossary has 147 terms.
+- A book card for Baseten's *An engineer's guide to harnesses*, with eight reading guides that link its pages to the agent harness lessons. The guide is a free PDF from Baseten and is not included.
+
 ## [1.3.0] - 2026-10-12
 
 ### Added
