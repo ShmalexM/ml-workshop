@@ -1,4 +1,4 @@
-import type { BookImportResult } from './libraryTypes'
+import type { Book, BookImportResult } from './libraryTypes'
 
 /** Shown when this browser has no valid session token. */
 export const connectMessage = 'Open Engineering Workshop from its shortcut or start command to connect this browser.'
@@ -146,6 +146,13 @@ export async function importBook(file: File, bookId: string, onProgress: (percen
   setConnected(true)
   if (result.status < 200 || result.status >= 300) throw new Error(result.data.error || 'Could not import this book. Choose the file again to retry.')
   return result.data
+}
+/** Send one rendered page to the local server, which reads it with Tesseract and stores the text for search. */
+export async function ocrPage(bookId: string, page: number, image: Blob) {
+  const response = await authorized(`/api/library/${encodeURIComponent(bookId)}/ocr?page=${page}`, {method: 'POST', headers: {'Content-Type': 'image/png'}, body: image})
+  const data = await response.json().catch(() => ({error: 'The server returned an unreadable response.'}))
+  if (!response.ok) throw new Error(data.error || 'Could not read this page.')
+  return data as {book: Book; page: number; characters: number}
 }
 /** Delete the app's stored copy of a book. Notes and reading position stay on the server. */
 export function removeBook(bookId: string) { return api<{ok: boolean}>('/library/remove', {bookId}) }

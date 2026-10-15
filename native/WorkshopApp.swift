@@ -198,7 +198,9 @@ final class WorkshopApp: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         panel.prompt = "Import"
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
-        panel.allowedContentTypes = [.pdf, UTType(filenameExtension: "epub") ?? .data]
+        // The same file types as the Books importer (FORMATS in backend/library.py).
+        panel.allowedContentTypes = ["pdf", "epub", "docx", "md", "markdown", "txt", "html", "htm", "ipynb", "png", "jpg", "jpeg", "webp", "gif"]
+            .compactMap { UTType(filenameExtension: $0) }
         panel.beginSheetModal(for: window) { result in completionHandler(result == .OK ? panel.urls : nil) }
     }
     func webView(_ webView: WKWebView, navigationResponse: WKNavigationResponse, didBecome download: WKDownload) { download.delegate = self }

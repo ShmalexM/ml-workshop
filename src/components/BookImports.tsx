@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type DragEvent, type ReactNode } from 'react'
 import { ArrowRight, BookOpen, Check, ExternalLink, FileUp, LoaderCircle, Trash2 } from 'lucide-react'
 import { importBook, removeBook } from '../api'
-import type { Book, BookImportResult, ReadingState } from '../libraryTypes'
+import { formatLabels, importAccept, importTypes, pageBook, supportedTypes, type Book, type BookImportResult, type ReadingState } from '../libraryTypes'
 
 const suggestedBooks = [
   {id: 'gpu-glossary', title: 'GPU Glossary', author: 'Modal', tag: 'GPU FUNDAMENTALS',
@@ -31,7 +31,7 @@ function DropZone({label, disabled, busy, percent, error, onFiles}: {
     onDragOver={event => { drag(event); event.dataTransfer.dropEffect = disabled ? 'none' : 'copy' }}
     onDragLeave={event => { drag(event); if (--depth.current <= 0) { depth.current = 0; setDragging(false) } }}
     onDrop={event => { drag(event); depth.current = 0; setDragging(false); if (!disabled) onFiles(Array.from(event.dataTransfer.files)) }}>
-    <input ref={input} type="file" accept=".pdf,.epub,application/pdf,application/epub+zip" hidden
+    <input ref={input} type="file" accept={importAccept} hidden
       aria-label={`Choose file for ${label}`} disabled={disabled}
       onChange={event => { const files = Array.from(event.target.files || []); event.target.value = ''; if (files.length) onFiles(files) }} />
     {busy ? <div className="book-import-progress" role="status" aria-live="polite">
@@ -40,16 +40,27 @@ function DropZone({label, disabled, busy, percent, error, onFiles}: {
       <p>{percent < 100 ? 'Copying to your local library.' : 'Building chapters and search. Large books can take up to 90 seconds.'}</p>
       <progress max={100} value={percent < 100 ? percent : undefined} aria-label={percent < 100 ? 'File upload progress' : 'Preparing book'} />
     </div> : <>
-      <FileUp size={24} aria-hidden="true" /><strong>Drop your PDF or EPUB here</strong>
+      <FileUp size={24} aria-hidden="true" /><strong>Drop your file here</strong>
       <span>or choose a file from your computer</span>
       <button className="secondary-button" disabled={disabled} onClick={() => input.current?.click()} aria-label={`Choose file for ${label}`}>Choose file</button>
-      <small>One book at a time · Up to 100 MB</small>
+      <small>One file at a time · Up to 100 MB</small>
     </>}
     {error && <p className="book-import-error" role="alert">{error}</p>}
   </div>
 }
 
 /** Two-step removal. The confirm step is inline because the Mac app's web view has no confirm() dialog. */
+/** A small label with the book's file type, such as PDF or Markdown. */
+export function FormatBadge({book}: {book: Pick<Book, 'format'>}) {
+  return <span className="book-format">{formatLabels[book.format] || book.format}</span>
+}
+
+/** "12 pages" or "4 sections". */
+export function bookLength(book: Pick<Book, 'format' | 'count'>) {
+  const unit = pageBook(book) ? 'page' : 'section'
+  return `${book.count} ${unit}${book.count === 1 ? '' : 's'}`
+}
+
 export function RemoveBook({book, onRemoved}: {book: Pick<Book, 'id' | 'title'>; onRemoved: (id: string) => void}) {
   const [confirming, setConfirming] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -87,9 +98,11 @@ export default function BookImports({books, states, onImported, onOpen, onRemove
     if (activeRef.current) return
     setSuccess(null); setErrors(old => ({...old, [id]: ''}))
     const file = files[0]
-    if (files.length !== 1 || !file) { setErrors(old => ({...old, [id]: 'Choose one book at a time.'})); return }
-    if (!/\.(pdf|epub)$/i.test(file.name)) { setErrors(old => ({...old, [id]: 'This file type is not supported. Choose a PDF or EPUB.'})); return }
-    if (!file.size || file.size > 100 * 1024 * 1024) { setErrors(old => ({...old, [id]: 'Choose a non-empty file no larger than 100 MB.'})); return }
+    if (files.length !== 1 || !file) { setErrors(old => ({...old, [id]: 'Choose one file at a time.'})); return }
+    const type = importTypes[file.name.split('.').pop()?.toLowerCase() || '']
+    if (!type || !file.name.includes('.')) { setErrors(old => ({...old, [id]: `“${file.name}” is not a supported file type. Supported files: ${supportedTypes}.`})); return }
+    if (!file.size) { setErrors(old => ({...old, [id]: 'This file is empty.'})); return }
+    if (file.size > type.limit) { setErrors(old => ({...old, [id]: `Choose a ${formatLabels[type.format]} file no larger than ${type.limit / 1024 / 1024} MB.`})); return }
     activeRef.current = true; setActive(id); setPercent(0)
     try {
       const result = await importBook(file, id, setPercent)
@@ -105,9 +118,9 @@ export default function BookImports({books, states, onImported, onOpen, onRemove
     <div className="book-suggestions">{suggestedBooks.map(suggestion => {
       const book = books.find(item => item.id === suggestion.id)
       return <section className={'book-import-card ' + suggestion.id} key={suggestion.id} aria-label={suggestion.title}>
-        <div className="book-card-heading"><div className="book-card-icon"><BookOpen size={26} aria-hidden="true" /></div><span>{suggestion.tag}</span>{book && <span className="book-ready"><Check size={13} />In your library</span>}</div>
+        <div className="book-card-heading"><div className="book-card-icon"><BookOpen size={26} aria-hidden="true" /></div><span>{suggestion.tag}</span>{book && <FormatBadge book={book} />}{book && <span className="book-ready"><Check size={13} />In your library</span>}</div>
         <h3>{suggestion.title}</h3><p className="book-card-author">{suggestion.author}</p><p className="book-card-description">{suggestion.description}</p>
-        {book ? <div className="book-card-ready"><p>{book.count} {book.format === 'pdf' ? 'pages' : 'sections'} · {book.format.toUpperCase()} · Available offline</p>
+        {book ? <div className="book-card-ready"><p>{bookLength(book)} · Available offline</p>
           <button className="primary-button" onClick={() => onOpen(book.id, states[book.id]?.location || 1)}>{states[book.id]?.updatedAt ? 'Continue reading' : 'Open book'}<ArrowRight size={16} /></button>
           <RemoveBook book={book} onRemoved={onRemoved} /></div>
           : <><a className="book-source-link" href={suggestion.url} target="_blank" rel="noreferrer">{suggestion.link}<ExternalLink size={14} /></a><p className="book-import-hint">{suggestion.hint}</p>
@@ -115,7 +128,7 @@ export default function BookImports({books, states, onImported, onOpen, onRemove
       </section>
     })}</div>
     {children}
-    <section className="book-add-other" aria-label="Add another book"><div><h2>Add another book</h2><p>Bring any PDF or EPUB, including another edition. Read, search, bookmark, and take notes in one place.</p><small>Your files stay on this computer. They are not sent to an online service.</small></div>
+    <section className="book-add-other" aria-label="Add another book"><div><h2>Add another book</h2><p>Bring any book or document, including another edition. Read, search, bookmark, and take notes in one place.</p><p className="book-types">Supported files: {supportedTypes}.</p><small>Your files stay on this computer. They are not sent to an online service.</small></div>
       <DropZone label="another book" disabled={active !== null} busy={active === ''} percent={percent} error={errors['']} onFiles={files => void add(files, '')} /></section>
   </>
 }

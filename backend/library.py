@@ -1,7 +1,9 @@
-"""Local-only EPUB/PDF imports. Originals and extracted content live under data/.
+"""Local-only book imports. Originals and extracted content live under data/.
 
-Each book folder holds book.json (the summary: metadata, contents and assets) and
-chapters/<n>.json (one page or section each). The server caches summaries only.
+EPUB and PDF are read here; Markdown, text, HTML, Word, notebooks and images are read in
+book_formats.py with the same sanitizer and limits. Each book folder holds book.json (the
+summary: metadata, contents and assets) and chapters/<n>.json (one page or section each).
+The server caches summaries only.
 """
 from html import escape
 from html.parser import HTMLParser
@@ -44,6 +46,35 @@ MAX_IMAGES = 2000
 MAX_IMAGE_BYTES = 150 * 1024 * 1024
 MAX_TITLE = 300
 MAX_FIELD = 2000
+
+# File types the importer accepts, by extension, and the most each one may weigh. Text formats
+# expand into far more memory than their size while they are parsed, so their limits are lower.
+FORMATS = {'.pdf':'pdf','.epub':'epub','.md':'markdown','.markdown':'markdown','.txt':'text',
+           '.html':'html','.htm':'html','.docx':'docx','.ipynb':'ipynb',
+           '.png':'image','.jpg':'image','.jpeg':'image','.webp':'image','.gif':'image'}
+FORMAT_NAMES = {'pdf':'PDF','epub':'EPUB','markdown':'Markdown','text':'text','html':'HTML','docx':'Word',
+                'ipynb':'notebook','image':'image'}
+INPUT_LIMITS = {'pdf':MAX_BOOK_BYTES,'epub':MAX_BOOK_BYTES,'docx':MAX_BOOK_BYTES,'markdown':16 << 20,'text':16 << 20,
+                'html':32 << 20,'ipynb':50 << 20,'image':50 << 20}
+SUPPORTED = 'Choose a PDF, EPUB, Word (.docx), Markdown, text, HTML, Jupyter notebook or image (PNG, JPEG, WebP or GIF) file.'
+# How the server sends each original file. HTML goes out as text, so it can never open as a page.
+SOURCE_TYPES = {'.pdf':'application/pdf','.epub':'application/epub+zip','.md':'text/markdown; charset=utf-8',
+                '.markdown':'text/markdown; charset=utf-8','.txt':'text/plain; charset=utf-8',
+                '.html':'text/plain; charset=utf-8','.htm':'text/plain; charset=utf-8',
+                '.docx':'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                '.ipynb':'application/x-ipynb+json','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg',
+                '.webp':'image/webp','.gif':'image/gif'}
+# Verified editions of suggested books, by SHA-256. A known edition matches its card even when the
+# file has no title inside it. pageOffset maps PDF page n to printed page n + pageOffset when the PDF
+# has no page labels; front names the pages before printed page 1.
+KNOWN_EDITIONS = {
+    # Baseten's harness guide: 22 pages of artwork, no title metadata and no page labels. Page 1 is the cover.
+    'c7092f4702a5732610b725cfc20897ce87a5bf80e7a28479405b42225bb12453': dict(
+        book='harness-guide', title="An engineer's guide to harnesses", author='Alex Ker and Zak Keener', pageOffset=-1, front=['Cover']),
+}
+# OCR reads at most this many pages of one book. Each page has its own time limit (book_ocr.py).
+MAX_OCR_PAGES = 300
+MAX_OCR_TEXT = 256 * 1024
 
 # Book class names and ids get this prefix, so book HTML can never use the app's own CSS classes.
 BOOK_PREFIX = 'bk-'
@@ -89,10 +120,10 @@ def archive_path(base, relative):
         raise ValueError('Unsafe EPUB path')
     return name
 
-def read_member(archive, name):
-    """Read one EPUB file, counting bytes as they are unpacked instead of trusting the zip header."""
-    limit = MAX_SECTION_BYTES
-    message = f'A file inside this EPUB is larger than {megabytes(limit)} when unpacked, which is over the import limit.'
+def read_member(archive, name, limit=None, kind='EPUB'):
+    """Read one file from a zip, counting bytes as they are unpacked instead of trusting the zip header."""
+    limit = limit or MAX_SECTION_BYTES
+    message = f'A file inside this {kind} is larger than {megabytes(limit)} when unpacked, which is over the import limit.'
     if archive.getinfo(name).file_size > limit:
         raise ValueError(message)
     with archive.open(name) as stream:
@@ -104,15 +135,16 @@ def read_member(archive, name):
 class _RootElement(Exception):
     pass
 
-def parse_xml(raw):
-    """Parse EPUB XML. Only short, plain entities such as nbsp are accepted.
+def parse_xml(raw, kind='EPUB'):
+    """Parse EPUB or Word XML. Only short, plain entities such as nbsp are accepted.
 
-    Nested or long entity declarations can expand a few lines into gigabytes.
+    Nested or long entity declarations can expand a few lines into gigabytes, and external
+    entities would read other files, so both are refused before the document is parsed.
     """
     scanner = pyexpat.ParserCreate()
     def declared(name, is_parameter, value, *_):
         if is_parameter or value is None or len(value)>16 or '&' in value:
-            raise ValueError('This EPUB declares XML entities that the importer does not accept.')
+            raise ValueError(f'This {kind} declares XML entities that the importer does not accept.')
     def root(*_):
         raise _RootElement  # Entities can only be declared before the root element.
     scanner.EntityDeclHandler = declared
@@ -167,9 +199,9 @@ def sanitized_html(element, chapter_path, book_id, chapters, assets):
         try:
             name = archive_path(posixpath.dirname(chapter_path), element.get('src',''))
         except ValueError:
-            return f'<p class="{BOOK_PREFIX}unavailable-media">Remote image omitted from this offline copy.</p>'
+            return f'<span class="{BOOK_PREFIX}unavailable-media">Remote image omitted from this offline copy.</span>'
         if name not in assets:
-            return f'<p class="{BOOK_PREFIX}unavailable-media">Image was not included in the source EPUB.</p>'
+            return f'<span class="{BOOK_PREFIX}unavailable-media">Image was not included in the imported file.</span>'
         attrs.update(src=f'/api/library/{book_id}/asset/{quote(assets[name], safe="/")}',
                      alt=element.get('alt','Book illustration'), loading='lazy', tabindex='0', role='button')
     elif tag == 'a':
@@ -177,7 +209,8 @@ def sanitized_html(element, chapter_path, book_id, chapters, assets):
         parsed = urlsplit(href)
         if parsed.scheme in ('https','http'):
             attrs.update(href=href, target='_blank', rel='noreferrer noopener')
-        elif not parsed.scheme and not parsed.netloc:
+        elif href and not parsed.scheme and not parsed.netloc:
+            # An <a id> with no href is an anchor, not a link.
             try:
                 target = archive_path(posixpath.dirname(chapter_path), parsed.path) if parsed.path else chapter_path
             except ValueError:
@@ -211,17 +244,25 @@ def prefix_stored_html(html):
     return ''.join(parser.parts)
 
 class ChapterWriter:
-    """Write chapters/<n>.json one at a time, and stop when the book's output limit is reached."""
-    def __init__(self, folder, message):
+    """Write chapters/<n>.json one at a time, and stop when the book's output limit is reached.
+
+    text_pages counts the chapters with searchable text; a PDF with none has no text layer.
+    """
+    def __init__(self, folder, message, section_limit=None):
         self.folder = Path(folder)/'chapters'
         self.folder.mkdir()
         self.message = message
+        self.section_limit = section_limit
         self.total = 0
+        self.text_pages = 0
     def add(self, document):
         raw = json.dumps(document, ensure_ascii=False).encode('utf-8')
+        if self.section_limit and len(raw) > self.section_limit:
+            raise ValueError(f'One section of this file is larger than {megabytes(self.section_limit)} after import, which is over the import limit.')
         self.total += len(raw)
         if self.total > MAX_OUTPUT_BYTES:
             raise ValueError(self.message)
+        self.text_pages += bool(document.get('text'))
         (self.folder/f"{document['location']}.json").write_bytes(raw)
 
 def copy_image(archive, name, folder, limit):
@@ -292,13 +333,41 @@ def import_epub(source, folder, book_id):
             writer.add({**item,'text':normalized(' '.join(body.itertext())),
                         'html':sanitized_html(body,name,book_id,chapters,assets)})
             del root, body
-        return dict(title=field('title',source.stem),author=field('creator'),format='epub',
+        return dict(title=field('title',source.stem),author=field('creator'),format='epub',textPages=writer.text_pages,
                     rights=field('rights','Rights remain with the source authors.',MAX_FIELD),sourceUrl=web_url(field('source',limit=MAX_FIELD)),
                     attribution='Original text, diagrams, captions, and attributions from the supplied EPUB. Reader layout adapted; image files unchanged.',
                     count=len(toc),toc=toc,assets=image_records,
                     cover=assets.get(next((archive_path(base,e.get('href')) for e in manifest.values() if 'cover-image' in e.get('properties','').split()),'')))
 
-def import_pdf(source, folder, book_id):
+def pdf_labels(reader, count, checksum):
+    """Page labels, and whether they are the book's printed page numbers.
+
+    A PDF without page labels gets its page numbers, which are not printed page numbers,
+    unless it is a known edition with an offset.
+    """
+    if '/PageLabels' in reader.root_object:
+        return [str(label)[:60] for label in reader.page_labels][:count], True
+    labels = edition_labels(count, checksum)
+    return (labels, True) if labels else ([str(i+1) for i in range(count)], False)
+
+def edition_labels(count, checksum):
+    """The printed page labels of a known edition with an offset, or None."""
+    edition = KNOWN_EDITIONS.get(checksum, {})
+    if 'pageOffset' not in edition:
+        return None
+    front = edition.get('front', [])
+    return [front[i] if i < len(front) else str(max(1,i+1+edition['pageOffset'])) for i in range(count)]
+
+def page_number(label):
+    """True for labels that are page numbers, such as 12, iv or A-3, and false for names such as Cover."""
+    return any(c.isdigit() for c in label) or bool(re.fullmatch(r'[ivxlcdm]+', label, re.I))
+
+def page_title(label, location, printed):
+    if not printed or not label:
+        return f'Page {location}'
+    return f'Page {label}' if page_number(label) else label
+
+def import_pdf(source, folder, book_id, checksum=None):
     from pypdf import PdfReader
     reader = PdfReader(source)
     if reader.is_encrypted:
@@ -307,10 +376,10 @@ def import_pdf(source, folder, book_id):
     count = len(reader.pages)
     if count>MAX_PDF_PAGES:
         raise ValueError(f'This PDF has more than {MAX_PDF_PAGES:,} pages, which is over the import limit.')
-    labels = [str(label)[:60] for label in reader.page_labels]
+    labels, printed = pdf_labels(reader, count, checksum)
     writer = ChapterWriter(folder, f'The text in this PDF is larger than {megabytes(MAX_OUTPUT_BYTES)}, which is over the import limit.')
     for i,page in enumerate(reader.pages):
-        writer.add(dict(location=i+1,label=labels[i],title=f'Page {labels[i]}',text=normalized(page.extract_text() or '')))
+        writer.add(dict(location=i+1,label=labels[i],title=page_title(labels[i],i+1,printed),text=normalized(page.extract_text() or '')))
     toc = []
     def walk(outline,depth=0):
         for item in outline:
@@ -324,20 +393,29 @@ def import_pdf(source, folder, book_id):
                     toc.append(dict(title=str(item.title)[:MAX_TITLE],location=page,label=labels[page-1],depth=max(depth-1,0)))
     walk(reader.outline)
     if not toc:
-        toc = [dict(title=f'Page {label}',location=i+1,label=label,depth=0) for i,label in enumerate(labels[:count])]
+        toc = [dict(title=page_title(label,i+1,printed),location=i+1,label=label,depth=0) for i,label in enumerate(labels[:count])]
     meta = reader.metadata or {}
+    edition = KNOWN_EDITIONS.get(checksum, {})
     # PDF vectors, embedded fonts and original image streams remain in source.pdf.
-    return dict(title=str(meta.get('/Title') or source.stem)[:MAX_TITLE],author=str(meta.get('/Author') or '')[:MAX_TITLE],format='pdf',
+    # A PDF made of artwork or scans has no text layer: it still reads as pages, and OCR can add text.
+    # printedLabels is false when the labels are only PDF page numbers, so the reader does not call them printed pages.
+    return dict(title=(str(meta.get('/Title') or '').strip() or edition.get('title') or source.stem)[:MAX_TITLE],
+                author=(str(meta.get('/Author') or '').strip() or edition.get('author',''))[:MAX_TITLE],format='pdf',
                 rights='Personal local copy. Copyright remains with the publisher; not included in the open-source app.',
                 sourceUrl='',attribution='Original PDF preserved unchanged, including vector diagrams, embedded fonts, pictures, and page labels.',
-                count=count,toc=toc,assets=[])
+                count=count,toc=toc,assets=[],textPages=writer.text_pages,printedLabels=printed)
 
-def import_book(source, data_dir, book_id):
+def import_book(source, data_dir, book_id, name=None):
+    """Import one file as a book. name, the original file name without its extension, is the
+    title when the file has none; it defaults to the source file's own name."""
     source = Path(source).expanduser().resolve()
     if not BOOK_ID.fullmatch(book_id):
         raise ValueError('Use a lowercase book ID with letters, numbers and hyphens')
-    if source.suffix.lower() not in ('.epub','.pdf') or source.stat().st_size>MAX_BOOK_BYTES:
-        raise ValueError('Choose an EPUB or PDF no larger than 100 MB')
+    kind = FORMATS.get(source.suffix.lower())
+    if not kind:
+        raise ValueError(SUPPORTED)
+    if source.stat().st_size>INPUT_LIMITS[kind]:
+        raise ValueError(f'Choose a {FORMAT_NAMES[kind]} file no larger than {megabytes(INPUT_LIMITS[kind])}.')
     root = Path(data_dir)/'library';root.mkdir(parents=True,exist_ok=True)
     checksum = digest(source)
     target = root/book_id
@@ -361,10 +439,19 @@ def import_book(source, data_dir, book_id):
         folder = Path(temporary)
         extension = source.suffix.lower()
         shutil.copyfile(source,folder/('source'+extension))
-        result = (import_epub if extension=='.epub' else import_pdf)(source,folder,book_id)
+        if kind=='epub':
+            result = import_epub(source,folder,book_id)
+        elif kind=='pdf':
+            result = import_pdf(source,folder,book_id,checksum)
+        else:
+            import book_formats
+            result = book_formats.IMPORTERS[kind](source,folder,book_id,(name or source.stem)[:MAX_TITLE])
         if not result['count']:
             raise ValueError('The book has no readable pages or sections')
-        result.update(id=book_id,sha256=checksum,sourceFile='source'+extension,bytes=source.stat().st_size,importVersion=IMPORT_VERSION)
+        # titleFromFile: the converted file had no title of its own. The book card check reads it; book.json does not keep it.
+        title_from_file = result.pop('titleFromFile',False)
+        result.update(id=book_id,sha256=checksum,sourceFile='source'+extension,sourceExtension=extension[1:],
+                      bytes=source.stat().st_size,importVersion=IMPORT_VERSION)
         write_json(folder/'book.json',result)
         # Rename only a complete import into the visible library. No partially loaded books.
         if refresh:
@@ -379,7 +466,7 @@ def import_book(source, data_dir, book_id):
             (folder/'book.json').replace(target/'book.json')
         else:
             folder.rename(target)
-    return result
+    return {**result,'titleFromFile':True} if title_from_file else result
 
 def split_legacy_book(folder, book):
     """Move the chapters of a version 1 book.json, which held the whole book, into chapter files.
@@ -405,10 +492,47 @@ def split_legacy_book(folder, book):
     finally:
         shutil.rmtree(staging,ignore_errors=True)
 
+def upgrade_pdf_summary(folder, book):
+    """Once, for a PDF imported before textPages and printedLabels were stored: count the pages
+    with text, decide whether its labels are printed page numbers, and relabel a known edition.
+
+    This runs in the server while it reads the summary, so it never opens the PDF. Labels that are
+    exactly 1 to N say nothing more than the page number, so the reader shows page n of N for them.
+    """
+    book = dict(book)
+    chapters = []
+    for location in range(1,book['count']+1):
+        try:
+            chapter = json.loads((folder/'chapters'/f'{location}.json').read_text(encoding='utf-8'))
+            chapters.append(chapter if isinstance(chapter,dict) else None)
+        except (OSError,ValueError):
+            chapters.append(None)
+    if not isinstance(book.get('textPages'),int):
+        # Unknown pages count as text, so a damaged index never hides search.
+        book['textPages'] = sum(1 if chapter is None else bool(chapter.get('text')) for chapter in chapters)
+    labels = edition_labels(book['count'], book['sha256'])
+    printed = bool(labels) or any(chapter and chapter.get('label')!=str(i+1) for i,chapter in enumerate(chapters))
+    book['printedLabels'] = printed
+    if labels and len(labels)==book['count'] and any(chapter and chapter.get('label')!=labels[i] for i,chapter in enumerate(chapters)):
+        for i,chapter in enumerate(chapters):
+            if chapter:
+                chapter.update(label=labels[i],title=page_title(labels[i],i+1,printed))
+                write_json(folder/'chapters'/'.label.partial',chapter)
+                os.replace(folder/'chapters'/'.label.partial',folder/'chapters'/f'{i+1}.json')
+        book['toc'] = [{**entry,'label':labels[entry['location']-1],
+                        **({'title':page_title(labels[entry['location']-1],entry['location'],printed)} if entry.get('title','').startswith('Page ') else {})}
+                       for entry in book['toc'] if isinstance(entry,dict) and isinstance(entry.get('location'),int) and 1<=entry['location']<=book['count']]
+    try:
+        write_json(folder/'.book.json.partial',book)
+        os.replace(folder/'.book.json.partial',folder/'book.json')
+    except OSError:
+        pass
+    return book
+
 # Summaries only, keyed by book.json path and file identity. Chapters are read from disk per request.
 # A book.json that cannot be read is cached as None, so its warning is logged once per file version.
 _SUMMARIES = {}
-_SUMMARY_LOCK = threading.Lock()
+_SUMMARY_LOCK = threading.RLock()
 LOG = logging.getLogger('library')
 # Fields the server and the reader use from book.json.
 SUMMARY_FIELDS = {'id':str,'title':str,'format':str,'count':int,'toc':list,'assets':list,'sourceFile':str,'sha256':str}
@@ -422,7 +546,7 @@ def checked_summary(book, book_id):
     wrong = [key for key,kind in SUMMARY_FIELDS.items() if not isinstance(book.get(key),kind)]
     if wrong:
         raise ValueError('book.json has missing or invalid fields: ' + ', '.join(wrong))
-    if book['id']!=book_id or book['format'] not in ('pdf','epub'):
+    if book['id']!=book_id or book['format'] not in FORMAT_NAMES:
         raise ValueError('book.json names another book or format')
     return book
 
@@ -460,6 +584,10 @@ class Library:
                     stat = path.stat()
                     key = (stat.st_mtime_ns,stat.st_size,stat.st_ino)
                 checked_summary(book,book_id)
+                if book['format']=='pdf' and (not isinstance(book.get('textPages'),int) or 'printedLabels' not in book):
+                    book = upgrade_pdf_summary(folder,book)
+                    stat = path.stat()
+                    key = (stat.st_mtime_ns,stat.st_size,stat.st_ino)
             except FileNotFoundError:
                 raise KeyError('Unknown book') from None
             except (OSError,ValueError,TypeError,KeyError,AttributeError) as error:
@@ -519,13 +647,39 @@ class Library:
     def asset(self,book_id,name):
         book = self.book(book_id)
         allowed = {item['path']:item['mediaType'] for item in book['assets']}
-        allowed[book['sourceFile']] = 'application/pdf' if book['format']=='pdf' else 'application/epub+zip'
+        allowed[book['sourceFile']] = SOURCE_TYPES.get(PurePosixPath(book['sourceFile']).suffix.lower(),'application/octet-stream')
+        if book['format']=='image' and book.get('sourceType') in ('image/png','image/jpeg','image/gif','image/webp'):
+            allowed[book['sourceFile']] = book['sourceType']
         if name not in allowed:
             raise KeyError('Unknown book asset')
         path = (self.root/book_id/name).resolve()
         if not path.is_relative_to((self.root/book_id).resolve()):
             raise KeyError('Unknown book asset')
         return path,allowed[name]
+
+    def set_ocr_text(self,book_id,location,text):
+        """Store the OCR text of one page of a book without a text layer, so search can find it.
+
+        Pages are read in order: ocrPages counts the pages read so far, from page 1.
+        """
+        with _SUMMARY_LOCK:
+            book = dict(self.book(book_id))
+            if book['format'] not in ('pdf','image') or book.get('textPages',1):
+                raise ValueError('This book already has a text layer.')
+            done = book.get('ocrPages',0)
+            if not 1<=location<=min(book['count'],MAX_OCR_PAGES) or location>done+1:
+                raise ValueError('Read the pages in order, starting from page 1.')
+            folder = self.folder(book_id)
+            chapter_path = folder/'chapters'/f'{location}.json'
+            chapter = json.loads(chapter_path.read_text(encoding='utf-8'))
+            chapter.update(text=normalized(text)[:MAX_OCR_TEXT],ocr=True)
+            write_json(folder/'chapters'/'.ocr.partial',chapter)
+            os.replace(folder/'chapters'/'.ocr.partial',chapter_path)
+            book['ocrPages'] = max(done,location)
+            write_json(folder/'.book.json.partial',book)
+            os.replace(folder/'.book.json.partial',folder/'book.json')
+            _SUMMARIES.pop(folder/'book.json',None)
+        return self.summary(book_id)
 
     def remove(self,book_id):
         """Delete one imported book's folder. Notes and reading position live in SQLite and stay."""

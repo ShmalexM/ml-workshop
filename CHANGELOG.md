@@ -2,15 +2,21 @@
 
 This file lists the notable changes in each release. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and version numbers follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.4.0] - 2026-10-15
 
 ### Added
 
 - Four lessons in Agent harness engineering, placed before Score a run from its trace so that it stays the last lesson: Load instructions within a budget, Find a command in its help text, Gate actions by phase, and Keep subagent work out of the main context. They cover choosing instruction files under a token budget, reading `--help` output one command at a time, refusing edits until a plan is approved, and returning short subagent summaries. The app now has 76 lessons in 13 paths.
 - Four glossary terms: context window, instruction budget, progressive disclosure and subagent. The glossary has 147 terms.
 - A book card for Baseten's *An engineer's guide to harnesses*, with eight reading guides that link its pages to the agent harness lessons. The guide is a free PDF from Baseten and is not included.
+- Books imports Word (.docx), Markdown, plain text, HTML, Jupyter notebook and image (PNG, JPEG, WebP, GIF) files, alongside PDF and EPUB. They open in the same reader, with search, bookmarks, notes and a saved position. Each type has its own size limit, and the file passes through the same filter as EPUB chapters: no scripts, no remote resources, and notebooks never run.
+- Each book shows a format badge. A file of another type gets a message that lists the supported types.
+- PDFs made of artwork or scans import and read page by page, with a plain note that search is not available. With Tesseract installed, **Make searchable (OCR)** reads the pages on this computer and adds their text to search.
+- A verified edition of a suggested book is recognized by its checksum, so Baseten's harness guide PDF, which has no title inside it, matches its card.
 
 ### Fixed
+
+- The PDF reader called every PDF page number a printed page. It now says **Page n of N** when the PDF has no page labels, and a known edition with offset numbering shows its printed page numbers.
 
 - Onboarding headings no longer show a green outline after a mouse click; the run message says the first PyTorch or TensorFlow run can take up to 30 seconds; Python from zero lesson 2 shows the expected rate as `2.0`; and **Test connection** in Settings → AI assistant says when it saved your changes first.
 
@@ -168,6 +174,8 @@ First public release.
 - Setup and launch scripts for Apple silicon Macs, and an optional launcher in your Applications folder.
 - CI that runs every lesson on macOS and the API tests on Linux.
 
+[1.4.0]: https://github.com/ShmalexM/ml-workshop/compare/v1.3.0...v1.4.0
+[1.3.0]: https://github.com/ShmalexM/ml-workshop/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/ShmalexM/ml-workshop/compare/v1.1.2...v1.2.0
 [1.1.2]: https://github.com/ShmalexM/ml-workshop/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/ShmalexM/ml-workshop/compare/v1.1.0...v1.1.1

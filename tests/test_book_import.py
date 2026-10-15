@@ -176,7 +176,8 @@ class UploadTests(unittest.TestCase):
     def test_invalid_uploads_and_guards_leave_library_unchanged(self):
         before = Library(self.data).catalog()
         cases = [
-            (b'bad', 'bad.txt', '', {}, 400), (b'', 'empty.pdf', '', {}, 413),
+            (b'bad', 'bad.rtf', '', {}, 400), (b'bad', 'bad.exe', '', {}, 400), (b'', 'empty.pdf', '', {}, 413),
+            (b'bad', 'bad.docx', '', {}, 400), (b'bad', 'bad.png', '', {}, 400), (b'bad', 'bad.ipynb', '', {}, 400),
             (b'bad', '../escape.pdf', '', {}, 400), (b'bad', 'bad.pdf', '../escape', {}, 400),
             (b'bad', 'bad.pdf', '', {'Content-Length': str(100*1024*1024+1)}, 413),
             (b'bad', 'bad.pdf', '', {'Content-Type': 'application/json'}, 415),

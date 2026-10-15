@@ -7,10 +7,12 @@ import sys
 import tempfile
 import time
 
-from library import Library, UnreadableBook, digest, import_book, normalized
+from library import FORMAT_NAMES, FORMATS, KNOWN_EDITIONS, Library, UnreadableBook, digest, import_book, normalized
 
 SUGGESTED = {'gpu-glossary': 'GPU Glossary', 'inference-engineering': 'Inference Engineering',
              'harness-guide': "An engineer's guide to harnesses"}
+# The file types each card takes. A verified edition in KNOWN_EDITIONS matches its card whatever its type.
+CARD_FORMATS = {'gpu-glossary': ('pdf', 'epub', 'markdown'), 'inference-engineering': ('pdf', 'epub'), 'harness-guide': ('pdf',)}
 PARSE_TIMEOUT = 90
 # Staging folders older than this belong to a server that stopped mid-import or mid-removal.
 STALE_STAGING_SECONDS = 3600
@@ -68,12 +70,12 @@ def import_checked_upload(source, data_dir, filename, suggested):
                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=PARSE_TIMEOUT,
             )
         except subprocess.TimeoutExpired:
-            raise ValueError('This book took too long to process. Try a smaller or repaired PDF or EPUB.') from None
+            raise ValueError('This file took too long to import. Try a smaller or repaired copy.') from None
         if result.returncode:
             try:
                 message = json.loads(result.stdout)['error']
             except (ValueError, KeyError, TypeError):
-                message = 'Could not read this book. Try a fresh, unencrypted PDF or EPUB.'
+                message = unreadable_message(filename)
             raise ValueError(message)
         library.root.mkdir(parents=True, exist_ok=True)
         target = library.root/book_id
@@ -86,12 +88,42 @@ def import_checked_upload(source, data_dir, filename, suggested):
     return book_id, False
 
 
+def unreadable_message(filename):
+    kind = FORMATS.get(Path(filename).suffix.lower())
+    if kind in ('pdf', 'epub'):
+        return f'Could not read this book. Try a fresh, unencrypted {FORMAT_NAMES[kind]}.'
+    name = f'{FORMAT_NAMES[kind]} ' if kind else ''
+    return f'Could not read this {name}file. Check that it opens in another app, then try again.'
+
+
+def file_title(filename):
+    """A title from a file name, for files without one: an_engineers_guide.pdf reads as "an engineers guide"."""
+    stem = Path(filename).stem
+    return ' '.join(stem.replace('_', ' ').split()) or stem
+
+
+def format_list(formats):
+    names = [FORMAT_NAMES[kind] for kind in formats]
+    return names[0] if len(names) == 1 else ', '.join(names[:-1]) + ' or ' + names[-1]
+
+
 def parse(source, destination, book_id, filename, expected_title):
-    book = import_book(source, destination, book_id)
+    book = import_book(source, destination, book_id, file_title(filename))
+    # A title made from the file name says nothing about the file, so it cannot match a card.
+    untitled = book.pop('titleFromFile', False) or book['title'] == Path(source).stem
     if book['title'] == Path(source).stem:
-        book['title'] = Path(filename).stem
-    if expected_title and normalized(expected_title).casefold() not in normalized(book['title']).casefold():
-        raise ValueError(f'This file is titled “{book["title"][:120]}”. Choose your copy of {expected_title}, or use Add another book.')
+        book['title'] = file_title(filename)
+    # A verified edition matches its card by checksum. Other files must be of a type the card takes and carry its title.
+    known = KNOWN_EDITIONS.get(book['sha256'], {}).get('book') == book_id
+    formats = CARD_FORMATS.get(book_id, ('pdf', 'epub'))
+    if expected_title and not known and book['format'] not in formats:
+        raise ValueError(f'The {expected_title} card takes a {format_list(formats)} file. '
+                         f'To read this {FORMAT_NAMES[book["format"]]} file, use Add another book.')
+    if expected_title and not known and (untitled or normalized(expected_title).casefold() not in normalized(book['title']).casefold()):
+        if untitled:
+            raise ValueError(f'This file has no title inside it, and it is not a copy of {expected_title} that Workshop knows. '
+                             'To read it anyway, use Add another book.')
+        raise ValueError(f'This file is titled “{book["title"][:120]}”, not {expected_title}. Choose your copy of {expected_title}, or use Add another book.')
     (Path(destination)/'library'/book_id/'book.json').write_text(json.dumps(book, ensure_ascii=False), encoding='utf-8')
 
 
@@ -115,6 +147,9 @@ if __name__ == '__main__':
     except MemoryError:
         print(json.dumps({'error': 'This book needs more memory to import than the import limit allows.'}))
         sys.exit(1)
+    except RecursionError:
+        print(json.dumps({'error': 'This file is nested too deeply to import.'}))
+        sys.exit(1)
     except Exception:
-        print(json.dumps({'error': 'Could not read this book. Try a fresh, unencrypted PDF or EPUB.'}))
+        print(json.dumps({'error': unreadable_message(sys.argv[4] if len(sys.argv) > 4 else '')}))
         sys.exit(1)
