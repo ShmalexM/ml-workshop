@@ -49,3 +49,12 @@ The PDF reader's fonts (Foxit, Liberation), character maps (Adobe), decoders (JB
 Source: https://github.com/liberationfonts/liberation-fonts
 
 The PDF reader uses Liberation Sans (`dist/pdfjs/standard_fonts/LiberationSans-*.ttf`) to draw PDFs that name a standard font without embedding it. These are separate font files, copied unchanged from pdf.js. They are under the GNU General Public License version 2 with a font exception: a document that uses or embeds the fonts is not covered by the GPL because of them. The full terms are in `dist/pdfjs/standard_fonts/LICENSE_LIBERATION`. The fonts do not change the license of Engineering Workshop's own code, which is MIT.
+
+## Reference works (not included)
+
+Engineering Workshop links to these books. It does not include their text, figures or files.
+
+- *GPU Glossary* by Modal Labs, Inc. and contributors, https://modal.com/gpu-glossary. Text under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/); many diagrams are adapted from NVIDIA material under other terms.
+- *Inference Engineering* by Philip Kiely, Baseten Books. © 2026 Baseten Labs, Inc. All rights reserved. https://www.baseten.co/inference-engineering/
+
+Both were references for the CUDA, GPU and inference material. Neither publisher is affiliated with this project.

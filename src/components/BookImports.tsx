@@ -11,7 +11,7 @@ const suggestedBooks = [
   {id: 'inference-engineering', title: 'Inference Engineering', author: 'Philip Kiely · Baseten', tag: 'MODELS IN PRODUCTION',
     description: 'Explore how models are optimized and served in production.',
     url: 'https://www.baseten.co/inference-engineering/', link: 'Get a free copy',
-    hint: 'Baseten offers the book as a free PDF or EPUB. Download your copy there, then add it here. Use the PDF for the printed page layout and the reading guides.'},
+    hint: 'Baseten offers the book as a free PDF. Download your copy there, then add it here. Use the PDF for the printed page layout and the reading guides.'},
 ]
 
 function DropZone({label, disabled, busy, percent, error, onFiles}: {
