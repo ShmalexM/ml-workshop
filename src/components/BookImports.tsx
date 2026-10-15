@@ -12,6 +12,10 @@ const suggestedBooks = [
     description: 'Explore how models are optimized and served in production.',
     url: 'https://www.baseten.co/inference-engineering/', link: 'Get a free copy',
     hint: 'Baseten offers the book as a free PDF. Download your copy there, then add it here. Use the PDF for the printed page layout and the reading guides.'},
+  {id: 'harness-guide', title: 'An engineer’s guide to harnesses', author: 'Alex Ker and Zak Keener · Baseten', tag: 'AGENT HARNESSES',
+    description: 'Manage an agent’s context, tools and subagents, and compare harnesses.',
+    url: 'https://www.baseten.co/harness-engineering-guide/', link: 'Request a free copy',
+    hint: 'Baseten sends the guide as a free PDF after you fill in a short form on its site with your name and email. Add the PDF here. The reading guides link to its pages.'},
 ]
 
 function DropZone({label, disabled, busy, percent, error, onFiles}: {
