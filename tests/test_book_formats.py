@@ -479,7 +479,7 @@ class ImageTests(FormatTestCase):
         huge = png(1, 1)[:16] + struct.pack('>II', 100_000, 100_000) + png(1, 1)[24:]
         svg = b'<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'
         for name, raw, message in (('page.png', b'<html><script>alert(1)</script></html>', 'not a PNG, JPEG'),
-                                   ('vector.png', svg, 'not a PNG, JPEG'), ('huge.png', huge, 'larger than 64 megapixels'),
+                                   ('vector.png', svg, 'not a PNG, JPEG'), ('huge.png', huge, 'more than 64 megapixels'),
                                    ('cut.jpg', b'\xff\xd8\xff\xe0\x00', 'size of this image could not be read')):
             with self.subTest(name=name), self.assertRaisesRegex(ValueError, message):
                 self.load(name, raw)
@@ -771,6 +771,54 @@ class SuggestedCardTests(FormatTestCase):
         writer.write(self.root/'other.pdf')
         with self.assertRaisesRegex(ValueError, 'titled “Some other book”, not Inference Engineering'):
             self.parse(self.root/'other.pdf', 'inference-engineering', 'Inference Engineering')
+
+
+def gif(screen, frames, data=b'\x02\x01\x00\x00'):
+    """A GIF with the given logical screen and frames (left, top, width, height). Only the headers are real."""
+    raw = b'GIF89a' + struct.pack('<HHBBB', *screen, 0, 0, 0)
+    for left, top, width, height in frames:
+        raw += b'\x21\xf9\x04\x00\x00\x00\x00\x00\x2c' + struct.pack('<HHHHB', left, top, width, height, 0) + data
+    return raw + b';'
+
+
+class SecurityRegressionTests(FormatTestCase):
+    """Findings from the file-type security pass (2026-10-15), with the reproductions scaled down."""
+    def timed(self, seconds, function, *args):
+        started = time.monotonic()
+        result = function(*args)
+        self.assertLess(time.monotonic() - started, seconds)
+        return result
+
+    def test_1_gif_frames_count_toward_the_pixel_limit(self):
+        hidden = gif((1, 1), [(0, 0, 12000, 12000)])  # 1 × 1 screen, 144 MP frame
+        self.assertEqual(book_formats.image_size(hidden, 'image/gif'), (12000, 12000))
+        with self.assertRaisesRegex(ValueError, 'more than 64 megapixels, counting every frame'):
+            self.load('hidden.gif', hidden)
+        with self.assertRaisesRegex(ValueError, 'more than 64 megapixels'):
+            self.load('animation.gif', gif((2000, 2000), [(0, 0, 2000, 2000)] * 20), 'animation')  # 20 × 4 MP
+        book = self.load('small.gif', gif((100, 100), [(0, 0, 100, 100)] * 3), 'small')
+        self.assertIn('100 × 100 pixels', book['attribution'])
+        # Inside other formats the picture is left out.
+        encoded = base64.b64encode(hidden).decode()
+        self.assertEqual(self.load('page.html', f'<p>Text</p><img src="data:image/gif;base64,{encoded}">', 'page')['assets'], [])
+        notebook = make_ipynb(self.root/'nb.ipynb', [{'cell_type': 'code', 'execution_count': 1, 'source': 'x',
+                                                      'outputs': [{'output_type': 'display_data', 'data': {'image/gif': encoded, 'text/plain': 'plot'}}]}])
+        self.assertEqual(self.load('nb.ipynb', notebook, 'nb')['assets'], [])
+        rels = f'<Relationship Id="rImg" Type="{IMAGE_REL}" Target="media/a.gif"/>'
+        word = make_docx(self.root/'gif.docx', para('Pictures') + para('', runs=drawing('rImg')), rels, {'word/media/a.gif': hidden})
+        self.assertEqual(self.load('gif.docx', word, 'word')['assets'], [])
+        # The frame scan reads each block once: 2.5 million sub-blocks take well under a second.
+        many = gif((10, 10), [(0, 0, 10, 10)], b'\x02' + b'\x01\x00' * 2_500_000 + b'\x00')
+        self.assertEqual(self.timed(2, book_formats.gif_frames, many), (10, 10, 100))
+
+    def test_1_pictures_in_one_section_are_limited(self):
+        pictures = ''.join(f'<p><img src="data:image/png;base64,{base64.b64encode(png(40, 30 + n)).decode()}"></p>' for n in range(3))
+        with patch.object(book_formats, 'MAX_SECTION_PIXELS', 2000):
+            book = self.load('pictures.html', '<h1>Only heading</h1>' + pictures)
+            self.assertEqual(book['count'], 3)  # Any two of the pictures are over 2,000 pixels, so each gets a section.
+            with patch.object(book_formats, 'MAX_SECTION_PIXELS', 1000):
+                with self.assertRaisesRegex(ValueError, 'megapixels of pictures'):
+                    self.load('one.html', '<p>x</p><table><tr><td>' + pictures + '</td></tr></table>', 'one')
 
 
 class UnsupportedTests(FormatTestCase):

@@ -30,7 +30,8 @@ TEXT_SECTION = 60_000          # characters in one section of a plain-text file
 PREAMBLE = 1000                # text before the first heading that joins the first section
 MAX_INLINE_IMAGE = 10 << 20    # one data: image in HTML, or one notebook output or attachment
 MAX_DOC_IMAGE = 32 << 20       # one picture inside a Word file
-MAX_IMAGE_PIXELS = 64_000_000  # width × height of any stored image
+MAX_IMAGE_PIXELS = 64_000_000  # width × height of any stored image, and the frames of an animated GIF together
+MAX_SECTION_PIXELS = 256_000_000  # pictures in one section; a section with more is split at a block boundary
 MAX_HTML_DEPTH = 200
 MAX_DOCX_XML = 16 << 20        # word/document.xml, unpacked
 MAX_DOCX_PART = 4 << 20        # styles, numbering, relationships and properties, unpacked
@@ -63,13 +64,56 @@ def image_type(raw):
     return None
 
 
+def gif_frames(raw):
+    """(width, height, frame pixels) of a GIF, from every image descriptor, or None.
+
+    A GIF's header gives only the logical screen. Browsers draw each frame at its own size, so a
+    1 × 1 screen can hold a 12000 × 12000 frame. The scan visits each block once and stops at the
+    trailer or at the first byte that starts no block.
+    """
+    if len(raw) < 13:
+        return None
+    width, height = struct.unpack('<HH', raw[6:10])
+    flags = raw[10]
+    i = 13 + (3 << ((flags & 7) + 1) if flags & 0x80 else 0)
+    pixels, n = 0, len(raw)
+    while i < n:
+        block = raw[i]
+        if block == 0x21:  # extension: label, then data sub-blocks
+            i += 2
+        elif block == 0x2C:  # image descriptor, optional local colour table, LZW code size, then data
+            if i + 10 > n:
+                return None
+            left, top, frame_width, frame_height = struct.unpack('<HHHH', raw[i + 1:i + 9])
+            flags = raw[i + 9]
+            width, height = max(width, left + frame_width), max(height, top + frame_height)
+            pixels += frame_width * frame_height
+            i += 10 + (3 << ((flags & 7) + 1) if flags & 0x80 else 0) + 1
+        else:
+            break  # 0x3B ends the file; anything else ends the image as far as a decoder reads it
+        while i < n and raw[i]:
+            i += raw[i] + 1
+        i += 1
+    return width, height, pixels
+
+
+def decoded_pixels(raw, kind):
+    """The pixels a browser decodes for this image: width × height, or every frame of a GIF. None if unknown."""
+    if kind == 'image/gif':
+        frames = gif_frames(raw)
+        return max(frames[0] * frames[1], frames[2]) if frames and frames[0] and frames[1] else None
+    size = image_size(raw, kind)
+    return size[0] * size[1] if size and all(size) else None
+
+
 def image_size(raw, kind):
-    """(width, height) from the image header, or None if it cannot be read."""
+    """(width, height) from the image header, or None if it cannot be read. For a GIF, the area that holds every frame."""
     try:
         if kind == 'image/png':
             return struct.unpack('>II', raw[16:24]) if raw[12:16] == b'IHDR' else None
         if kind == 'image/gif':
-            return struct.unpack('<HH', raw[6:10])
+            frames = gif_frames(raw)
+            return frames[:2] if frames else None
         if kind == 'image/webp':
             chunk = raw[12:16]
             if chunk == b'VP8X':
@@ -106,12 +150,12 @@ def image_size(raw, kind):
 
 
 def checked_image(raw):
-    """The media type of raw if it is a supported image within the pixel limit, else None."""
+    """(media type, decoded pixels) if raw is a supported image within the pixel limit, else None."""
     kind = image_type(raw)
-    size = image_size(raw, kind) if kind else None
-    if not size or not all(size) or size[0] * size[1] > MAX_IMAGE_PIXELS:
+    pixels = decoded_pixels(raw, kind) if kind else None
+    if not pixels or pixels > MAX_IMAGE_PIXELS:
         return None
-    return kind
+    return kind, pixels
 
 
 class Images:
@@ -122,12 +166,14 @@ class Images:
         self.paths = {}
         self.records = []
         self.assets = {}
+        self.pixels = {}
         self.bytes = 0
 
     def add(self, name, raw):
-        kind = checked_image(raw)
-        if not kind:
+        checked = checked_image(raw)
+        if not checked:
             return None
+        kind, self.pixels[name] = checked
         digest = hashlib.sha256(raw).hexdigest()
         path = self.paths.get(digest)
         if path is None:
@@ -196,8 +242,14 @@ def heading_level(block):
     return None
 
 
-def split_sections(blocks):
-    """Split a document at its top-level headings, then split very long sections by size.
+def picture_pixels(block, images):
+    """Decoded pixels of the stored pictures in one block."""
+    return sum(images.pixels.get(node.get('src'), 0) for node in block.iter('img')) if images else 0
+
+
+def split_sections(blocks, images=None):
+    """Split a document at its top-level headings, then split sections with very long text, or
+    with more pictures than MAX_SECTION_PIXELS, at block boundaries.
 
     A document with one title heading and several headings below it splits at the second level.
     """
@@ -221,14 +273,15 @@ def split_sections(blocks):
         del sections[0]
     out = []
     for section in sections:
-        part, size = [], 0
+        part, size, pixels = [], 0, 0
         for block in section:
-            length = text_length(block)
-            if part and size + length > SECTION_SPLIT:
+            length, block_pixels = text_length(block), picture_pixels(block, images)
+            if part and (size + length > SECTION_SPLIT or pixels + block_pixels > MAX_SECTION_PIXELS):
                 out.append(part)
-                part, size = [], 0
+                part, size, pixels = [], 0, 0
             part.append(block)
             size += length
+            pixels += block_pixels
         out.append(part)
     return out
 
@@ -271,6 +324,8 @@ def write_chapters(sections, folder, book_id, images, title):
                                section_limit=lib.MAX_SECTION_BYTES)
     toc = []
     for number, blocks in enumerate(sections, 1):
+        if sum(picture_pixels(block, images) for block in blocks) > MAX_SECTION_PIXELS:
+            raise ValueError(f'One part of this file holds more than {MAX_SECTION_PIXELS // 1_000_000} megapixels of pictures, which is over the import limit.')
         body = ET.Element('body')
         body.extend(blocks)
         heading = section_title(blocks)
@@ -308,7 +363,7 @@ def import_markdown(source, folder, book_id, name):
     blocks = Markdown(Builder()).convert(text)
     title = title or next((''.join(block.itertext()) for block in blocks if block.tag == 'h1'), '') or name
     images = Images(folder)
-    toc, text_pages = write_chapters(split_sections(blocks), folder, book_id, images, title)
+    toc, text_pages = write_chapters(split_sections(blocks, images), folder, book_id, images, title)
     return summary(title, 'markdown', toc, images, text_pages,
                    'Converted from the supplied Markdown file. Raw HTML, scripts and images from outside the file are not included.')
 
@@ -534,7 +589,7 @@ def import_html(source, folder, book_id, name):
     store_inline_images(tree.root, images, 'inline')
     blocks = content_blocks(tree.root, builder)
     title = lib.normalized(''.join(tree.title)) or section_title(blocks) or name
-    toc, text_pages = write_chapters(split_sections(blocks), folder, book_id, images, title)
+    toc, text_pages = write_chapters(split_sections(blocks, images), folder, book_id, images, title)
     return summary(title, 'html', toc, images, text_pages,
                    'Converted from the supplied HTML file. Scripts, styles, forms, embedded pages and remote images are not included.')
 
@@ -873,7 +928,7 @@ def import_docx(source, folder, book_id, name):
         blocks = reader.blocks(body) if body is not None else []
         del document
         title = title or section_title(blocks) or name
-        toc, text_pages = write_chapters(split_sections(blocks), folder, book_id, reader.images, title)
+        toc, text_pages = write_chapters(split_sections(blocks, reader.images), folder, book_id, reader.images, title)
     return summary(title, 'docx', toc, reader.images, text_pages,
                    'Converted from the supplied Word file: headings, paragraphs, lists, tables and pictures. Page layout, headers, footnotes and comments are not included.',
                    author=author)
@@ -1013,7 +1068,7 @@ def import_ipynb(source, folder, book_id, name):
     blocks = reader.cells(cells)
     del notebook, cells
     title = joined(metadata.get('title')) or next((''.join(block.itertext()) for block in blocks if block.tag == 'h1'), '') or name
-    toc, text_pages = write_chapters(split_sections(blocks), folder, book_id, reader.images, title)
+    toc, text_pages = write_chapters(split_sections(blocks, reader.images), folder, book_id, reader.images, title)
     return summary(title, 'ipynb', toc, reader.images, text_pages,
                    'Shown from the supplied notebook as it was saved. Cells never run here; HTML and JavaScript outputs are not run.')
 
@@ -1026,11 +1081,11 @@ def import_image(source, folder, book_id, name):
     kind = image_type(raw)
     if not kind:
         raise ValueError('This file is not a PNG, JPEG, WebP or GIF image.')
-    size = image_size(raw, kind)
-    if not size or not all(size):
+    size, pixels = image_size(raw, kind), decoded_pixels(raw, kind)
+    if not size or not all(size) or not pixels:
         raise ValueError('The size of this image could not be read. Save it again and retry.')
-    if size[0] * size[1] > MAX_IMAGE_PIXELS:
-        raise ValueError(f'This image is larger than {MAX_IMAGE_PIXELS // 1_000_000} megapixels, which is over the import limit.')
+    if pixels > MAX_IMAGE_PIXELS:
+        raise ValueError(f'This image has more than {MAX_IMAGE_PIXELS // 1_000_000} megapixels, counting every frame of an animation, which is over the import limit.')
     original = 'source' + Path(source).suffix.lower()
     builder = Builder()
     figure = builder.element('figure')
