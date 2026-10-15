@@ -2,7 +2,7 @@ export type BookLocation = { bookId: string; location: number; anchor?: string }
 export type BookEntry = { title: string; location: number; label: string; depth: number; key?: string }
 export type BookFormat = 'pdf' | 'epub' | 'markdown' | 'text' | 'html' | 'docx' | 'ipynb' | 'image'
 /** textPages: pages or sections with searchable text (0 for a PDF or image without a text layer). ocrPages: pages read by OCR, from page 1. */
-export type Book = { id: string; title: string; author: string; format: BookFormat; count: number; toc: BookEntry[]; rights: string; attribution: string; sha256: string; cover?: string; assets: { path: string; bytes: number; sha256: string; mediaType: string }[]; textPages?: number; ocrPages?: number; sourceExtension?: string }
+export type Book = { id: string; title: string; author: string; format: BookFormat; count: number; toc: BookEntry[]; rights: string; attribution: string; sha256: string; cover?: string; assets: { path: string; bytes: number; sha256: string; mediaType: string }[]; textPages?: number; ocrPages?: number; sourceExtension?: string; printedLabels?: boolean }
 /** OCR with a local Tesseract: whether it is installed, how to install it, and the page limit per book. */
 export type OcrStatus = { available: boolean; install: string; maxPages: number }
 export type ReadingState = { location: number; notes: string; bookmarks: number[]; completed: string[]; updatedAt: number }
@@ -27,6 +27,16 @@ export const importTypes: Record<string, { format: BookFormat; limit: number }> 
 }
 export const importAccept = Object.keys(importTypes).map(extension => '.' + extension).join(',')
 export const supportedTypes = 'PDF, EPUB, Word (.docx), Markdown (.md), plain text (.txt), HTML (.html), Jupyter notebooks (.ipynb) and images (PNG, JPEG, WebP, GIF)'
+/** True for page labels that are page numbers, such as 12 or iv, and false for names such as Cover. */
+export function isPageNumber(label: string) { return /\d/.test(label) || /^[ivxlcdm]+$/i.test(label) }
+/** How a search result or bookmark names one location: "printed page 5" only when the PDF has printed page labels. */
+export function locationLabel(book: Pick<Book, 'format' | 'printedLabels'> | undefined, location: number, label: string) {
+  if (book?.format === 'pdf') {
+    if (book.printedLabels === false || !label) return `page ${location}`
+    return isPageNumber(label) ? `printed page ${label}` : label
+  }
+  return `${book?.format === 'image' ? 'page' : 'section'} ${label}`
+}
 /** True for books read as pages (PDF and images) rather than as sections. */
 export function pageBook(book: Pick<Book, 'format'>) { return book.format === 'pdf' || book.format === 'image' }
 /** A PDF or image without a text layer, and no OCR text yet: search finds nothing in it. */
