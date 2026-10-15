@@ -27,6 +27,7 @@ from book_markdown import Builder, Markdown, append_text, code_block
 
 SECTION_SPLIT = 400_000        # characters of text before a long section is split at a block boundary
 TEXT_SECTION = 60_000          # characters in one section of a plain-text file
+PREAMBLE = 1000                # text before the first heading that joins the first section
 MAX_INLINE_IMAGE = 10 << 20    # one data: image in HTML, or one notebook output or attachment
 MAX_DOC_IMAGE = 32 << 20       # one picture inside a Word file
 MAX_IMAGE_PIXELS = 64_000_000  # width × height of any stored image
@@ -214,6 +215,10 @@ def split_sections(blocks):
         current.append(block)
     if current:
         sections.append(current)
+    # Short text before the first heading, such as navigation or badges, joins the first section.
+    if len(sections) > 1 and not any(heading_level(block) for block in sections[0]) and sum(map(text_length, sections[0])) < PREAMBLE:
+        sections[1:2] = [sections[0] + sections[1]]
+        del sections[0]
     out = []
     for section in sections:
         part, size = [], 0
@@ -494,7 +499,32 @@ def content_blocks(root, builder):
         lead = builder.element('p')
         lead.text = node.text
         blocks.insert(0, lead)
-    return blocks
+    return expand_wrappers(blocks, builder)
+
+
+def expand_wrappers(blocks, builder, depth=0):
+    """Open wrappers such as <article> that hold two or more headings, so the page splits at them.
+
+    A page with navigation next to an article otherwise stays one section.
+    """
+    out = []
+    for block in blocks:
+        if (block.tag in ('div', 'main', 'article', 'section', 'center') and depth < 8
+                and sum(1 for child in block if heading_level(child)) >= 2):
+            if block.get('id'):
+                out.append(builder.element('a', {'id': block.get('id')}))
+            if (block.text or '').strip():
+                lead = builder.element('p')
+                lead.text = block.text
+                out.append(lead)
+            out.extend(expand_wrappers(list(block), builder, depth + 1))
+            if (block.tail or '').strip():
+                tail = builder.element('p')
+                tail.text = block.tail
+                out.append(tail)
+        else:
+            out.append(block)
+    return out
 
 
 def import_html(source, folder, book_id, name):

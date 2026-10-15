@@ -201,7 +201,8 @@ def sanitized_html(element, chapter_path, book_id, chapters, assets):
         parsed = urlsplit(href)
         if parsed.scheme in ('https','http'):
             attrs.update(href=href, target='_blank', rel='noreferrer noopener')
-        elif not parsed.scheme and not parsed.netloc:
+        elif href and not parsed.scheme and not parsed.netloc:
+            # An <a id> with no href is an anchor, not a link.
             try:
                 target = archive_path(posixpath.dirname(chapter_path), parsed.path) if parsed.path else chapter_path
             except ValueError:

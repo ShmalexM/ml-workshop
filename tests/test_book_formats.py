@@ -266,6 +266,15 @@ class HtmlTests(FormatTestCase):
         self.assertEqual(found.ids, {'bk-root'})
         self.assertTrue({'bk-solution-overlay', 'bk-error-toast'} <= found.classes)
 
+    def test_headings_inside_an_article_next_to_navigation_split_the_page(self):
+        page = ('<nav><a href="/">Home</a></nav><article id="story"><h1>First</h1><p>one</p><h1>Second</h1><p>two</p></article>'
+                '<footer><p>Footer text</p></footer>')
+        book = self.load('article.html', page)
+        self.assertEqual([entry['title'] for entry in book['toc']], ['First', 'Second'])
+        self.assertIn('<a id="bk-story"></a>', self.library.chapter('doc', 1)['html'])
+        self.assertIn('Home', self.library.chapter('doc', 1)['text'])
+        self.assertIn('Footer text', self.library.chapter('doc', 2)['text'])
+
     def test_inline_image_limits_and_deep_nesting(self):
         picture = base64.b64encode(png(4, 4)).decode()
         with patch.object(book_formats, 'MAX_INLINE_IMAGE', 10):
@@ -696,6 +705,12 @@ class FormatServerTests(unittest.TestCase):
         status, result, _ = self.request('POST', f"/api/library/{text_book['book']['id']}/ocr?page=1", png(5, 5), 'image/png')
         self.assertEqual(status, 400); self.assertIn('already has a text layer', result['error'])
         self.assertEqual(list(self.data.glob('.upload-*')) + list(self.data.glob('.ocr-*')), [])
+
+
+class SuggestedCardTests(FormatTestCase):
+    def test_titles_from_file_names_read_as_words(self):
+        import book_import
+        self.assertEqual(book_import.file_title('an_engineers_guide__to_harnesses.pdf'), 'an engineers guide to harnesses')
 
 
 class UnsupportedTests(FormatTestCase):

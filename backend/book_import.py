@@ -90,13 +90,20 @@ def unreadable_message(filename):
     kind = FORMATS.get(Path(filename).suffix.lower())
     if kind in ('pdf', 'epub'):
         return f'Could not read this book. Try a fresh, unencrypted {FORMAT_NAMES[kind]}.'
-    return f'Could not read this {FORMAT_NAMES.get(kind, "")} file. Check that it opens in another app, then try again.'.replace('this  file', 'this file')
+    name = f'{FORMAT_NAMES[kind]} ' if kind else ''
+    return f'Could not read this {name}file. Check that it opens in another app, then try again.'
+
+
+def file_title(filename):
+    """A title from a file name, for files without one: an_engineers_guide.pdf reads as "an engineers guide"."""
+    stem = Path(filename).stem
+    return ' '.join(stem.replace('_', ' ').split()) or stem
 
 
 def parse(source, destination, book_id, filename, expected_title):
-    book = import_book(source, destination, book_id, Path(filename).stem)
+    book = import_book(source, destination, book_id, file_title(filename))
     if book['title'] == Path(source).stem:
-        book['title'] = Path(filename).stem
+        book['title'] = file_title(filename)
     if expected_title and normalized(expected_title).casefold() not in normalized(book['title']).casefold():
         raise ValueError(f'This file is titled “{book["title"][:120]}”. Choose your copy of {expected_title}, or use Add another book.')
     (Path(destination)/'library'/book_id/'book.json').write_text(json.dumps(book, ensure_ascii=False), encoding='utf-8')
